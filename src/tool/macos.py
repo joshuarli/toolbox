@@ -37,7 +37,8 @@ def require_macos(action: str) -> None:
 
 def plist_command(argv: Sequence[str]) -> dict[str, object]:
     """Run a plist-emitting command and parse its stdout."""
-    require_macos(f"command: {shlex.join(list(argv))}")
+    command = shlex.join(list(argv))
+    require_macos(f"command: {command}")
     try:
         process = subprocess.run(
             list(argv),
@@ -46,15 +47,15 @@ def plist_command(argv: Sequence[str]) -> dict[str, object]:
         )
         value = plistlib.loads(process.stdout)
     except OSError as exc:
-        raise SdError(f"could not run: {shlex.join(list(argv))}") from exc
+        raise SdError(f"could not run: {command}") from exc
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.decode(errors="replace").strip() if exc.stderr else ""
         detail = f": {stderr}" if stderr else ""
-        raise SdError(f"command failed: {shlex.join(list(argv))}{detail}") from exc
+        raise SdError(f"command failed: {command}{detail}") from exc
     except plistlib.InvalidFileException as exc:
-        raise SdError(f"invalid plist returned by: {shlex.join(list(argv))}") from exc
+        raise SdError(f"invalid plist returned by: {command}") from exc
     if not isinstance(value, dict):
-        raise SdError(f"unexpected plist returned by: {shlex.join(list(argv))}")
+        raise SdError(f"unexpected plist returned by: {command}")
     return value
 
 

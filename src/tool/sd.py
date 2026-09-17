@@ -5,7 +5,8 @@ validation, fio argv construction, interactive prompting) plus thin
 orchestration. Every macOS specificity -- ``diskutil``/``sudo``/``caffeinate``
 paths and the subprocesses that touch them -- lives in :mod:`tool.macos`
 behind a platform gate. The only macOS touchpoints here are calls into that
-module and the ``sys.platform`` dispatch in :func:`discover_candidates`.
+module and the :func:`tool.macos.is_macos` dispatch in
+:func:`discover_candidates`.
 """
 
 from __future__ import annotations
@@ -21,15 +22,6 @@ from pathlib import Path
 
 from . import macos, preflight
 from .errors import SafetyError, SdError
-
-__all__ = (
-    "CandidateDisk",
-    "DiskInfo",
-    "FioTest",
-    "SafetyError",
-    "SdError",
-    "TestResult",
-)
 
 DISK_RE = re.compile(r"^(?:/dev/)?(disk\d+)$")
 ANY_DISK_IDENTIFIER_RE = re.compile(r"^(disk\d+)(?:s\d+)*$")

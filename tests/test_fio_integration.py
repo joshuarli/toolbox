@@ -27,7 +27,7 @@ from pathlib import Path
 from tool import preflight, sd
 
 FAKE_DISK_BYTES = 8 * 1024 * 1024
-WRITE_BYTES = "4m"
+FIO_SIZE = "4m"
 TIMEOUT_SECONDS = 180
 
 
@@ -38,6 +38,11 @@ def require_fio() -> str:
     except preflight.PreflightError as exc:
         raise unittest.SkipTest(f"fio >= 3.42 not available: {exc}") from exc
     return path
+
+
+def _tail(proc: subprocess.CompletedProcess[str]) -> str:
+    """Last of fio's output, for failure messages."""
+    return (proc.stderr + proc.stdout)[-2000:]
 
 
 @contextlib.contextmanager
@@ -126,32 +131,22 @@ class FioIntegrationTests(unittest.TestCase):
         ]
         for shape in shapes:
             with self.subTest(shape=shape.name):
-                proc = self._run_fio(shape, [f"--size={WRITE_BYTES}"])
-                self.assertEqual(
-                    proc.returncode,
-                    0,
-                    msg=(proc.stderr + proc.stdout)[-2000:],
-                )
+                proc = self._run_fio(shape, [f"--size={FIO_SIZE}"])
+                self.assertEqual(proc.returncode, 0, msg=_tail(proc))
                 self.assertIn("err= 0", proc.stdout)
 
     def test_integrity_write_then_verify_roundtrip(self) -> None:
-        written = self._run_fio(sd.FioTest.integrity(), [f"--size={WRITE_BYTES}"])
-        self.assertEqual(
-            written.returncode, 0, msg=(written.stderr + written.stdout)[-2000:]
-        )
-        verified = self._run_fio(sd.FioTest.verify_only(), [f"--size={WRITE_BYTES}"])
-        self.assertEqual(
-            verified.returncode, 0, msg=(verified.stderr + verified.stdout)[-2000:]
-        )
+        written = self._run_fio(sd.FioTest.integrity(), [f"--size={FIO_SIZE}"])
+        self.assertEqual(written.returncode, 0, msg=_tail(written))
+        verified = self._run_fio(sd.FioTest.verify_only(), [f"--size={FIO_SIZE}"])
+        self.assertEqual(verified.returncode, 0, msg=_tail(verified))
         self.assertIn("err= 0", verified.stdout)
 
     def test_verify_only_detects_single_byte_corruption(self) -> None:
-        written = self._run_fio(sd.FioTest.integrity(), [f"--size={WRITE_BYTES}"])
-        self.assertEqual(
-            written.returncode, 0, msg=(written.stderr + written.stdout)[-2000:]
-        )
+        written = self._run_fio(sd.FioTest.integrity(), [f"--size={FIO_SIZE}"])
+        self.assertEqual(written.returncode, 0, msg=_tail(written))
         self._corrupt_byte(2 * 1024 * 1024 + 13)
-        verified = self._run_fio(sd.FioTest.verify_only(), [f"--size={WRITE_BYTES}"])
+        verified = self._run_fio(sd.FioTest.verify_only(), [f"--size={FIO_SIZE}"])
         self.assertNotEqual(verified.returncode, 0)
         self.assertIn("crc", (verified.stdout + verified.stderr).lower())
 

@@ -64,25 +64,31 @@ class DiskInfoTests(unittest.TestCase):
             sd.DiskInfo.from_plist({"WholeDisk": True})
 
 
+def _plist_dict(identifier: str = "disk7", **overrides: object) -> dict[str, object]:
+    values: dict[str, object] = {
+        "DeviceIdentifier": identifier,
+        "DeviceNode": f"/dev/{identifier}",
+        "WholeDisk": True,
+        "Writable": True,
+        "WritableMedia": True,
+        "Internal": False,
+        "Ejectable": True,
+        "Removable": True,
+        "RemovableMedia": True,
+        "RemovableMediaOrExternalDevice": True,
+        "BusProtocol": "USB",
+        "MediaName": "Reader Media",
+        "MediaType": "Generic",
+        "TotalSize": 64_000_000_000,
+        "DeviceBlockSize": 512,
+    }
+    values.update(overrides)
+    return values
+
+
 class SafetyTests(unittest.TestCase):
     def make_info(self, **overrides: object) -> sd.DiskInfo:
-        values: dict[str, object] = {
-            "DeviceIdentifier": "disk7",
-            "DeviceNode": "/dev/disk7",
-            "WholeDisk": True,
-            "Writable": True,
-            "WritableMedia": True,
-            "Internal": False,
-            "Ejectable": True,
-            "Removable": True,
-            "RemovableMedia": True,
-            "RemovableMediaOrExternalDevice": True,
-            "BusProtocol": "USB",
-            "MediaName": "Reader Media",
-            "MediaType": "Generic",
-            "TotalSize": 64_000_000_000,
-            "DeviceBlockSize": 512,
-        }
+        values = _plist_dict("disk7")
         values.update(overrides)
         return sd.DiskInfo.from_plist(values)
 
@@ -440,29 +446,8 @@ class DiscoverCandidatesTests(unittest.TestCase):
 
 
 class DiscoverDarwinTests(unittest.TestCase):
-    def _plist(self, identifier: str, **overrides: object) -> dict[str, object]:
-        values: dict[str, object] = {
-            "DeviceIdentifier": identifier,
-            "DeviceNode": f"/dev/{identifier}",
-            "WholeDisk": True,
-            "Writable": True,
-            "WritableMedia": True,
-            "Internal": False,
-            "Ejectable": True,
-            "Removable": True,
-            "RemovableMedia": True,
-            "RemovableMediaOrExternalDevice": True,
-            "BusProtocol": "USB",
-            "MediaName": "Reader Media",
-            "MediaType": "Generic",
-            "TotalSize": 64_000_000_000,
-            "DeviceBlockSize": 512,
-        }
-        values.update(overrides)
-        return values
-
     def _fixed_internal_plist(self, identifier: str) -> dict[str, object]:
-        return self._plist(
+        return _plist_dict(
             identifier,
             Internal=True,
             Ejectable=False,
@@ -471,7 +456,9 @@ class DiscoverDarwinTests(unittest.TestCase):
             RemovableMediaOrExternalDevice=False,
         )
 
-    def _backend(self, mock_macos: MagicMock, *, root_fails: bool = False) -> None:
+    def _stub_darwin_backend(
+        self, mock_macos: MagicMock, *, root_fails: bool = False
+    ) -> None:
         mock_macos.physical_list_plist.return_value = {"WholeDisks": ["disk0", "disk7"]}
         if root_fails:
             mock_macos.root_info_plist.side_effect = sd.SdError("no root")
@@ -483,7 +470,7 @@ class DiscoverDarwinTests(unittest.TestCase):
 
         def _info(target: str) -> dict[str, object]:
             if target == "disk7":
-                return self._plist(target)
+                return _plist_dict(target)
             return self._fixed_internal_plist(target)
 
         mock_macos.disk_info_plist.side_effect = _info
@@ -493,7 +480,7 @@ class DiscoverDarwinTests(unittest.TestCase):
     def test_lists_only_eligible_disks(
         self, mock_macos: MagicMock, mock_path: MagicMock
     ) -> None:
-        self._backend(mock_macos)
+        self._stub_darwin_backend(mock_macos)
         raw = mock_path.return_value
         raw.exists.return_value = True
         raw.is_char_device.return_value = True
@@ -506,7 +493,7 @@ class DiscoverDarwinTests(unittest.TestCase):
     def test_missing_raw_device_filters_candidate(
         self, mock_macos: MagicMock, mock_path: MagicMock
     ) -> None:
-        self._backend(mock_macos)
+        self._stub_darwin_backend(mock_macos)
         raw = mock_path.return_value
         raw.exists.return_value = True
         raw.is_char_device.return_value = False
@@ -517,7 +504,7 @@ class DiscoverDarwinTests(unittest.TestCase):
     def test_unresolvable_root_still_lists_removable(
         self, mock_macos: MagicMock, mock_path: MagicMock
     ) -> None:
-        self._backend(mock_macos, root_fails=True)
+        self._stub_darwin_backend(mock_macos, root_fails=True)
         raw = mock_path.return_value
         raw.exists.return_value = True
         raw.is_char_device.return_value = True
