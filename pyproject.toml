@@ -1,7 +1,7 @@
 [project]
 name = "tool"
 version = "0.1.0"
-description = "Joshua Li's focused command-line tools"
+description = "various tools"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = []
@@ -10,5 +10,6 @@ dependencies = []
 tool = "tool.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.12.15,<0.13"]
+requires = ["uv_build"]
 build-backend = "uv_build"
+

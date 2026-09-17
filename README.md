@@ -1,18 +1,3 @@
-# tool
-
-Small, focused command-line utilities.
-
-## Requirements
-
-- macOS for `sdqual`
-- Python 3.14, managed with [`uv`](https://docs.astral.sh/uv/)
-- [`fio`](https://fio.readthedocs.io/) for SD/removable-media qualification
-
-```sh
-brew install fio
-uv sync
-```
-
 ## `tool sdqual`
 
 `sdqual` destructively benchmarks and verifies an entire removable/raw disk.
@@ -64,22 +49,3 @@ uv run tool sdqual --verify-only disk4
 `--verify-only` does not intentionally rewrite the card; it verifies the fio
 data written by the preceding full qualification pass.
 
-You can also invoke the package directly:
-
-```sh
-uv run python -m tool sdqual --help
-```
-
-## Testing
-
-```sh
-uv run python -m unittest discover -s tests -v
-uv run tool --help
-uv run tool sdqual --help
-uv build
-```
-
-The safety logic, plist interpretation, CLI dispatch, and exact fio argv are
-unit-tested without hardware. The destructive raw-device path is intentionally
-not integration-tested in ordinary CI because meaningful coverage requires
-macOS plus dedicated disposable removable media.
