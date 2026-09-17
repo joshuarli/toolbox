@@ -1,12 +1,17 @@
-"""Destructively qualify an SD card or removable raw disk with fio."""
+"""Destructively qualify an SD card or removable raw disk with fio.
+
+Platform policy: this module holds pure logic (plist parsing, safety
+validation, fio argv construction, interactive prompting) plus thin
+orchestration. Every macOS specificity -- ``diskutil``/``sudo``/``caffeinate``
+paths and the subprocesses that touch them -- lives in :mod:`tool.macos`
+behind a platform gate. The only macOS touchpoints here are calls into that
+module and the ``sys.platform`` dispatch in :func:`discover_candidates`.
+"""
 
 from __future__ import annotations
 
 import argparse
-import os
-import plistlib
 import re
-import shlex
 import subprocess
 import sys
 import time
@@ -14,23 +19,21 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import preflight
+from . import macos, preflight
+from .errors import SafetyError, SdError
 
-DISKUTIL = "/usr/sbin/diskutil"
-SUDO = "/usr/bin/sudo"
-CAFFEINATE = "/usr/bin/caffeinate"
+__all__ = (
+    "CandidateDisk",
+    "DiskInfo",
+    "FioTest",
+    "SafetyError",
+    "SdError",
+    "TestResult",
+)
 
 DISK_RE = re.compile(r"^(?:/dev/)?(disk\d+)$")
 ANY_DISK_IDENTIFIER_RE = re.compile(r"^(disk\d+)(?:s\d+)*$")
 UNIX_WHOLE_DISK_RE = re.compile(r"^(sd[a-z]|mmcblk\d+|nvme\d+n\d+|disk\d+)$")
-
-
-class SdError(RuntimeError):
-    """Expected user-facing sd error."""
-
-
-class SafetyError(SdError):
-    """The target could not be proven safe to overwrite."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +177,8 @@ class FioTest:
             if self.ramp_seconds:
                 argv.append(f"--ramp_time={self.ramp_seconds}")
         if self.read_only:
-            argv.append("--readonly=1")
+            # Bare flag: fio 3.42 rejects `--readonly=1`.
+            argv.append("--readonly")
         if self.rwmixread is not None:
             argv.append(f"--rwmixread={self.rwmixread}")
         if self.norandommap:
@@ -318,33 +322,14 @@ def validate_candidate(
         )
 
 
-def plist_command(argv: Sequence[str]) -> dict[str, object]:
-    try:
-        process = subprocess.run(
-            list(argv),
-            check=True,
-            capture_output=True,
-        )
-        value = plistlib.loads(process.stdout)
-    except OSError as exc:
-        raise SdError(f"could not run: {shlex.join(argv)}") from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode(errors="replace").strip() if exc.stderr else ""
-        detail = f": {stderr}" if stderr else ""
-        raise SdError(f"command failed: {shlex.join(argv)}{detail}") from exc
-    except plistlib.InvalidFileException as exc:
-        raise SdError(f"invalid plist returned by: {shlex.join(argv)}") from exc
-    if not isinstance(value, dict):
-        raise SdError(f"unexpected plist returned by: {shlex.join(argv)}")
-    return value
-
-
 def disk_info(target: str) -> DiskInfo:
-    return DiskInfo.from_plist(plist_command([DISKUTIL, "info", "-plist", target]))
+    """Fetch and parse the macOS ``diskutil info`` plist for a target."""
+    return DiskInfo.from_plist(macos.disk_info_plist(target))
 
 
 def physical_disks() -> set[str]:
-    data = plist_command([DISKUTIL, "list", "-plist", "physical"])
+    """Return macOS whole-disk identifiers reported as physical."""
+    data = macos.physical_list_plist()
     value = data.get("WholeDisks")
     if not isinstance(value, list):
         raise SafetyError("diskutil did not return the physical WholeDisks list")
@@ -355,10 +340,11 @@ def physical_disks() -> set[str]:
 
 
 def root_backing_disks() -> set[str]:
-    root = plist_command([DISKUTIL, "info", "-plist", "/"])
+    """Return the whole disks backing the running macOS root, fail-closed."""
+    root = macos.root_info_plist()
     apfs: dict[str, object] | None = None
     if isinstance(root.get("APFSContainerReference"), str):
-        apfs = plist_command([DISKUTIL, "apfs", "list", "-plist"])
+        apfs = macos.apfs_list_plist()
     result = root_backing_disks_from_plists(root, apfs)
     if not result:
         raise SafetyError(
@@ -435,7 +421,7 @@ def discover_unixy_candidates(
 
 
 def discover_candidates() -> list[CandidateDisk]:
-    if sys.platform == "darwin":
+    if macos.is_macos():
         return discover_darwin_candidates()
     return discover_unixy_candidates()
 
@@ -560,15 +546,6 @@ def benchmark_tests(seconds: int) -> tuple[FioTest, ...]:
     )
 
 
-def sudo_validate() -> None:
-    try:
-        returncode = subprocess.run([SUDO, "-v"], check=False).returncode
-    except OSError as exc:
-        raise SdError("could not execute sudo") from exc
-    if returncode != 0:
-        raise SdError("sudo authentication failed")
-
-
 def confirm_target(
     identifier: str,
     *,
@@ -626,18 +603,6 @@ def same_device(before: DiskInfo) -> DiskInfo:
     return after
 
 
-def unmount_disk(info: DiskInfo) -> None:
-    sudo_validate()
-    try:
-        returncode = subprocess.run(
-            [SUDO, "-n", DISKUTIL, "unmountDisk", info.device_node], check=False
-        ).returncode
-    except OSError as exc:
-        raise SdError("could not execute diskutil unmountDisk") from exc
-    if returncode != 0:
-        raise SdError(f"could not unmount {info.device_node}")
-
-
 def prepare_target(identifier: str, *, verify_only: bool) -> DiskInfo:
     try:
         normalized = normalize_disk(identifier)
@@ -647,7 +612,7 @@ def prepare_target(identifier: str, *, verify_only: bool) -> DiskInfo:
     validate_candidate(before, physical_disks(), root_backing_disks())
     print_target(before, verify_only=verify_only)
     confirm_target(normalized, verify_only=verify_only)
-    unmount_disk(before)
+    macos.unmount_disk(before.device_node)
     after = same_device(before)
     raw_path = Path(after.raw_node)
     if not raw_path.exists() or not raw_path.is_char_device():
@@ -655,14 +620,19 @@ def prepare_target(identifier: str, *, verify_only: bool) -> DiskInfo:
     return after
 
 
-def run_test(test: FioTest, fio: str, raw_device: str) -> TestResult:
+def run_test(
+    test: FioTest, fio: str, raw_device: str, *, use_sudo: bool = True
+) -> TestResult:
+    """Run one fio workload; ``use_sudo=False`` runs fio directly (tests)."""
     print(f"\n{' ' + test.name + ' ':=^72}\n")
-    sudo_validate()
+    if use_sudo:
+        macos.validate_sudo()
+        command = [*macos.sudo_prefix(), *test.argv(fio, raw_device)]
+    else:
+        command = test.argv(fio, raw_device)
     started = time.monotonic()
     try:
-        returncode = subprocess.run(
-            [SUDO, "-n", *test.argv(fio, raw_device)], check=False
-        ).returncode
+        returncode = subprocess.run(command, check=False).returncode
     except OSError as exc:
         raise SdError(f"could not execute fio test {test.name}") from exc
     elapsed = time.monotonic() - started
@@ -686,36 +656,38 @@ def execute_suite(
     *,
     seconds: int,
     verify_only: bool,
+    use_sudo: bool = True,
 ) -> list[TestResult]:
-    try:
-        caffeinate = subprocess.Popen(
-            [CAFFEINATE, "-im", "-w", str(os.getpid())],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError as exc:
-        raise SdError("could not start caffeinate") from exc
+    # caffeinate exists only on macOS; fake-disk test runs skip it.
+    caffeinate: subprocess.Popen[bytes] | None = None
+    if macos.is_macos():
+        caffeinate = macos.start_caffeinate()
 
     results: list[TestResult] = []
     try:
         if verify_only:
-            results.append(run_test(FioTest.verify_only(), fio, info.raw_node))
+            results.append(
+                run_test(FioTest.verify_only(), fio, info.raw_node, use_sudo=use_sudo)
+            )
             return results
         print(
             f"\nPerformance workloads: QD1, {seconds}s each. "
             "The integrity pass has no time limit."
         )
         for test in benchmark_tests(seconds):
-            results.append(run_test(test, fio, info.raw_node))
+            results.append(run_test(test, fio, info.raw_node, use_sudo=use_sudo))
         print(
             "\nFinal qualification: full-device write → flush → "
             "read → CRC32C verification."
         )
         print("Verification continues after mismatches so damage can surface.")
-        results.append(run_test(FioTest.integrity(), fio, info.raw_node))
+        results.append(
+            run_test(FioTest.integrity(), fio, info.raw_node, use_sudo=use_sudo)
+        )
         return results
     finally:
-        _stop_caffeinate(caffeinate)
+        if caffeinate is not None:
+            _stop_caffeinate(caffeinate)
 
 
 def render_summary(

@@ -218,7 +218,8 @@ class FioCommandTests(unittest.TestCase):
         self.assertIn("--filename=/dev/rdisk7", seq_read)
         self.assertIn("--rw=read", seq_read)
         self.assertIn("--bs=1m", seq_read)
-        self.assertIn("--readonly=1", seq_read)
+        self.assertIn("--readonly", seq_read)
+        self.assertNotIn("--readonly=1", seq_read)
         self.assertIn("--time_based=1", seq_read)
         self.assertIn("--runtime=30", seq_read)
 
@@ -230,7 +231,8 @@ class FioCommandTests(unittest.TestCase):
         self.assertIn("--rw=randread", rand_read)
         self.assertIn("--bs=4k", rand_read)
         self.assertIn("--norandommap=1", rand_read)
-        self.assertIn("--readonly=1", rand_read)
+        self.assertIn("--readonly", rand_read)
+        self.assertNotIn("--readonly=1", rand_read)
 
         rand_write = tests["rand-write-4k"].argv("fio", "/dev/rdisk7")
         self.assertIn("--rw=randwrite", rand_write)
@@ -261,6 +263,60 @@ class FioCommandTests(unittest.TestCase):
         self.assertIn("--verify=crc32c", argv)
         self.assertNotIn("--do_verify=1", argv)
         self.assertNotIn("--time_based=1", argv)
+
+    def test_seq_read_argv_is_pinned(self) -> None:
+        test = sd.FioTest(
+            "seq-read-1m",
+            "read",
+            "1m",
+            runtime_seconds=30,
+            ramp_seconds=3,
+            read_only=True,
+        )
+        self.assertEqual(
+            test.argv("fio", "/dev/rdisk7"),
+            [
+                "fio",
+                "--name=seq-read-1m",
+                "--filename=/dev/rdisk7",
+                "--ioengine=psync",
+                "--direct=1",
+                "--iodepth=1",
+                "--group_reporting=1",
+                "--output-format=normal",
+                "--eta=always",
+                "--eta-interval=5",
+                "--rw=read",
+                "--bs=1m",
+                "--time_based=1",
+                "--runtime=30",
+                "--ramp_time=3",
+                "--readonly",
+            ],
+        )
+
+    def test_integrity_argv_is_pinned(self) -> None:
+        self.assertEqual(
+            sd.FioTest.integrity().argv("fio", "/dev/rdisk7"),
+            [
+                "fio",
+                "--name=full-device-integrity",
+                "--filename=/dev/rdisk7",
+                "--ioengine=psync",
+                "--direct=1",
+                "--iodepth=1",
+                "--group_reporting=1",
+                "--output-format=normal",
+                "--eta=always",
+                "--eta-interval=5",
+                "--rw=write",
+                "--bs=1m",
+                "--end_fsync=1",
+                "--verify=crc32c",
+                "--do_verify=1",
+                "--verify_fatal=0",
+            ],
+        )
 
 
 def _candidate(identifier: str = "disk7") -> sd.CandidateDisk:
@@ -375,12 +431,190 @@ class DiscoverCandidatesTests(unittest.TestCase):
     ) -> None:
         mock_darwin.return_value = [_candidate("disk4")]
         mock_unixy.return_value = [_candidate("sda")]
-        with patch("tool.sd.sys.platform", "darwin"):
+        with patch("tool.sd.macos.is_macos", return_value=True):
             self.assertEqual(
                 [c.identifier for c in sd.discover_candidates()], ["disk4"]
             )
-        with patch("tool.sd.sys.platform", "linux"):
+        with patch("tool.sd.macos.is_macos", return_value=False):
             self.assertEqual([c.identifier for c in sd.discover_candidates()], ["sda"])
+
+
+class DiscoverDarwinTests(unittest.TestCase):
+    def _plist(self, identifier: str, **overrides: object) -> dict[str, object]:
+        values: dict[str, object] = {
+            "DeviceIdentifier": identifier,
+            "DeviceNode": f"/dev/{identifier}",
+            "WholeDisk": True,
+            "Writable": True,
+            "WritableMedia": True,
+            "Internal": False,
+            "Ejectable": True,
+            "Removable": True,
+            "RemovableMedia": True,
+            "RemovableMediaOrExternalDevice": True,
+            "BusProtocol": "USB",
+            "MediaName": "Reader Media",
+            "MediaType": "Generic",
+            "TotalSize": 64_000_000_000,
+            "DeviceBlockSize": 512,
+        }
+        values.update(overrides)
+        return values
+
+    def _fixed_internal_plist(self, identifier: str) -> dict[str, object]:
+        return self._plist(
+            identifier,
+            Internal=True,
+            Ejectable=False,
+            Removable=False,
+            RemovableMedia=False,
+            RemovableMediaOrExternalDevice=False,
+        )
+
+    def _backend(self, mock_macos: MagicMock, *, root_fails: bool = False) -> None:
+        mock_macos.physical_list_plist.return_value = {"WholeDisks": ["disk0", "disk7"]}
+        if root_fails:
+            mock_macos.root_info_plist.side_effect = sd.SdError("no root")
+        else:
+            mock_macos.root_info_plist.return_value = {
+                "DeviceIdentifier": "disk0s1",
+                "ParentWholeDisk": "disk0",
+            }
+
+        def _info(target: str) -> dict[str, object]:
+            if target == "disk7":
+                return self._plist(target)
+            return self._fixed_internal_plist(target)
+
+        mock_macos.disk_info_plist.side_effect = _info
+
+    @patch("tool.sd.Path")
+    @patch("tool.sd.macos")
+    def test_lists_only_eligible_disks(
+        self, mock_macos: MagicMock, mock_path: MagicMock
+    ) -> None:
+        self._backend(mock_macos)
+        raw = mock_path.return_value
+        raw.exists.return_value = True
+        raw.is_char_device.return_value = True
+        candidates = sd.discover_darwin_candidates()
+        self.assertEqual([c.identifier for c in candidates], ["disk7"])
+        self.assertEqual(candidates[0].device_node, "/dev/disk7")
+
+    @patch("tool.sd.Path")
+    @patch("tool.sd.macos")
+    def test_missing_raw_device_filters_candidate(
+        self, mock_macos: MagicMock, mock_path: MagicMock
+    ) -> None:
+        self._backend(mock_macos)
+        raw = mock_path.return_value
+        raw.exists.return_value = True
+        raw.is_char_device.return_value = False
+        self.assertEqual(sd.discover_darwin_candidates(), [])
+
+    @patch("tool.sd.Path")
+    @patch("tool.sd.macos")
+    def test_unresolvable_root_still_lists_removable(
+        self, mock_macos: MagicMock, mock_path: MagicMock
+    ) -> None:
+        self._backend(mock_macos, root_fails=True)
+        raw = mock_path.return_value
+        raw.exists.return_value = True
+        raw.is_char_device.return_value = True
+        candidates = sd.discover_darwin_candidates()
+        self.assertEqual([c.identifier for c in candidates], ["disk7"])
+
+
+class RunTestSudoTests(unittest.TestCase):
+    @patch("tool.sd.macos")
+    @patch("tool.sd.subprocess.run")
+    def test_use_sudo_prefixes_with_sudo(
+        self, mock_run: MagicMock, mock_macos: MagicMock
+    ) -> None:
+        mock_macos.sudo_prefix.return_value = ["/usr/bin/sudo", "-n"]
+        mock_run.return_value = MagicMock(returncode=0)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = sd.run_test(
+                sd.FioTest("probe", "read", "4k"), "/bin/fio", "/dev/rdisk7"
+            )
+        command = mock_run.call_args.args[0]
+        self.assertEqual(command[:2], ["/usr/bin/sudo", "-n"])
+        self.assertIn("--filename=/dev/rdisk7", command)
+        mock_macos.validate_sudo.assert_called_once_with()
+        self.assertTrue(result.passed)
+
+    @patch("tool.sd.macos")
+    @patch("tool.sd.subprocess.run")
+    def test_no_sudo_runs_fio_directly(
+        self, mock_run: MagicMock, mock_macos: MagicMock
+    ) -> None:
+        mock_run.return_value = MagicMock(returncode=0)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = sd.run_test(
+                sd.FioTest("probe", "read", "4k"),
+                "/bin/fio",
+                "/dev/rdisk7",
+                use_sudo=False,
+            )
+        command = mock_run.call_args.args[0]
+        self.assertEqual(command[0], "/bin/fio")
+        mock_macos.validate_sudo.assert_not_called()
+        self.assertTrue(result.passed)
+
+    @patch("tool.sd.macos")
+    @patch("tool.sd.subprocess.run")
+    def test_nonzero_exit_is_failure(
+        self, mock_run: MagicMock, _macos: MagicMock
+    ) -> None:
+        mock_run.return_value = MagicMock(returncode=3)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = sd.run_test(
+                sd.FioTest("probe", "read", "4k"),
+                "/bin/fio",
+                "/dev/rdisk7",
+                use_sudo=False,
+            )
+        self.assertFalse(result.passed)
+        self.assertEqual(result.returncode, 3)
+
+
+class ExecuteSuiteTests(unittest.TestCase):
+    def _passed(self, test, fio: str, raw: str, **kwargs) -> sd.TestResult:
+        return sd.TestResult(test.name, 0, 0.1)
+
+    @patch("tool.sd.macos")
+    @patch("tool.sd.run_test")
+    def test_skips_caffeinate_off_darwin(
+        self, mock_run_test: MagicMock, mock_macos: MagicMock
+    ) -> None:
+        mock_macos.is_macos.return_value = False
+        mock_run_test.side_effect = self._passed
+        info = SafetyTests().make_info()
+        with contextlib.redirect_stdout(io.StringIO()):
+            results = sd.execute_suite(
+                info, "/bin/fio", seconds=30, verify_only=False, use_sudo=False
+            )
+        self.assertEqual(len(results), 6)
+        self.assertTrue(all(result.passed for result in results))
+        mock_macos.start_caffeinate.assert_not_called()
+
+    @patch("tool.sd.run_test")
+    @patch("tool.sd.macos")
+    def test_uses_caffeinate_on_darwin(
+        self, mock_macos: MagicMock, mock_run_test: MagicMock
+    ) -> None:
+        proc = MagicMock()
+        mock_macos.is_macos.return_value = True
+        mock_macos.start_caffeinate.return_value = proc
+        mock_run_test.side_effect = self._passed
+        info = SafetyTests().make_info()
+        with contextlib.redirect_stdout(io.StringIO()):
+            results = sd.execute_suite(
+                info, "/bin/fio", seconds=30, verify_only=True, use_sudo=False
+            )
+        self.assertEqual(len(results), 1)
+        mock_macos.start_caffeinate.assert_called_once_with()
+        proc.terminate.assert_called_once_with()
 
 
 class ParserTests(unittest.TestCase):
