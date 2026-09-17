@@ -1,18 +1,33 @@
-## `tool sdqual`
+## `tool sd`
 
-`sdqual` destructively benchmarks and verifies an entire removable/raw disk.
+`sd` destructively benchmarks and verifies an entire removable/raw disk.
 
 **Normal mode erases the selected disk. Check the `diskN` identifier carefully.**
 
+Requires macOS 26+ and `fio` >= 3.42 (checked on every run):
+
+```sh
+brew install fio
+```
+
+The dumbed-down default is interactive: pick a card from a numbered list
+and it runs and reports overall health.
+
+```sh
+uv run tool sd
+```
+
+Power users can pass the disk and flags explicitly:
+
 ```sh
 diskutil list
-uv run tool sdqual disk4
+uv run tool sd disk4
 ```
 
 Use longer benchmark samples when comparing cards:
 
 ```sh
-uv run tool sdqual --seconds 60 disk4
+uv run tool sd --seconds 60 disk4
 ```
 
 The performance suite is deliberately QD1:
@@ -29,7 +44,7 @@ qualification failure. Performance is reported without an arbitrary grade;
 compare bandwidth, IOPS, and especially high-percentile latency across cards
 using the same reader and port.
 
-The target must be a physical, writable removable/external whole disk. `sdqual`
+The target must be a physical, writable removable/external whole disk. `sd`
 fails closed for the running macOS system disk and ordinary internal fixed
 media, has no `--force` bypass, unmounts before raw access, and leaves the disk
 unmounted afterward.
@@ -43,9 +58,17 @@ real power/removal cycle:
 diskutil eject /dev/disk4
 # Physically remove and reinsert the card, then find its new identifier:
 diskutil list
-uv run tool sdqual --verify-only disk4
+uv run tool sd --verify-only disk4
 ```
 
 `--verify-only` does not intentionally rewrite the card; it verifies the fio
 data written by the preceding full qualification pass.
 
+### Lint and format
+
+```sh
+make fmtlint
+```
+
+Runs latest `ruff` destructively (`check --fix --unsafe-fixes` + `format`)
+and `ty` (type check). It rewrites files in place.

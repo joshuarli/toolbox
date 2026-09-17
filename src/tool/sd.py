@@ -1,17 +1,20 @@
+"""Destructively qualify an SD card or removable raw disk with fio."""
+
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 import os
-from pathlib import Path
-import platform
 import plistlib
 import re
 import shlex
-import shutil
 import subprocess
+import sys
 import time
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+from . import preflight
 
 DISKUTIL = "/usr/sbin/diskutil"
 SUDO = "/usr/bin/sudo"
@@ -19,13 +22,14 @@ CAFFEINATE = "/usr/bin/caffeinate"
 
 DISK_RE = re.compile(r"^(?:/dev/)?(disk\d+)$")
 ANY_DISK_IDENTIFIER_RE = re.compile(r"^(disk\d+)(?:s\d+)*$")
+UNIX_WHOLE_DISK_RE = re.compile(r"^(sd[a-z]|mmcblk\d+|nvme\d+n\d+|disk\d+)$")
 
 
-class SdqualError(RuntimeError):
-    """Expected user-facing sdqual error."""
+class SdError(RuntimeError):
+    """Expected user-facing sd error."""
 
 
-class SafetyError(SdqualError):
+class SafetyError(SdError):
     """The target could not be proven safe to overwrite."""
 
 
@@ -62,7 +66,9 @@ class DiskInfo:
 
         def integer(key: str) -> int:
             value = data.get(key, 0)
-            return value if isinstance(value, int) and not isinstance(value, bool) else 0
+            if isinstance(value, bool):
+                return 0
+            return value if isinstance(value, int) else 0
 
         device_node = data.get("DeviceNode")
         if not isinstance(device_node, str) or not device_node:
@@ -94,8 +100,8 @@ class DiskInfo:
 
     @property
     def is_removable_or_external(self) -> bool:
-        # A built-in SD reader can report Internal=True while its media remains
-        # ejectable/removable. External fixed media is also accepted by design.
+        # A built-in SD reader can report Internal=True while its media
+        # remains ejectable/removable. External fixed media is accepted.
         return (
             not self.internal
             or self.ejectable
@@ -103,6 +109,15 @@ class DiskInfo:
             or self.removable_media
             or self.removable_media_or_external
         )
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateDisk:
+    identifier: str
+    device_node: str
+    media_name: str
+    total_size: int
+    detail: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,8 +202,15 @@ class TestResult:
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.description = "Destructively qualify an SD card or removable raw disk with fio."
-    parser.add_argument("disk", help="whole disk identifier: disk4 or /dev/disk4")
+    parser.description = (
+        "Destructively qualify an SD card or removable raw disk with fio."
+    )
+    parser.add_argument(
+        "disk",
+        nargs="?",
+        default=None,
+        help="whole disk identifier: disk4 or /dev/disk4 (omit for interactive picker)",
+    )
     parser.add_argument(
         "--seconds",
         type=int,
@@ -291,7 +313,9 @@ def validate_candidate(
 ) -> None:
     validate_target(info, physical_disks)
     if info.identifier in root_disks:
-        raise SafetyError(f"{info.identifier} backs the running macOS system; refusing it")
+        raise SafetyError(
+            f"{info.identifier} backs the running macOS system; refusing it"
+        )
 
 
 def plist_command(argv: Sequence[str]) -> dict[str, object]:
@@ -299,20 +323,19 @@ def plist_command(argv: Sequence[str]) -> dict[str, object]:
         process = subprocess.run(
             list(argv),
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
         value = plistlib.loads(process.stdout)
     except OSError as exc:
-        raise SdqualError(f"could not run: {shlex.join(argv)}") from exc
+        raise SdError(f"could not run: {shlex.join(argv)}") from exc
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.decode(errors="replace").strip() if exc.stderr else ""
         detail = f": {stderr}" if stderr else ""
-        raise SdqualError(f"command failed: {shlex.join(argv)}{detail}") from exc
+        raise SdError(f"command failed: {shlex.join(argv)}{detail}") from exc
     except plistlib.InvalidFileException as exc:
-        raise SdqualError(f"invalid plist returned by: {shlex.join(argv)}") from exc
+        raise SdError(f"invalid plist returned by: {shlex.join(argv)}") from exc
     if not isinstance(value, dict):
-        raise SdqualError(f"unexpected plist returned by: {shlex.join(argv)}")
+        raise SdError(f"unexpected plist returned by: {shlex.join(argv)}")
     return value
 
 
@@ -338,8 +361,138 @@ def root_backing_disks() -> set[str]:
         apfs = plist_command([DISKUTIL, "apfs", "list", "-plist"])
     result = root_backing_disks_from_plists(root, apfs)
     if not result:
-        raise SafetyError("cannot prove which physical disk backs the running macOS root")
+        raise SafetyError(
+            "cannot prove which physical disk backs the running macOS root"
+        )
     return result
+
+
+def candidate_from_disk_info(info: DiskInfo) -> CandidateDisk:
+    detail = info.bus_protocol or info.media_type or "(unknown)"
+    return CandidateDisk(
+        identifier=info.identifier,
+        device_node=info.device_node,
+        media_name=info.media_name or "(unknown)",
+        total_size=info.total_size,
+        detail=detail,
+    )
+
+
+def discover_darwin_candidates() -> list[CandidateDisk]:
+    """Autodetect eligible disks via diskutil plus a unix device check."""
+    physical = physical_disks()
+    try:
+        roots = root_backing_disks()
+    except SdError:
+        roots = set()
+    candidates: list[CandidateDisk] = []
+    for identifier in sorted(physical):
+        try:
+            info = disk_info(identifier)
+        except SdError:
+            continue
+        try:
+            validate_candidate(info, physical, roots)
+        except SafetyError:
+            continue
+        raw_path = Path(info.raw_node)
+        try:
+            if not raw_path.exists() or not raw_path.is_char_device():
+                continue
+        except OSError:
+            continue
+        candidates.append(candidate_from_disk_info(info))
+    return candidates
+
+
+def discover_unixy_candidates(
+    dev_dir: Path = Path("/dev"),
+) -> list[CandidateDisk]:
+    """Generic Unix fallback: enumerate whole-disk-like device nodes."""
+    try:
+        entries = list(dev_dir.iterdir())
+    except OSError as exc:
+        raise SdError(f"could not list {dev_dir}: {exc}") from exc
+    candidates: list[CandidateDisk] = []
+    for entry in sorted(entries, key=lambda item: item.name):
+        if UNIX_WHOLE_DISK_RE.fullmatch(entry.name) is None:
+            continue
+        try:
+            if not entry.exists():
+                continue
+        except OSError:
+            continue
+        candidates.append(
+            CandidateDisk(
+                identifier=entry.name,
+                device_node=str(entry),
+                media_name="(unknown)",
+                total_size=0,
+                detail="unix",
+            )
+        )
+    return candidates
+
+
+def discover_candidates() -> list[CandidateDisk]:
+    if sys.platform == "darwin":
+        return discover_darwin_candidates()
+    return discover_unixy_candidates()
+
+
+def format_candidate(index: int, candidate: CandidateDisk) -> str:
+    if candidate.total_size > 0:
+        size = format_size(candidate.total_size)
+    else:
+        size = "unknown size"
+    return (
+        f"  {index}) {candidate.device_node} — {candidate.media_name}"
+        f" — {size} — {candidate.detail}"
+    )
+
+
+def prompt_for_candidate(
+    candidates: Sequence[CandidateDisk],
+    *,
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> CandidateDisk:
+    if not candidates:
+        raise SdError("no suitable removable disks found; connect a card and try again")
+    output_fn("Available removable disks:")
+    for position, candidate in enumerate(candidates, start=1):
+        output_fn(format_candidate(position, candidate))
+    last = len(candidates)
+    while True:
+        try:
+            response = input_fn(f"Select a disk [1-{last}] (or q to quit): ")
+        except EOFError as exc:
+            raise SdError("no disk selected") from exc
+        text = response.strip().lower()
+        if text in {"q", "quit", "exit"}:
+            raise SdError("cancelled by user")
+        try:
+            choice = int(text)
+        except ValueError:
+            output_fn(f"Enter a number 1-{last} or q to quit.")
+            continue
+        if 1 <= choice <= last:
+            return candidates[choice - 1]
+        output_fn(f"Enter a number 1-{last} or q to quit.")
+
+
+def resolve_interactive_disk(
+    *,
+    input_fn: Callable[[str], str] = input,
+    output_fn: Callable[[str], None] = print,
+) -> str:
+    if not sys.stdin.isatty():
+        raise SdError(
+            "no disk specified and stdin is not interactive; pass diskN explicitly"
+        )
+    candidates = discover_candidates()
+    selected = prompt_for_candidate(candidates, input_fn=input_fn, output_fn=output_fn)
+    return selected.identifier
 
 
 def format_size(size: int) -> str:
@@ -359,64 +512,61 @@ def format_duration(seconds: float) -> str:
 
 def benchmark_tests(seconds: int) -> tuple[FioTest, ...]:
     ramp_seconds = min(3, seconds // 10)
-    common = {"runtime_seconds": seconds, "ramp_seconds": ramp_seconds}
     return (
-        FioTest("seq-read-1m", "read", "1m", read_only=True, **common),
-        FioTest("seq-write-1m", "write", "1m", end_fsync=True, **common),
+        FioTest(
+            "seq-read-1m",
+            "read",
+            "1m",
+            runtime_seconds=seconds,
+            ramp_seconds=ramp_seconds,
+            read_only=True,
+        ),
+        FioTest(
+            "seq-write-1m",
+            "write",
+            "1m",
+            runtime_seconds=seconds,
+            ramp_seconds=ramp_seconds,
+            end_fsync=True,
+        ),
         FioTest(
             "rand-read-4k",
             "randread",
             "4k",
+            runtime_seconds=seconds,
+            ramp_seconds=ramp_seconds,
             read_only=True,
             norandommap=True,
-            **common,
         ),
         FioTest(
             "rand-write-4k",
             "randwrite",
             "4k",
+            runtime_seconds=seconds,
+            ramp_seconds=ramp_seconds,
             norandommap=True,
             end_fsync=True,
-            **common,
         ),
         FioTest(
             "rand-70r30w-4k",
             "randrw",
             "4k",
+            runtime_seconds=seconds,
+            ramp_seconds=ramp_seconds,
             rwmixread=70,
             norandommap=True,
             end_fsync=True,
-            **common,
         ),
     )
 
 
-def require_fio() -> tuple[str, str]:
-    fio = shutil.which("fio")
-    if fio is None:
-        raise SdqualError("fio not found; install it with: brew install fio")
-    try:
-        process = subprocess.run(
-            [fio, "--version"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise SdqualError("fio is installed but could not be executed") from exc
-    version = process.stdout.strip()
-    if not version:
-        raise SdqualError("fio returned an empty version string")
-    return fio, version
-
-
 def sudo_validate() -> None:
     try:
-        returncode = subprocess.run([SUDO, "-v"]).returncode
+        returncode = subprocess.run([SUDO, "-v"], check=False).returncode
     except OSError as exc:
-        raise SdqualError("could not execute sudo") from exc
+        raise SdError("could not execute sudo") from exc
     if returncode != 0:
-        raise SdqualError("sudo authentication failed")
+        raise SdError("sudo authentication failed")
 
 
 def confirm_target(
@@ -429,12 +579,12 @@ def confirm_target(
     expected = f"{verb} {identifier}"
     response = input_fn(f"Type exactly {expected!r} to continue: ")
     if response != expected:
-        raise SdqualError("confirmation did not match")
+        raise SdError("confirmation did not match")
 
 
 def print_target(info: DiskInfo, *, verify_only: bool) -> None:
     print("=" * 72)
-    print("sdqual — raw-device SD/removable-media qualification")
+    print("sd — raw-device SD/removable-media qualification")
     print("=" * 72)
     print(f"device:     {info.device_node}")
     print(f"raw device: {info.raw_node}")
@@ -451,7 +601,7 @@ def print_target(info: DiskInfo, *, verify_only: bool) -> None:
         )
     else:
         print("\nWARNING: THIS WILL DESTROY ALL DATA ON THE DEVICE.")
-        print("The final pass overwrites and verifies the device's advertised capacity.")
+        print("The final pass overwrites and verifies the advertised capacity.")
 
 
 def _identity(info: DiskInfo) -> tuple[object, ...]:
@@ -480,19 +630,19 @@ def unmount_disk(info: DiskInfo) -> None:
     sudo_validate()
     try:
         returncode = subprocess.run(
-            [SUDO, "-n", DISKUTIL, "unmountDisk", info.device_node]
+            [SUDO, "-n", DISKUTIL, "unmountDisk", info.device_node], check=False
         ).returncode
     except OSError as exc:
-        raise SdqualError("could not execute diskutil unmountDisk") from exc
+        raise SdError("could not execute diskutil unmountDisk") from exc
     if returncode != 0:
-        raise SdqualError(f"could not unmount {info.device_node}")
+        raise SdError(f"could not unmount {info.device_node}")
 
 
 def prepare_target(identifier: str, *, verify_only: bool) -> DiskInfo:
     try:
         normalized = normalize_disk(identifier)
     except ValueError as exc:
-        raise SdqualError(str(exc)) from exc
+        raise SdError(str(exc)) from exc
     before = disk_info(normalized)
     validate_candidate(before, physical_disks(), root_backing_disks())
     print_target(before, verify_only=verify_only)
@@ -511,10 +661,10 @@ def run_test(test: FioTest, fio: str, raw_device: str) -> TestResult:
     started = time.monotonic()
     try:
         returncode = subprocess.run(
-            [SUDO, "-n", *test.argv(fio, raw_device)]
+            [SUDO, "-n", *test.argv(fio, raw_device)], check=False
         ).returncode
     except OSError as exc:
-        raise SdqualError(f"could not execute fio test {test.name}") from exc
+        raise SdError(f"could not execute fio test {test.name}") from exc
     elapsed = time.monotonic() - started
     status = "PASS" if returncode == 0 else f"FAIL (fio exit {returncode})"
     print(f"\n{test.name}: {status} [{format_duration(elapsed)}]")
@@ -544,7 +694,7 @@ def execute_suite(
             stderr=subprocess.DEVNULL,
         )
     except OSError as exc:
-        raise SdqualError("could not start caffeinate") from exc
+        raise SdError("could not start caffeinate") from exc
 
     results: list[TestResult] = []
     try:
@@ -561,9 +711,7 @@ def execute_suite(
             "\nFinal qualification: full-device write → flush → "
             "read → CRC32C verification."
         )
-        print(
-            "Verification continues after mismatches so additional damage can surface."
-        )
+        print("Verification continues after mismatches so damage can surface.")
         results.append(run_test(FioTest.integrity(), fio, info.raw_node))
         return results
     finally:
@@ -579,13 +727,16 @@ def render_summary(
     print(f"\n{' SUMMARY ':=^72}\n")
     for result in results:
         status = "PASS" if result.passed else f"FAIL ({result.returncode})"
-        print(
-            f"{result.name:<28} "
-            f"{status:<12} "
-            f"{format_duration(result.elapsed_seconds)}"
+        line = (
+            f"{result.name:<28} {status:<12} {format_duration(result.elapsed_seconds)}"
         )
+        print(line)
     failed = [result for result in results if not result.passed]
     print(f"\nOVERALL: {'FAIL' if failed else 'PASS'}")
+    if failed:
+        print("Overall health: FAILED — do not trust this card.")
+    else:
+        print("Overall health: HEALTHY (all checks passed).")
     print("Any verification mismatch or I/O error is a failure.")
     print("Performance is intentionally not graded: compare bandwidth, IOPS, and")
     print("especially p99/p99.9 latency between cards.")
@@ -594,27 +745,36 @@ def render_summary(
         print("\nStrongly recommended persistence check:")
         print(f"  diskutil eject /dev/{identifier}")
         print("  physically remove/reinsert the card; find its new diskN; then:")
-        print("  tool sdqual --verify-only diskN")
+        print("  tool sd --verify-only diskN")
     return not failed
 
 
 def run(args: argparse.Namespace) -> int:
-    if platform.system() != "Darwin":
-        raise SdqualError("sdqual is macOS-only")
-    if args.seconds <= 0:
-        raise SdqualError("--seconds must be > 0")
-    fio, fio_version = require_fio()
+    preflight_info = getattr(args, "preflight", None)
+    if preflight_info is None:
+        preflight_info = preflight.run_preflight()
+    fio = preflight_info.fio_path
+    fio_version = preflight_info.fio_version
+    seconds = getattr(args, "seconds", 30)
+    verify_only = bool(getattr(args, "verify_only", False))
+    if seconds <= 0:
+        raise SdError("--seconds must be > 0")
     print(f"fio: {fio_version} ({fio})")
-    info = prepare_target(args.disk, verify_only=args.verify_only)
+    print(f"macOS {preflight_info.macos_version} preflight: OK")
+    disk_arg = getattr(args, "disk", None)
+    if disk_arg is None:
+        print("No disk specified; autodetecting removable disks…")
+        disk_arg = resolve_interactive_disk()
+    info = prepare_target(disk_arg, verify_only=verify_only)
     results = execute_suite(
         info,
         fio,
-        seconds=args.seconds,
-        verify_only=args.verify_only,
+        seconds=seconds,
+        verify_only=verify_only,
     )
     passed = render_summary(
         results,
-        verify_only=args.verify_only,
+        verify_only=verify_only,
         identifier=info.identifier,
     )
     return 0 if passed else 1
