@@ -15,8 +15,9 @@ def _normalize(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def _artist_from_credit(credit: list[dict[str, Any]]) -> str:
-    names = [e.get("name", "") for e in credit if isinstance(e, dict) and e.get("name")]
+def _artist_from_credit(credit: list[Any]) -> str:
+    """*credit* is untrusted external JSON; entries are not guaranteed to be dicts."""
+    names = [str(e.get("name", "")) for e in credit if isinstance(e, dict) and e.get("name")]
     return ", ".join(names)
 
 

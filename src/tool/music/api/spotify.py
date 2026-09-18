@@ -131,7 +131,7 @@ def _generate_totp(version: int, secret_bytes: bytearray) -> str:
 def _get_js_pack_url(session: Session) -> str:
     """Extract the web-player JS bundle URL from Spotify's homepage."""
     html = session.get_text("https://open.spotify.com")
-    links = re.findall(r'src="(https://open\.spotifycdn\.com/cdn/build/[^"]+\.js)"', html)
+    links = [str(link) for link in re.findall(r'src="(https://open\.spotifycdn\.com/cdn/build/[^"]+\.js)"', html)]
     # Prefer desktop web-player, fall back to mobile-web-player
     for link in links:
         if "/web-player/web-player" in link:
@@ -149,7 +149,7 @@ def _get_client_version(session: Session) -> str:
     if not match:
         raise RuntimeError("Could not find appServerConfig on Spotify homepage")
     cfg = json.loads(base64.b64decode(match.group(1)).decode("utf-8"))
-    return cfg["clientVersion"]
+    return str(cfg["clientVersion"])
 
 
 def _get_sha256_hash(session: Session, js_pack_url: str, operation_name: str) -> str:
@@ -158,12 +158,16 @@ def _get_sha256_hash(session: Session, js_pack_url: str, operation_name: str) ->
     pattern = rf'"{operation_name}","query","([a-f0-9]{{64}})"'
     match = re.search(pattern, js)
     if match:
-        return match.group(1)
+        h = match.group(1)
+        assert isinstance(h, str)
+        return h
     # Fallback: try mutation
     pattern = rf'"{operation_name}","mutation","([a-f0-9]{{64}})"'
     match = re.search(pattern, js)
     if match:
-        return match.group(1)
+        h = match.group(1)
+        assert isinstance(h, str)
+        return h
     raise RuntimeError(f"Could not find sha256Hash for {operation_name} in JS pack")
 
 
@@ -211,7 +215,7 @@ class SpotifyPublicPlaylist:
                     },
                 )
                 self._access_token = data["accessToken"]
-                client_id = data["clientId"]
+                client_id = str(data["clientId"])
                 break
             except Exception:
                 if attempt == 1:

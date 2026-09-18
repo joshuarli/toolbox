@@ -5,6 +5,8 @@ import sys
 from collections.abc import Sequence
 
 from tool import sd
+from tool.ig import cli as ig_cli
+from tool.ig.browser import BrowserCrashedError, BrowserInUseError
 from tool.movies import cli as movies_cli
 from tool.music import cli as music_cli
 from tool.sd import preflight
@@ -35,6 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="scan/tag/transcode a local audio library",
     )
     music_cli.configure_parser(music_parser)
+
+    ig_parser = subparsers.add_parser(
+        "ig",
+        help="log in to, scan, and archive Instagram profiles and posts",
+    )
+    ig_cli.configure_parser(ig_parser)
     return parser
 
 
@@ -50,6 +58,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130
+    except (BrowserInUseError, BrowserCrashedError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     except (preflight.PreflightError, sd.SdError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

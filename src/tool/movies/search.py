@@ -5,7 +5,7 @@ import sqlite3
 import zlib
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, cast
 
 from tool.movies.paths import db_path
 
@@ -112,7 +112,13 @@ def match_confidence(query_title: str, query_year: int | None, row) -> int:
     return round(sim * 60 + (40 if year_match else 0))
 
 
-def confidence_breakdown(query_title: str, query_year: int | None, row) -> dict[str, int | bool | None]:
+class ConfidenceBreakdown(TypedDict):
+    title: int
+    year: bool | None
+    pop: int
+
+
+def confidence_breakdown(query_title: str, query_year: int | None, row) -> ConfidenceBreakdown:
     """Return the individual score components: title %, year bool|None, pop %."""
     sim = _title_sim(query_title, row)
     pop_pct = round(min(_popularity(row), 25.0) / 25.0 * 100)
@@ -210,37 +216,45 @@ def search(query: str, year: int | None = None, limit: int = 10) -> list[sqlite3
     con.row_factory = sqlite3.Row
     fts_query = _fts5_safe(query)
 
-    def _execute(fts_expr: str, year_filter: int | None, row_limit: int):
+    def _execute(fts_expr: str, year_filter: int | None, row_limit: int) -> list[sqlite3.Row]:
         """Run an FTS query; if year_filter is given, pre-filter in SQL
         so year-matched films can never be pushed out of the candidate set
         by BM25 rank alone (fixes e.g. 'Summer' where 634 results bury
         the year-1986 candidates beyond the default limit)."""
+        # con.row_factory = sqlite3.Row (set above); fetchall() is typed
+        # list[Any] by typeshed since the row type is row_factory-dependent.
         if year_filter is not None:
-            return con.execute(
-                """
-                SELECT m.slug, m.title, m.alt_title, m.year, m.directors,
-                       m.rating, m.rating_count
-                FROM movie_fts fts
-                JOIN movie m ON m.slug = fts.slug
-                WHERE movie_fts MATCH ? AND m.year = ?
-                ORDER BY rank
-                LIMIT ?
-                """,
-                (fts_expr, year_filter, row_limit),
-            ).fetchall()
+            return cast(
+                "list[sqlite3.Row]",
+                con.execute(
+                    """
+                    SELECT m.slug, m.title, m.alt_title, m.year, m.directors,
+                           m.rating, m.rating_count
+                    FROM movie_fts fts
+                    JOIN movie m ON m.slug = fts.slug
+                    WHERE movie_fts MATCH ? AND m.year = ?
+                    ORDER BY rank
+                    LIMIT ?
+                    """,
+                    (fts_expr, year_filter, row_limit),
+                ).fetchall(),
+            )
         else:
-            return con.execute(
-                """
-                SELECT m.slug, m.title, m.alt_title, m.year, m.directors,
-                       m.rating, m.rating_count
-                FROM movie_fts fts
-                JOIN movie m ON m.slug = fts.slug
-                WHERE movie_fts MATCH ?
-                ORDER BY rank
-                LIMIT ?
-                """,
-                (fts_expr, row_limit),
-            ).fetchall()
+            return cast(
+                "list[sqlite3.Row]",
+                con.execute(
+                    """
+                    SELECT m.slug, m.title, m.alt_title, m.year, m.directors,
+                           m.rating, m.rating_count
+                    FROM movie_fts fts
+                    JOIN movie m ON m.slug = fts.slug
+                    WHERE movie_fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?
+                    """,
+                    (fts_expr, row_limit),
+                ).fetchall(),
+            )
 
     # When year is known, try year-filtered search first so year-matched
     # candidates are guaranteed to appear in the result set.

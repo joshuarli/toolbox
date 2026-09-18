@@ -126,8 +126,8 @@ def _run(cmd: list[str], duration: float) -> tuple[bool, str]:
             print(f"\r  [{bar}] {pct * 100:5.1f}%", end="", flush=True)
 
     print()
-    proc.wait()
-    return proc.returncode == 0, stderr_buf[0] if stderr_buf else ""
+    returncode = proc.wait()
+    return returncode == 0, stderr_buf[0] if stderr_buf else ""
 
 
 def normalize(src: Path) -> None:
