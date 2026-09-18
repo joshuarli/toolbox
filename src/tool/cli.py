@@ -4,7 +4,10 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from . import preflight, sd
+from tool import sd
+from tool.movies import cli as movies_cli
+from tool.music import cli as music_cli
+from tool.sd import preflight
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,7 +22,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="destructively qualify SD/removable media with fio",
     )
     sd.configure_parser(sd_parser)
-    sd_parser.set_defaults(handler=sd.run)
+    sd_parser.set_defaults(handler=sd.run, needs_preflight=True)
+
+    movies_parser = subparsers.add_parser(
+        "movies",
+        help="encode/audit video files and manage a Letterboxd-backed movie library",
+    )
+    movies_cli.configure_parser(movies_parser)
+
+    music_parser = subparsers.add_parser(
+        "music",
+        help="scan/tag/transcode a local audio library",
+    )
+    music_cli.configure_parser(music_parser)
     return parser
 
 
@@ -28,8 +43,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     handler = args.handler
     try:
-        args.preflight = preflight.run_preflight()
-        return int(handler(args))
+        if getattr(args, "needs_preflight", False):
+            args.preflight = preflight.run_preflight()
+        result = handler(args)
+        return int(result) if result is not None else 0
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130

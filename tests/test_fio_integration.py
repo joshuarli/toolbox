@@ -24,7 +24,8 @@ import unittest
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
-from tool import preflight, sd
+from tool import sd
+from tool.sd import preflight
 
 FAKE_DISK_BYTES = 8 * 1024 * 1024
 FIO_SIZE = "4m"

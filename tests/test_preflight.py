@@ -4,7 +4,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from tool import preflight
+from tool.sd import preflight
 
 
 class ParseMacosMajorTests(unittest.TestCase):
@@ -67,16 +67,16 @@ def _completed(stdout: str) -> subprocess.CompletedProcess[str]:
 
 
 class CheckFioTests(unittest.TestCase):
-    @patch("tool.preflight.shutil.which", return_value=None)
+    @patch("tool.sd.preflight.shutil.which", return_value=None)
     def test_missing_fio_is_error(self, _which) -> None:
         with self.assertRaisesRegex(preflight.PreflightError, "brew install fio"):
             preflight.check_fio()
 
     @patch(
-        "tool.preflight.subprocess.run",
+        "tool.sd.preflight.subprocess.run",
         return_value=_completed("fio-3.42\n"),
     )
-    @patch("tool.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
+    @patch("tool.sd.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
     def test_accepts_minimum_version(self, _which, _run) -> None:
         path, version, parsed = preflight.check_fio()
         self.assertEqual(path, "/opt/homebrew/bin/fio")
@@ -84,37 +84,37 @@ class CheckFioTests(unittest.TestCase):
         self.assertEqual(parsed, (3, 42))
 
     @patch(
-        "tool.preflight.subprocess.run",
+        "tool.sd.preflight.subprocess.run",
         return_value=_completed("fio-3.44\n"),
     )
-    @patch("tool.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
+    @patch("tool.sd.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
     def test_accepts_newer_version(self, _which, _run) -> None:
         _, _, parsed = preflight.check_fio()
         self.assertEqual(parsed, (3, 44))
 
     @patch(
-        "tool.preflight.subprocess.run",
+        "tool.sd.preflight.subprocess.run",
         return_value=_completed("fio-3.41\n"),
     )
-    @patch("tool.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
+    @patch("tool.sd.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
     def test_rejects_old_version(self, _which, _run) -> None:
         with self.assertRaisesRegex(preflight.PreflightError, ">= 3.42"):
             preflight.check_fio()
 
     @patch(
-        "tool.preflight.subprocess.run",
+        "tool.sd.preflight.subprocess.run",
         return_value=_completed("\n"),
     )
-    @patch("tool.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
+    @patch("tool.sd.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
     def test_rejects_empty_version(self, _which, _run) -> None:
         with self.assertRaisesRegex(preflight.PreflightError, "empty"):
             preflight.check_fio()
 
     @patch(
-        "tool.preflight.subprocess.run",
+        "tool.sd.preflight.subprocess.run",
         side_effect=OSError("noexec"),
     )
-    @patch("tool.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
+    @patch("tool.sd.preflight.shutil.which", return_value="/opt/homebrew/bin/fio")
     def test_unrunnable_fio_is_error(self, _which, _run) -> None:
         with self.assertRaises(preflight.PreflightError):
             preflight.check_fio()
@@ -122,10 +122,10 @@ class CheckFioTests(unittest.TestCase):
 
 class RunPreflightTests(unittest.TestCase):
     @patch(
-        "tool.preflight.check_fio",
+        "tool.sd.preflight.check_fio",
         return_value=("/opt/homebrew/bin/fio", "fio-3.42", (3, 42)),
     )
-    @patch("tool.preflight.check_platform", return_value=("26.5.2", 26))
+    @patch("tool.sd.preflight.check_platform", return_value=("26.5.2", 26))
     def test_returns_combined_info(self, _platform, _fio) -> None:
         info = preflight.run_preflight()
         self.assertEqual(info.macos_version, "26.5.2")

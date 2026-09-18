@@ -1,74 +1,19 @@
-## `tool sd`
+# tool
 
-`sd` destructively benchmarks and verifies an entire removable/raw disk.
-
-**Normal mode erases the selected disk. Check the `diskN` identifier carefully.**
-
-Requires macOS 26+ and `fio` >= 3.42 (checked on every run):
+A monolith of personal command-line tools.
 
 ```sh
-brew install fio
+uv run tool sd ...       # destructively benchmark/verify a removable disk with fio — docs/sd.md
+uv run tool movies ...   # encode/audit video files, manage a Letterboxd-backed movie library — docs/movies.md
+uv run tool music ...    # scan/tag/transcode a local audio library — docs/music.md
 ```
 
-The dumbed-down default is interactive: pick a card from a numbered list
-and it runs and reports overall health.
+See `docs/<name>.md` for each tool's usage and design notes, and `AGENTS.md`
+for how the repo is laid out.
+
+## Development
 
 ```sh
-uv run tool sd
+make fmtlint    # ruff check --fix --unsafe-fixes + ruff format + ty check, in place
+uv run pytest
 ```
-
-Power users can pass the disk and flags explicitly:
-
-```sh
-diskutil list
-uv run tool sd disk4
-```
-
-Use longer benchmark samples when comparing cards:
-
-```sh
-uv run tool sd --seconds 60 disk4
-```
-
-The performance suite is deliberately QD1:
-
-- 1 MiB sequential read
-- 1 MiB sequential write
-- 4 KiB random read
-- 4 KiB random write
-- 4 KiB 70/30 random read/write
-
-It then writes fio verification data across the raw device and performs an
-unrestricted CRC32C readback pass. Any fio I/O or verification error is a
-qualification failure. Performance is reported without an arbitrary grade;
-compare bandwidth, IOPS, and especially high-percentile latency across cards
-using the same reader and port.
-
-The target must be a physical, writable removable/external whole disk. `sd`
-fails closed for the running macOS system disk and ordinary internal fixed
-media, has no `--force` bypass, unmounts before raw access, and leaves the disk
-unmounted afterward.
-
-### Persistence check
-
-After a successful full run, test whether the verification data survives a
-real power/removal cycle:
-
-```sh
-diskutil eject /dev/disk4
-# Physically remove and reinsert the card, then find its new identifier:
-diskutil list
-uv run tool sd --verify-only disk4
-```
-
-`--verify-only` does not intentionally rewrite the card; it verifies the fio
-data written by the preceding full qualification pass.
-
-### Lint and format
-
-```sh
-make fmtlint
-```
-
-Runs latest `ruff` destructively (`check --fix --unsafe-fixes` + `format`)
-and `ty` (type check). It rewrites files in place.

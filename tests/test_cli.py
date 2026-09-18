@@ -5,7 +5,8 @@ import io
 import unittest
 from unittest.mock import patch
 
-from tool import cli, preflight
+from tool import cli
+from tool.sd import preflight
 
 
 def _preflight_info() -> preflight.PreflightInfo:

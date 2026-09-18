@@ -4,7 +4,7 @@ Every macOS specificity in the codebase lives here: the ``diskutil``,
 ``sudo`` and ``caffeinate`` paths plus each subprocess that touches them.
 Importing this module is side-effect free; every public helper calls
 :func:`require_macos` first so non-Darwin runtimes fail closed with
-:class:`~tool.errors.UnsupportedPlatform` instead of shelling out to
+:class:`~tool.errors.UnsupportedPlatformError` instead of shelling out to
 binaries that do not exist there.
 """
 
@@ -17,7 +17,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 
-from .errors import SdError, UnsupportedPlatform
+from tool.sd.errors import SdError, UnsupportedPlatformError
 
 DISKUTIL = "/usr/sbin/diskutil"
 SUDO = "/usr/bin/sudo"
@@ -32,7 +32,7 @@ def is_macos() -> bool:
 def require_macos(action: str) -> None:
     """Fail closed unless running on macOS."""
     if not is_macos():
-        raise UnsupportedPlatform(f"{action} requires macOS (found {sys.platform})")
+        raise UnsupportedPlatformError(f"{action} requires macOS (found {sys.platform})")
 
 
 def plist_command(argv: Sequence[str]) -> dict[str, object]:
@@ -56,7 +56,7 @@ def plist_command(argv: Sequence[str]) -> dict[str, object]:
         raise SdError(f"invalid plist returned by: {command}") from exc
     if not isinstance(value, dict):
         raise SdError(f"unexpected plist returned by: {command}")
-    return value
+    return {str(key): val for key, val in value.items()}
 
 
 def disk_info_plist(target: str) -> dict[str, object]:

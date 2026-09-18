@@ -4,7 +4,13 @@ version = "0.1.0"
 description = "various tools"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "blessed>=1.20",
+    "mutagen>=1.48.1",
+    "shadowdriver",
+    "urllib3>=2.7.0",
+    "uvloop>=0.22.1",
+]
 
 [project.scripts]
 tool = "tool.cli:main"
@@ -13,6 +19,68 @@ tool = "tool.cli:main"
 requires = ["uv_build"]
 build-backend = "uv_build"
 
+[tool.uv.sources]
+shadowdriver = { path = "../shadowdriver/py" }
+
+[dependency-groups]
+dev = [
+    "joshuarli-pytest-parallel>=0.2.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.12",
+    "ty>=0.0.34",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+minversion = "8"
+
+[tool.ty.environment]
+root = ["src"]
+
+[tool.ty.src]
+include = ["src"]
+
+[tool.ty.rules]
+all = "error"
+unresolved-import = "ignore"
+
 [tool.ruff]
 target-version = "py314"
+line-length = 120
+src = ["src"]
 
+[tool.ruff.lint]
+select = [
+    "F",      # pyflakes
+    "E", "W", # pycodestyle
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins (shadowing builtins)
+    "SIM",    # flake8-simplify
+    "RUF",    # ruff-specific rules
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "PIE",    # flake8-pie (misc lints)
+    "C4",     # flake8-comprehensions
+    "T20",    # flake8-print (flag print in library code)
+    "TCH",    # flake8-type-checking (move imports to TYPE_CHECKING)
+    "PERF",   # perflint
+    "FURB",   # refurb
+]
+ignore = [
+    "E501",
+    "SIM105",
+    "RUF001",
+    "RUF003",
+    "B904",
+    "T201",   # allow print() — this is a CLI tool
+    "RET505", # allow else-after-return for clarity
+    "SIM108", # allow if/else over ternary when clearer
+    "TCH",    # don't move imports to TYPE_CHECKING — not worth the complexity for a CLI
+    "PT009",  # some suites use unittest.TestCase-style self.assertX on purpose
+    "PT027",  # (same) unittest.TestCase-style self.assertRaises
+    "PT019",  # false positive on unittest.mock.patch-injected parameters
+]

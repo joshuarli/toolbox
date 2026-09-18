@@ -7,7 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tool import preflight, sd
+from tool import sd
+from tool.sd import preflight
 
 
 def _preflight_info() -> preflight.PreflightInfo:

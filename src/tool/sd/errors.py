@@ -11,5 +11,5 @@ class SafetyError(SdError):
     """The target could not be proven safe to overwrite."""
 
 
-class UnsupportedPlatform(SdError):
+class UnsupportedPlatformError(SdError):
     """A platform-gated helper was called on the wrong OS."""

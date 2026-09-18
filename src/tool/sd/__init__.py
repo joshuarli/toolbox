@@ -20,8 +20,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import macos, preflight
-from .errors import SafetyError, SdError
+from tool.sd import macos, preflight
+from tool.sd.errors import SafetyError, SdError
 
 DISK_RE = re.compile(r"^(?:/dev/)?(disk\d+)$")
 ANY_DISK_IDENTIFIER_RE = re.compile(r"^(disk\d+)(?:s\d+)*$")
@@ -224,7 +224,9 @@ def normalize_disk(value: str) -> str:
     value = value.strip()
     match = DISK_RE.fullmatch(value)
     if match:
-        return match.group(1)
+        group = match.group(1)
+        assert isinstance(group, str)
+        return group
     if re.fullmatch(r"(?:/dev/)?disk\d+(?:s\d+)+", value):
         raise ValueError("target must be a whole disk, not a partition (use diskN)")
     raise ValueError("target must be in the form diskN or /dev/diskN")
@@ -232,7 +234,11 @@ def normalize_disk(value: str) -> str:
 
 def whole_disk_for_identifier(identifier: str) -> str | None:
     match = ANY_DISK_IDENTIFIER_RE.fullmatch(identifier)
-    return match.group(1) if match else None
+    if match is None:
+        return None
+    group = match.group(1)
+    assert isinstance(group, str)
+    return group
 
 
 def root_backing_disks_from_plists(
@@ -325,7 +331,10 @@ def physical_disks() -> set[str]:
     value = data.get("WholeDisks")
     if not isinstance(value, list):
         raise SafetyError("diskutil did not return the physical WholeDisks list")
-    result = {item for item in value if isinstance(item, str)}
+    result: set[str] = set()
+    for item in value:
+        if isinstance(item, str):
+            result.add(item)
     if not result:
         raise SafetyError("diskutil reported no physical whole disks")
     return result
@@ -666,8 +675,10 @@ def execute_suite(
             f"\nPerformance workloads: QD1, {seconds}s each. "
             "The integrity pass has no time limit."
         )
-        for test in benchmark_tests(seconds):
-            results.append(run_test(test, fio, info.raw_node, use_sudo=use_sudo))
+        results.extend(
+            run_test(test, fio, info.raw_node, use_sudo=use_sudo)
+            for test in benchmark_tests(seconds)
+        )
         print(
             "\nFinal qualification: full-device write → flush → "
             "read → CRC32C verification."
