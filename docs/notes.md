@@ -3,15 +3,16 @@
 Two CLI tools for the hardcoded Obsidian vault at
 `~/iCloud~md~obsidian/Documents/Notes`:
 
-- **`clean`** — move files in `z-images/` that no markdown note references to
-  the Trash. Dry run by default; `--apply` deletes via the system `trash`
-  command (recoverable from the Trash).
+- **`clean`** — move files in `z-images/` that no markdown note references,
+  plus duplicate and empty notes, to the Trash. Dry run by default;
+  `--apply` deletes via the system `trash` command (recoverable from the
+  Trash).
 - **`localize`** — download remote `![alt](https://...)` images into
   `z-images/` as WebP and rewrite the embeds to `![[<sha>.webp]]`. Dry run by
   default; `--apply` downloads and rewrites.
 
 ```bash
-uv run tool notes clean                       # dry run: list unreferenced images
+uv run tool notes clean                       # dry run: list unreferenced images + duplicate notes
 uv run tool notes clean --apply               # move them to the Trash
 uv run tool notes localize                    # dry run: list remote images
 uv run tool notes localize --apply            # download + convert + rewrite
@@ -30,7 +31,7 @@ paths and paths outside the vault are errors, never silent no-ops.
 src/tool/notes/
 ├── __init__.py   # empty
 ├── common.py     # hardcoded VAULT, z-images/ name, WebP quality, NotesError
-├── clean.py      # rg reference scan, trash deletion, run()
+├── clean.py      # rg reference scan, md5 duplicate scan, trash deletion, run()
 ├── localize.py   # remote-image parser, downloader, ffmpeg WebP, rewriter, run()
 └── cli.py        # configure_parser()/build_parser() for clean + localize
 ```
@@ -54,6 +55,16 @@ excluded: a note rotting in `.trash` must not pin its images.
 
 `--apply` moves files with the system `trash` command (`/usr/bin/trash`,
 macOS 15+) in chunks of 500, so deletions are recoverable.
+
+## `clean` duplicate detection
+
+Non-empty `*.md` files are grouped by md5 of their exact bytes; empty
+(0-byte) notes are listed separately and every one is trashed. In each
+duplicate group the survivor is the shortest vault-relative path, ties
+broken alphabetically — so `hackernews.md` is kept over `hackernews 2.md`
+and `Custom Linux Kernel.md`, and `dev/Linux/Oasis Linux Server.md` is
+kept over its `archive/` copy. The vault's `.trash` and `.obsidian`
+directories are excluded from the scan, same as the image reference scan.
 
 ## `localize` scope and naming
 
