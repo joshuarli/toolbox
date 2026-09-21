@@ -101,12 +101,8 @@ def transcode_to_aac(filepath: str, dst: str | None = None) -> str | None:
 
 def configure_parser(p: argparse.ArgumentParser) -> None:
     p.description = "Transcode audio files to high-quality AAC in an M4A container."
-    p.add_argument(
-        "paths", nargs="*", default=["."], help="audio files or directories to transcode"
-    )
-    p.add_argument(
-        "-o", "--output", help="output path (only valid for a single input file)"
-    )
+    p.add_argument("paths", nargs="*", default=["."], help="audio files or directories to transcode")
+    p.add_argument("-o", "--output", help="output path (only valid for a single input file)")
 
 
 def run(args: argparse.Namespace) -> None:

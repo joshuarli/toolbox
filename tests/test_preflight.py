@@ -61,9 +61,7 @@ class ParseFioVersionTests(unittest.TestCase):
 
 
 def _completed(stdout: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(
-        args=["fio", "--version"], returncode=0, stdout=stdout, stderr=""
-    )
+    return subprocess.CompletedProcess(args=["fio", "--version"], returncode=0, stdout=stdout, stderr="")
 
 
 class CheckFioTests(unittest.TestCase):

@@ -212,9 +212,7 @@ async def test_get_following_reads_cookies_and_saves(monkeypatch):
         yield browser, tab
 
     monkeypatch.setattr("tool.ig.following.browser_session", browser_session)
-    monkeypatch.setattr(
-        "tool.ig.following.profile_id", lambda username, cookies, error_cls=FollowingFetchError: "123"
-    )
+    monkeypatch.setattr("tool.ig.following.profile_id", lambda username, cookies, error_cls=FollowingFetchError: "123")
     monkeypatch.setattr(
         "tool.ig.following.fetch_following", lambda username, user_id, cookies: [Followee("a", "1", "", False, "")]
     )

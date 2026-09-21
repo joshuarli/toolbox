@@ -69,10 +69,7 @@ def init_db() -> sqlite3.Connection:
     add_col("enriched_at", "INTEGER")
     # Fix existing rows where year was stored as a float text (e.g. '2025.0').
     # The legacy Waterfox BiDi client serialized JS numbers as doubles in JSON.
-    cur = db.execute(
-        "UPDATE movie SET year = CAST(CAST(year AS REAL) AS INTEGER)"
-        " WHERE year LIKE '%.%'"
-    )
+    cur = db.execute("UPDATE movie SET year = CAST(CAST(year AS REAL) AS INTEGER) WHERE year LIKE '%.%'")
     if cur.rowcount:
         print(f"  fixed {cur.rowcount} movie{'s' if cur.rowcount != 1 else ''} with float-formatted year", flush=True)
     db.commit()
@@ -615,9 +612,7 @@ def _metric_map(result: Any) -> dict[str, float]:
     return {
         row["name"]: float(row["value"])
         for row in metrics
-        if isinstance(row, dict)
-        and isinstance(row.get("name"), str)
-        and isinstance(row.get("value"), (int, float))
+        if isinstance(row, dict) and isinstance(row.get("name"), str) and isinstance(row.get("value"), (int, float))
     }
 
 
@@ -653,9 +648,7 @@ def _summarize_processes(
         item["cpu_s"] = round(item["cpu_s"], 3)
         item["cpu_delta_s"] = round(item["cpu_delta_s"], 3)
         item["cpu_pct"] = (
-            round(item["cpu_delta_s"] / interval_s * 100.0, 1)
-            if item["delta_processes"] and interval_s > 0
-            else None
+            round(item["cpu_delta_s"] / interval_s * 100.0, 1) if item["delta_processes"] and interval_s > 0 else None
         )
         del item["delta_processes"]
     return summary, current_cpu
@@ -679,11 +672,7 @@ async def _telemetry_tab(tab: Any, index: int) -> dict[str, Any]:
             tab.command("Performance.getMetrics"),
         )
         metrics = _metric_map(performance)
-        selected_metrics = {
-            key: round(metrics[key], 6)
-            for key in _TELEMETRY_METRICS
-            if key in metrics
-        }
+        selected_metrics = {key: round(metrics[key], 6) for key in _TELEMETRY_METRICS if key in metrics}
         result: dict[str, Any] = {"tab": index, "metrics": selected_metrics}
         if isinstance(activity, dict):
             result.update(
@@ -714,11 +703,7 @@ async def _telemetry_snapshot(
     )
     now = time.monotonic()
     interval_s = max(now - previous_at, 0.001)
-    processes = (
-        process_result.get("processInfo", [])
-        if isinstance(process_result, dict)
-        else []
-    )
+    processes = process_result.get("processInfo", []) if isinstance(process_result, dict) else []
     process_summary, current_cpu = _summarize_processes(processes, previous_cpu, interval_s)
     snapshot: dict[str, Any] = {
         "elapsed_s": round(now - started_at, 1),
@@ -941,7 +926,7 @@ async def scrape_from_args(args) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
             loop.add_signal_handler(sig, stop.set)
-        except (NotImplementedError, RuntimeError, ValueError):
+        except NotImplementedError, RuntimeError, ValueError:
             pass
 
     headless = not getattr(args, "live", False)
@@ -1021,7 +1006,9 @@ async def scrape_from_args(args) -> None:
                 if not info.get("title"):
                     # A title-less row is useless for search/rename and would
                     # be marked enriched. Skip it for a later retry instead.
-                    print(f"  [{slug}] skipping upsert: no title (leaving unenriched for a later retry)", file=sys.stderr)
+                    print(
+                        f"  [{slug}] skipping upsert: no title (leaving unenriched for a later retry)", file=sys.stderr
+                    )
                     db.commit()
                     errors += 1
                     continue
@@ -1029,7 +1016,10 @@ async def scrape_from_args(args) -> None:
                     # Not fatal: the film may genuinely have no poster, or
                     # hydration flaked. Leave it unenriched so a later run
                     # retries it instead of aborting the whole rescrape.
-                    print(f"  [{slug}] skipping upsert: no posterUrl (leaving unenriched for a later retry)", file=sys.stderr)
+                    print(
+                        f"  [{slug}] skipping upsert: no posterUrl (leaving unenriched for a later retry)",
+                        file=sys.stderr,
+                    )
                     db.commit()
                     errors += 1
                     continue

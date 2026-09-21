@@ -480,8 +480,10 @@ def _clean_legacy_sharded_images(out: Path = OUT) -> int:
         # Keep unrelated files/directories in images/ (for example a manually
         # placed README or a future non-sharded asset).  Legacy shards are
         # exactly two characters from the shortcode alphabet.
-        if entry.name == "by-profile" or len(entry.name) != 2 or any(
-            char not in SHORTCODE_ALPHABET for char in entry.name
+        if (
+            entry.name == "by-profile"
+            or len(entry.name) != 2
+            or any(char not in SHORTCODE_ALPHABET for char in entry.name)
         ):
             continue
         try:

@@ -87,11 +87,13 @@ def _rank_score(row, query_title: str, query_year: int | None) -> float:
     year_bonus = 1.0 if (query_year and _row_year(row) == query_year) else 0.0
     # Normalise popularity to [0, 1] (log-scale max ~25 for a 5★, 1M-vote film)
     pop = min(_popularity(row), 25.0) / 25.0
+
     # Word overlap bonus: catches films stored under different English titles
     # that still share several words (e.g. "And Life Goes On" ↔ "Life, and
     # Nothing More…").  Strip punctuation so "Life," and "life" match.
     def _words(s: str) -> set[str]:
         return set(re.sub(r"[^\w\s]", " ", s).lower().split())
+
     q_words = _words(query_title)
     t_words = _words(row["title"] or "") | _words(row["alt_title"] or "")
     overlap = len(q_words & t_words)

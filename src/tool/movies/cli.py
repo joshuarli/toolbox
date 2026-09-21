@@ -209,9 +209,7 @@ def _add_encode_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser])
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.description = (
-        "Encode/audit video files and manage a Letterboxd-backed movie library."
-    )
+    parser.description = "Encode/audit video files and manage a Letterboxd-backed movie library."
     sub = parser.add_subparsers(dest="movies_cmd", required=True)
 
     _add_encode_parser(sub)

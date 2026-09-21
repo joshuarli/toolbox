@@ -109,7 +109,7 @@ def _safe_sidecar_part(value: str) -> str:
 
 
 def _stream_label(stream) -> str:
-    """Human-readable label for a stream:  "#0:0  video  (h264)".  """
+    """Human-readable label for a stream:  "#0:0  video  (h264)"."""
     codec = stream.codec_name
     stype = stream.codec_type
     parts = [f"#{stream.index}", stype, f"({codec})"]
@@ -120,7 +120,7 @@ def _stream_label(stream) -> str:
 
 
 def _sidecar_name(stem: str, stream, ext: str) -> str:
-    """Build a sidecar filename:  Movie.s2.eng.dts  """
+    """Build a sidecar filename:  Movie.s2.eng.dts"""
     lang = _safe_sidecar_part(_stream_lang(stream))
     return f"{stem}.s{stream.index}.{lang}{ext}"
 

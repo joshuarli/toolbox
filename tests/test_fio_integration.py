@@ -77,9 +77,7 @@ class FioIntegrationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def _run_fio(
-        self, test: sd.FioTest, extra: Sequence[str] = ()
-    ) -> subprocess.CompletedProcess[str]:
+    def _run_fio(self, test: sd.FioTest, extra: Sequence[str] = ()) -> subprocess.CompletedProcess[str]:
         argv = [*test.argv(self.fio, str(self.disk)), *extra]
         return subprocess.run(
             argv,
@@ -101,9 +99,7 @@ class FioIntegrationTests(unittest.TestCase):
     def test_benchmark_shapes_exit_zero_on_fake_disk(self) -> None:
         shapes = [
             sd.FioTest("seq-read-1m", "read", "1m", runtime_seconds=1, read_only=True),
-            sd.FioTest(
-                "seq-write-1m", "write", "1m", runtime_seconds=1, end_fsync=True
-            ),
+            sd.FioTest("seq-write-1m", "write", "1m", runtime_seconds=1, end_fsync=True),
             sd.FioTest(
                 "rand-read-4k",
                 "randread",

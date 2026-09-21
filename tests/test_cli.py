@@ -37,9 +37,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.preflight.fio_version, "fio-3.42")
 
     def test_sd_options_parse(self) -> None:
-        args = cli.build_parser().parse_args(
-            ["sd", "--seconds", "60", "--verify-only", "/dev/disk7"]
-        )
+        args = cli.build_parser().parse_args(["sd", "--seconds", "60", "--verify-only", "/dev/disk7"])
         self.assertEqual(args.disk, "/dev/disk7")
         self.assertEqual(args.seconds, 60)
         self.assertTrue(args.verify_only)

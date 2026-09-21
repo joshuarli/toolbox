@@ -57,7 +57,10 @@ class TestCachedSecret:
     def test_write_creates_dir(self, tmp_path):
         cache_dir = str(tmp_path / "subdir")
         cache_file = tmp_path / "subdir" / "secret.json"
-        with patch("tool.music.api.spotify._CACHE_DIR", cache_dir), patch("tool.music.api.spotify._CACHE_PATH", cache_file):
+        with (
+            patch("tool.music.api.spotify._CACHE_DIR", cache_dir),
+            patch("tool.music.api.spotify._CACHE_PATH", cache_file),
+        ):
             _write_cached_secret({"61": [10, 20]})
             assert cache_file.exists()
             data = json.loads(cache_file.read_text())

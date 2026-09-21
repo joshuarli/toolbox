@@ -35,8 +35,7 @@ def parse_macos_major(version: str) -> int:
         major = int(major_text)
     except ValueError:
         raise PreflightError(
-            f"could not parse macOS version {version!r}; "
-            f"tool requires macOS {MIN_MACOS_MAJOR}+"
+            f"could not parse macOS version {version!r}; tool requires macOS {MIN_MACOS_MAJOR}+"
         ) from None
     return major
 
@@ -53,20 +52,14 @@ def check_platform(
         system = platform.system()
     if system != "Darwin":
         found = system or "unknown platform"
-        raise PreflightError(
-            f"tool requires macOS {MIN_MACOS_MAJOR}+ (Darwin); found {found}"
-        )
+        raise PreflightError(f"tool requires macOS {MIN_MACOS_MAJOR}+ (Darwin); found {found}")
     if mac_version is None:
         mac_version = platform.mac_ver()[0]
     if not mac_version:
-        raise PreflightError(
-            f"could not determine macOS version; tool requires macOS {MIN_MACOS_MAJOR}+"
-        )
+        raise PreflightError(f"could not determine macOS version; tool requires macOS {MIN_MACOS_MAJOR}+")
     major = parse_macos_major(mac_version)
     if major < MIN_MACOS_MAJOR:
-        raise PreflightError(
-            f"tool requires macOS {MIN_MACOS_MAJOR}+; found macOS {mac_version}"
-        )
+        raise PreflightError(f"tool requires macOS {MIN_MACOS_MAJOR}+; found macOS {mac_version}")
     return mac_version, major
 
 
@@ -105,9 +98,7 @@ def check_fio() -> tuple[str, str, tuple[int, ...]]:
     major = parsed[0]
     minor = parsed[1] if len(parsed) > 1 else 0
     if (major, minor) < (MIN_FIO_MAJOR, MIN_FIO_MINOR):
-        raise PreflightError(
-            f"fio >= {MIN_FIO_MAJOR}.{MIN_FIO_MINOR} required; found {version} ({fio})"
-        )
+        raise PreflightError(f"fio >= {MIN_FIO_MAJOR}.{MIN_FIO_MINOR} required; found {version} ({fio})")
     return fio, version, parsed
 
 

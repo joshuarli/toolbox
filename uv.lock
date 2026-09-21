@@ -260,13 +260,13 @@ wheels = [
 
 [[package]]
 name = "shadowdriver"
-version = "0.1.0"
 source = { directory = "../shadowdriver/py" }
 
 [package.metadata]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "maturin", specifier = ">=1.15,<2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "ruff", specifier = ">=0.16" },

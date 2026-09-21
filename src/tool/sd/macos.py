@@ -101,9 +101,7 @@ def unmount_disk(device_node: str) -> None:
     require_macos(f"unmount {device_node}")
     validate_sudo()
     try:
-        returncode = subprocess.run(
-            [SUDO, "-n", DISKUTIL, "unmountDisk", device_node], check=False
-        ).returncode
+        returncode = subprocess.run([SUDO, "-n", DISKUTIL, "unmountDisk", device_node], check=False).returncode
     except OSError as exc:
         raise SdError("could not execute diskutil unmountDisk") from exc
     if returncode != 0:

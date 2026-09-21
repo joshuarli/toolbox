@@ -145,9 +145,7 @@ class RootBackingDiskTests(unittest.TestCase):
             "Containers": [
                 {
                     "ContainerReference": "disk9",
-                    "PhysicalStores": [
-                        {"DeviceIdentifier": "disk7s2", "Size": 1_000_000}
-                    ],
+                    "PhysicalStores": [{"DeviceIdentifier": "disk7s2", "Size": 1_000_000}],
                     "Volumes": [{"DeviceIdentifier": "disk9s1"}],
                 }
             ]
@@ -392,9 +390,7 @@ class PromptTests(unittest.TestCase):
 class ResolveInteractiveDiskTests(unittest.TestCase):
     @patch("tool.sd.discover_candidates", return_value=[_candidate("disk4")])
     @patch("tool.sd.sys.stdin")
-    def test_returns_selected_identifier(
-        self, mock_stdin: MagicMock, _discover: MagicMock
-    ) -> None:
+    def test_returns_selected_identifier(self, mock_stdin: MagicMock, _discover: MagicMock) -> None:
         mock_stdin.isatty.return_value = True
         result = sd.resolve_interactive_disk(
             input_fn=lambda prompt: "1",
@@ -433,15 +429,11 @@ class DiscoverCandidatesTests(unittest.TestCase):
 
     @patch("tool.sd.discover_unixy_candidates")
     @patch("tool.sd.discover_darwin_candidates")
-    def test_dispatches_on_platform(
-        self, mock_darwin: MagicMock, mock_unixy: MagicMock
-    ) -> None:
+    def test_dispatches_on_platform(self, mock_darwin: MagicMock, mock_unixy: MagicMock) -> None:
         mock_darwin.return_value = [_candidate("disk4")]
         mock_unixy.return_value = [_candidate("sda")]
         with patch("tool.sd.macos.is_macos", return_value=True):
-            self.assertEqual(
-                [c.identifier for c in sd.discover_candidates()], ["disk4"]
-            )
+            self.assertEqual([c.identifier for c in sd.discover_candidates()], ["disk4"])
         with patch("tool.sd.macos.is_macos", return_value=False):
             self.assertEqual([c.identifier for c in sd.discover_candidates()], ["sda"])
 
@@ -457,9 +449,7 @@ class DiscoverDarwinTests(unittest.TestCase):
             RemovableMediaOrExternalDevice=False,
         )
 
-    def _stub_darwin_backend(
-        self, mock_macos: MagicMock, *, root_fails: bool = False
-    ) -> None:
+    def _stub_darwin_backend(self, mock_macos: MagicMock, *, root_fails: bool = False) -> None:
         mock_macos.physical_list_plist.return_value = {"WholeDisks": ["disk0", "disk7"]}
         if root_fails:
             mock_macos.root_info_plist.side_effect = sd.SdError("no root")
@@ -478,9 +468,7 @@ class DiscoverDarwinTests(unittest.TestCase):
 
     @patch("tool.sd.Path")
     @patch("tool.sd.macos")
-    def test_lists_only_eligible_disks(
-        self, mock_macos: MagicMock, mock_path: MagicMock
-    ) -> None:
+    def test_lists_only_eligible_disks(self, mock_macos: MagicMock, mock_path: MagicMock) -> None:
         self._stub_darwin_backend(mock_macos)
         raw = mock_path.return_value
         raw.exists.return_value = True
@@ -491,9 +479,7 @@ class DiscoverDarwinTests(unittest.TestCase):
 
     @patch("tool.sd.Path")
     @patch("tool.sd.macos")
-    def test_missing_raw_device_filters_candidate(
-        self, mock_macos: MagicMock, mock_path: MagicMock
-    ) -> None:
+    def test_missing_raw_device_filters_candidate(self, mock_macos: MagicMock, mock_path: MagicMock) -> None:
         self._stub_darwin_backend(mock_macos)
         raw = mock_path.return_value
         raw.exists.return_value = True
@@ -502,9 +488,7 @@ class DiscoverDarwinTests(unittest.TestCase):
 
     @patch("tool.sd.Path")
     @patch("tool.sd.macos")
-    def test_unresolvable_root_still_lists_removable(
-        self, mock_macos: MagicMock, mock_path: MagicMock
-    ) -> None:
+    def test_unresolvable_root_still_lists_removable(self, mock_macos: MagicMock, mock_path: MagicMock) -> None:
         self._stub_darwin_backend(mock_macos, root_fails=True)
         raw = mock_path.return_value
         raw.exists.return_value = True
@@ -516,15 +500,11 @@ class DiscoverDarwinTests(unittest.TestCase):
 class RunTestSudoTests(unittest.TestCase):
     @patch("tool.sd.macos")
     @patch("tool.sd.subprocess.run")
-    def test_use_sudo_prefixes_with_sudo(
-        self, mock_run: MagicMock, mock_macos: MagicMock
-    ) -> None:
+    def test_use_sudo_prefixes_with_sudo(self, mock_run: MagicMock, mock_macos: MagicMock) -> None:
         mock_macos.sudo_prefix.return_value = ["/usr/bin/sudo", "-n"]
         mock_run.return_value = MagicMock(returncode=0)
         with contextlib.redirect_stdout(io.StringIO()):
-            result = sd.run_test(
-                sd.FioTest("probe", "read", "4k"), "/bin/fio", "/dev/rdisk7"
-            )
+            result = sd.run_test(sd.FioTest("probe", "read", "4k"), "/bin/fio", "/dev/rdisk7")
         command = mock_run.call_args.args[0]
         self.assertEqual(command[:2], ["/usr/bin/sudo", "-n"])
         self.assertIn("--filename=/dev/rdisk7", command)
@@ -533,9 +513,7 @@ class RunTestSudoTests(unittest.TestCase):
 
     @patch("tool.sd.macos")
     @patch("tool.sd.subprocess.run")
-    def test_no_sudo_runs_fio_directly(
-        self, mock_run: MagicMock, mock_macos: MagicMock
-    ) -> None:
+    def test_no_sudo_runs_fio_directly(self, mock_run: MagicMock, mock_macos: MagicMock) -> None:
         mock_run.return_value = MagicMock(returncode=0)
         with contextlib.redirect_stdout(io.StringIO()):
             result = sd.run_test(
@@ -551,9 +529,7 @@ class RunTestSudoTests(unittest.TestCase):
 
     @patch("tool.sd.macos")
     @patch("tool.sd.subprocess.run")
-    def test_nonzero_exit_is_failure(
-        self, mock_run: MagicMock, _macos: MagicMock
-    ) -> None:
+    def test_nonzero_exit_is_failure(self, mock_run: MagicMock, _macos: MagicMock) -> None:
         mock_run.return_value = MagicMock(returncode=3)
         with contextlib.redirect_stdout(io.StringIO()):
             result = sd.run_test(
@@ -572,34 +548,26 @@ class ExecuteSuiteTests(unittest.TestCase):
 
     @patch("tool.sd.macos")
     @patch("tool.sd.run_test")
-    def test_skips_caffeinate_off_darwin(
-        self, mock_run_test: MagicMock, mock_macos: MagicMock
-    ) -> None:
+    def test_skips_caffeinate_off_darwin(self, mock_run_test: MagicMock, mock_macos: MagicMock) -> None:
         mock_macos.is_macos.return_value = False
         mock_run_test.side_effect = self._passed
         info = SafetyTests().make_info()
         with contextlib.redirect_stdout(io.StringIO()):
-            results = sd.execute_suite(
-                info, "/bin/fio", seconds=30, verify_only=False, use_sudo=False
-            )
+            results = sd.execute_suite(info, "/bin/fio", seconds=30, verify_only=False, use_sudo=False)
         self.assertEqual(len(results), 6)
         self.assertTrue(all(result.passed for result in results))
         mock_macos.start_caffeinate.assert_not_called()
 
     @patch("tool.sd.run_test")
     @patch("tool.sd.macos")
-    def test_uses_caffeinate_on_darwin(
-        self, mock_macos: MagicMock, mock_run_test: MagicMock
-    ) -> None:
+    def test_uses_caffeinate_on_darwin(self, mock_macos: MagicMock, mock_run_test: MagicMock) -> None:
         proc = MagicMock()
         mock_macos.is_macos.return_value = True
         mock_macos.start_caffeinate.return_value = proc
         mock_run_test.side_effect = self._passed
         info = SafetyTests().make_info()
         with contextlib.redirect_stdout(io.StringIO()):
-            results = sd.execute_suite(
-                info, "/bin/fio", seconds=30, verify_only=True, use_sudo=False
-            )
+            results = sd.execute_suite(info, "/bin/fio", seconds=30, verify_only=True, use_sudo=False)
         self.assertEqual(len(results), 1)
         mock_macos.start_caffeinate.assert_called_once_with()
         proc.terminate.assert_called_once_with()

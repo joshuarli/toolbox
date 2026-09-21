@@ -198,9 +198,7 @@ class TestResult:
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.description = (
-        "Destructively qualify an SD card or removable raw disk with fio."
-    )
+    parser.description = "Destructively qualify an SD card or removable raw disk with fio."
     parser.add_argument(
         "disk",
         nargs="?",
@@ -261,15 +259,8 @@ def root_backing_disks_from_plists(
             volumes = container.get("Volumes")
             volume_ids: set[object] = set()
             if isinstance(volumes, list):
-                volume_ids = {
-                    volume.get("DeviceIdentifier")
-                    for volume in volumes
-                    if isinstance(volume, Mapping)
-                }
-            if not (
-                container.get("ContainerReference") == container_ref
-                or root_id in volume_ids
-            ):
+                volume_ids = {volume.get("DeviceIdentifier") for volume in volumes if isinstance(volume, Mapping)}
+            if not (container.get("ContainerReference") == container_ref or root_id in volume_ids):
                 continue
             stores = container.get("PhysicalStores")
             if not isinstance(stores, list):
@@ -315,9 +306,7 @@ def validate_candidate(
 ) -> None:
     validate_target(info, physical_disks)
     if info.identifier in root_disks:
-        raise SafetyError(
-            f"{info.identifier} backs the running macOS system; refusing it"
-        )
+        raise SafetyError(f"{info.identifier} backs the running macOS system; refusing it")
 
 
 def disk_info(target: str) -> DiskInfo:
@@ -348,9 +337,7 @@ def root_backing_disks() -> set[str]:
         apfs = macos.apfs_list_plist()
     result = root_backing_disks_from_plists(root, apfs)
     if not result:
-        raise SafetyError(
-            "cannot prove which physical disk backs the running macOS root"
-        )
+        raise SafetyError("cannot prove which physical disk backs the running macOS root")
     return result
 
 
@@ -432,10 +419,7 @@ def format_candidate(index: int, candidate: CandidateDisk) -> str:
         size = format_size(candidate.total_size)
     else:
         size = "unknown size"
-    return (
-        f"  {index}) {candidate.device_node} — {candidate.media_name}"
-        f" — {size} — {candidate.detail}"
-    )
+    return f"  {index}) {candidate.device_node} — {candidate.media_name} — {size} — {candidate.detail}"
 
 
 def prompt_for_candidate(
@@ -474,9 +458,7 @@ def resolve_interactive_disk(
     output_fn: Callable[[str], None] = print,
 ) -> str:
     if not sys.stdin.isatty():
-        raise SdError(
-            "no disk specified and stdin is not interactive; pass diskN explicitly"
-        )
+        raise SdError("no disk specified and stdin is not interactive; pass diskN explicitly")
     candidates = discover_candidates()
     selected = prompt_for_candidate(candidates, input_fn=input_fn, output_fn=output_fn)
     return selected.identifier
@@ -573,10 +555,7 @@ def print_target(info: DiskInfo, *, verify_only: bool) -> None:
     print(f"internal:   {'yes' if info.internal else 'no'}")
     print(f"ejectable:  {'yes' if info.ejectable else 'no'}")
     if verify_only:
-        print(
-            "\nVERIFY ONLY: fio will read and validate verification data "
-            "from a previous full run."
-        )
+        print("\nVERIFY ONLY: fio will read and validate verification data from a previous full run.")
     else:
         print("\nWARNING: THIS WILL DESTROY ALL DATA ON THE DEVICE.")
         print("The final pass overwrites and verifies the advertised capacity.")
@@ -621,9 +600,7 @@ def prepare_target(identifier: str, *, verify_only: bool) -> DiskInfo:
     return after
 
 
-def run_test(
-    test: FioTest, fio: str, raw_device: str, *, use_sudo: bool = True
-) -> TestResult:
+def run_test(test: FioTest, fio: str, raw_device: str, *, use_sudo: bool = True) -> TestResult:
     """Run one fio workload; ``use_sudo=False`` runs fio directly (tests)."""
     print(f"\n{' ' + test.name + ' ':=^72}\n")
     if use_sudo:
@@ -667,26 +644,13 @@ def execute_suite(
     results: list[TestResult] = []
     try:
         if verify_only:
-            results.append(
-                run_test(FioTest.verify_only(), fio, info.raw_node, use_sudo=use_sudo)
-            )
+            results.append(run_test(FioTest.verify_only(), fio, info.raw_node, use_sudo=use_sudo))
             return results
-        print(
-            f"\nPerformance workloads: QD1, {seconds}s each. "
-            "The integrity pass has no time limit."
-        )
-        results.extend(
-            run_test(test, fio, info.raw_node, use_sudo=use_sudo)
-            for test in benchmark_tests(seconds)
-        )
-        print(
-            "\nFinal qualification: full-device write → flush → "
-            "read → CRC32C verification."
-        )
+        print(f"\nPerformance workloads: QD1, {seconds}s each. The integrity pass has no time limit.")
+        results.extend(run_test(test, fio, info.raw_node, use_sudo=use_sudo) for test in benchmark_tests(seconds))
+        print("\nFinal qualification: full-device write → flush → read → CRC32C verification.")
         print("Verification continues after mismatches so damage can surface.")
-        results.append(
-            run_test(FioTest.integrity(), fio, info.raw_node, use_sudo=use_sudo)
-        )
+        results.append(run_test(FioTest.integrity(), fio, info.raw_node, use_sudo=use_sudo))
         return results
     finally:
         if caffeinate is not None:
@@ -702,9 +666,7 @@ def render_summary(
     print(f"\n{' SUMMARY ':=^72}\n")
     for result in results:
         status = "PASS" if result.passed else f"FAIL ({result.returncode})"
-        line = (
-            f"{result.name:<28} {status:<12} {format_duration(result.elapsed_seconds)}"
-        )
+        line = f"{result.name:<28} {status:<12} {format_duration(result.elapsed_seconds)}"
         print(line)
     failed = [result for result in results if not result.passed]
     print(f"\nOVERALL: {'FAIL' if failed else 'PASS'}")

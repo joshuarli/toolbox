@@ -74,9 +74,7 @@ async def test_fetch_profile_posts_page_uses_username_feed_when_id_is_unset(monk
     session = ProfileTimelineSession("alice smith", None, {"sessionid": "s", "csrftoken": "c"})
     await fetch_profile_posts_page(session, after="CURSOR")
 
-    assert captured == [
-        "https://www.instagram.com/api/v1/feed/user/alice%20smith/username/?count=12&max_id=CURSOR"
-    ]
+    assert captured == ["https://www.instagram.com/api/v1/feed/user/alice%20smith/username/?count=12&max_id=CURSOR"]
 
 
 @pytest.mark.asyncio

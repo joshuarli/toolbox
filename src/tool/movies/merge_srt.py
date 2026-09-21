@@ -120,7 +120,7 @@ def _detect_srt_encoding(srt_path: Path) -> str | None:
             text=True,
             timeout=10,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return None
 
     charset = ""

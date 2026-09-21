@@ -620,7 +620,9 @@ class EncodingTests(unittest.TestCase):
     def test_delete_cannot_be_combined_with_yes(self) -> None:
         src = self.copy_fixture(sdr_fixture())
 
-        result = run([sys.executable, "-m", "tool", "movies", "encode", "--delete", "--yes", "hq", str(src)], check=False)
+        result = run(
+            [sys.executable, "-m", "tool", "movies", "encode", "--delete", "--yes", "hq", str(src)], check=False
+        )
 
         assert result.returncode != 0
         assert "--delete cannot be combined with --yes" in result.stderr
