@@ -174,8 +174,8 @@ re-presents the rest; `s` ignores that source spelling for the rest of the
 run (ephemeral — nothing is persisted); `n` skips just that mapping;
 `q` quits, leaving already-applied edits in place. Keys are single
 keystrokes on a macOS terminal, line input otherwise. Candidates are ordered
-by number of safe occurrences, then by independent model evidence — no fake
-confidence scores. The session ends with counts of mappings approved,
+within each streamed group by number of safe occurrences, then by independent
+model evidence — no fake confidence scores. The session ends with counts of mappings approved,
 occurrences corrected, notes modified, candidates skipped, spellings ignored,
 and discovery passes.
 
@@ -273,18 +273,27 @@ Discovery packs prose from *many* notes into each request rather than asking
 about one note at a time. On-device generation costs several seconds per call
 almost independently of how much prose the call carries, so a request per note
 spends nearly all of its cost on overhead: measured on this host, eight short
-notes cost ~68s as eight requests and ~11s as one. Prose is packed across note
-boundaries up to the real context window minus measured instruction/schema
-cost minus response headroom, with each unit remembering the note it came from.
-Proposals are then validated per source note, so a block id belonging to a
-neighbouring note in the same request can never be applied to the wrong file.
-A request that still overflows is halved and retried, then skipped with a loud
-warning rather than aborting the vault run. Chunks run strictly one at a time:
-the on-device model is a single serial resource, and concurrent requests were
-measured to be slower than sequential ones, not faster. Holding one session
-open across requests is also a loss — the accumulated transcript both slows
-generation down and lets earlier notes bias later judgments — so every request
-gets a fresh session.
+notes cost ~68s as eight requests and ~11s as one. Whole files are packed
+into each group up to the real context window minus measured
+instruction/schema cost minus response headroom, with each unit remembering
+the note it came from. Proposals are then validated per source note, so a
+block id belonging to a neighbouring note in the same request can never be
+applied to the wrong file. A request that still overflows is halved and
+retried, then skipped with a loud warning rather than aborting the vault run.
+Groups run strictly one at a time: the on-device model is a single serial
+resource, and concurrent requests were measured to be slower than sequential
+ones, not faster. Holding one session open across requests is also a loss —
+the accumulated transcript both slows generation down and lets earlier notes
+bias later judgments — so every request gets a fresh session.
+
+Each pass streams those groups in path order: discover one group, review its
+candidates immediately, then move on. Approving a mapping fixes it vault-wide
+at once, so later groups are read from text that already contains earlier
+fixes — a typo approved early is never re-reported later, and the first prompt
+arrives after the first productive group instead of after the whole vault
+scan. Each file's units are derived fresh from the current text, so approved
+edits can never stale later offsets. This changes interaction latency, not
+throughput: the model still reads every character once per pass.
 
 There is no inference server to exploit and none is needed: the model already
 lives in a persistent system service (`TGOnDeviceInferenceProviderService`) and
@@ -295,9 +304,10 @@ characters of eligible prose, so a full pass is on the order of tens of hours,
 and the three-pass cap multiplies that. Packing cuts the per-request overhead
 (~17% of a whole-vault run here, since the median note is already ~2.5k
 characters) but cannot change the throughput term. Progress lines report
-`n/total chunks checked` so a long run never looks hung. Expect to run this
-overnight, and expect it to be worth starting only when you actually want the
-vault cleaned.
+`n/total groups checked` against a start-of-pass estimate — fixes shrink
+later groups, so a pass can finish just under its estimate — so a long run
+never looks hung. Expect to run this overnight, and expect it to be worth
+starting only when you actually want the vault cleaned.
 
 Set expectations accordingly. False positives are the failure mode the gates
 above exist to prevent, and the model does produce them — the markup gate was

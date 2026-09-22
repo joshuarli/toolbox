@@ -1167,3 +1167,56 @@ def test_occurrence_moved_under_review_is_safe(tmp_path: Path) -> None:
     with pytest.raises(NotesError):
         spellcheck.apply_single_occurrence(corpus, occurrence, "recieve", "receive", ReviewStats())
     assert path.read_text(encoding="utf-8") == "recieve here\n"
+
+
+# --- streaming passes (discover → review, one group at a time) ----------------
+
+
+class OrderReviewer(ScriptedReviewer):
+    """Scripted reviewer that records how much was discovered before each decision."""
+
+    def __init__(self, actions: list[str], client: FakeClient) -> None:
+        super().__init__(actions)
+        self._client = client
+        self.discoveries_at_decide: list[int] = []
+
+    def decide(self, candidate: Candidate) -> str:
+        self.discoveries_at_decide.append(len(self._client.seen))
+        return super().decide(candidate)
+
+
+def run_pass(vault: Path, client: FakeClient, actions: list[str]) -> tuple[tuple[bool, bool], OrderReviewer]:
+    """Drive one streaming pass directly: no multi-pass loop, no result summary."""
+    corpus = spellcheck.load_corpus(vault)
+    reviewer = OrderReviewer(actions, client)
+    outcome = spellcheck._review_pass(vault, corpus, {}, client, reviewer, {}, set(), set(), ReviewStats())
+    return outcome, reviewer
+
+
+def test_first_review_happens_before_last_discovery(tmp_path: Path) -> None:
+    """Streaming: the first prompt arrives mid-pass, and skip-state carries
+    into groups discovered later in the same pass."""
+    write_vault(tmp_path, {f"{name}.md": "recieve " * 60 + "\n" for name in ("a", "b", "c")})
+    client = ContentFake(context_size=1600, overhead=1020)
+    (quit, found), reviewer = run_pass(tmp_path, client, ["n"])
+    assert (quit, found) == (False, True)
+    assert reviewer.seen == [("recieve", "receive")]  # b/c groups suppressed by the skip
+    assert reviewer.discoveries_at_decide, "reviewer was never consulted"
+    assert reviewer.discoveries_at_decide[0] < len(client.seen)
+    for name in ("a", "b", "c"):
+        assert (tmp_path / f"{name}.md").read_text(encoding="utf-8") == "recieve " * 60 + "\n"
+
+
+def test_approved_mapping_never_reaches_later_groups(tmp_path: Path) -> None:
+    """Freshness: a mapping approved in an early group is swept vault-wide
+    before later groups are read, so the model never sees the typo again."""
+    write_vault(tmp_path, {"a.md": "recieve " * 60 + "\n", "b.md": "recieve " * 60 + "\n"})
+    client = ContentFake(context_size=1600, overhead=1020)
+    (quit, found), reviewer = run_pass(tmp_path, client, ["a"])
+    assert (quit, found) == (False, True)
+    assert reviewer.seen == [("recieve", "receive")]
+    for name in ("a", "b"):
+        assert (tmp_path / f"{name}.md").read_text(encoding="utf-8") == "receive " * 60 + "\n"
+    decided_after = reviewer.discoveries_at_decide[0]
+    assert len(client.seen) > decided_after, "later groups were never discovered after review"
+    assert all("recieve" not in block.text for _, block in client.seen[decided_after:])

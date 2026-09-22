@@ -19,6 +19,14 @@ worse, per paragraph — wastes nearly all of its cost on overhead. Each unit
 remembers the note it came from, so a chunk spanning notes still maps every
 edit back to its exact source range (:func:`validate_chunk`).
 
+Each pass streams file-groups in path order: discover one group, review its
+candidates immediately, then move on. An approved mapping applies vault-wide
+at once, so later groups are read from text that already contains earlier
+fixes — a typo approved early is never re-reported later, and the first
+prompt arrives after the first productive group instead of after the whole
+vault scan. No materialized units survive a review boundary, so later offsets
+can never go stale under review edits.
+
 Usage::
 
     tool notes spellcheck
@@ -689,7 +697,8 @@ async def discover_corrections(text: str, client: ModelClient, path: Path | None
     """Document-level discovery primitive: validated model evidence for one note.
 
     Retained as the single-document seam (and the shape most tests want). The
-    vault path uses :func:`discover_vault`, which packs many notes per request.
+    vault path streams file-groups through :func:`_review_pass`, which packs
+    many notes per request the same way.
     """
     units = _units_for(path if path is not None else Path("<note>"), text, markdown.find_protected_ranges(text))
     if not units:
@@ -721,36 +730,133 @@ def _units_for(path: Path, text: str, protected: Sequence[tuple[int, int]]) -> l
     ]
 
 
-async def discover_vault(
-    corpus: dict[Path, str],
+async def _discover_group(
+    group: list[Unit],
+    budget: int,
     client: ModelClient,
+    corpus: dict[Path, str],
     cache: dict[Path, tuple[str, list[tuple[int, int]]]],
 ) -> list[ModelEvidence]:
-    """Validated model evidence for every note, packed into window-sized requests.
+    """Discover one file-group, splitting to fit; every piece costs one request.
 
-    Notes are walked in deterministic path order and their prose is packed across
-    note boundaries, so a short note costs a fraction of a request instead of a
-    whole one. A file-level model failure still names the file that caused it.
+    All of the group's requests run before the caller reviews anything, so the
+    snapshots the model saw can never go stale under review edits. A model
+    failure still names the file that caused it.
     """
-    units = [
-        unit
-        for path in sorted(corpus)
-        for unit in _units_for(path, corpus[path], _protected_ranges(cache, path, corpus[path]))
-    ]
-    if not units:
-        return []
-    chunks = await plan_chunks(units, client)
-    started = time.monotonic()
     evidence: list[ModelEvidence] = []
-    for done, chunk in enumerate(chunks, 1):
+    for chunk in await _fit_chunk(group, budget, client):
         try:
             evidence.extend(await _discover_chunk(client, chunk, corpus, cache))
         except NotesError as exc:
             raise NotesError(f"{chunk[0].path}: {exc}") from exc
-        _report_progress(done, len(chunks), started)
-    if chunks:
-        _finish_progress()
     return evidence
+
+
+def _review_pass(
+    vault: Path,
+    corpus: dict[Path, str],
+    cache: dict[Path, tuple[str, list[tuple[int, int]]]],
+    client: ModelClient,
+    reviewer: Reviewer,
+    approved: dict[str, str],
+    skipped_sources: set[str],
+    skipped_pairs: set[tuple[str, str]],
+    stats: ReviewStats,
+) -> tuple[bool, bool]:
+    """Stream one discovery pass: per file-group, discover then review immediately.
+
+    Groups pack whole files up to the context budget in deterministic path
+    order — slightly looser than unit-level packing at file boundaries, but
+    whole files keep every snapshot inside the group fresh by construction.
+    Each file's units are (re)derived from the current corpus text, so mappings
+    approved in earlier groups are already applied to what the model sees next.
+    Returns ``(quit_requested, found_any)``.
+    """
+    sample: list[Unit] = []
+    for path in sorted(corpus):
+        sample.extend(_units_for(path, corpus[path], _protected_ranges(cache, path, corpus[path])))
+        if len(sample) >= _RATIO_SAMPLE_UNITS:
+            break
+    if not sample:
+        return False, False
+    budget = asyncio.run(_prompt_budget(client))
+    ratio = asyncio.run(_chars_per_token(sample, client))
+
+    cached: dict[Path, tuple[str, list[Unit]]] = {}
+
+    def fresh_units(path: Path) -> list[Unit]:
+        """Units for *path*, re-derived whenever its text changed underneath."""
+        text = corpus[path]
+        entry = cached.get(path)
+        if entry is not None and entry[0] == text:
+            return entry[1]
+        units = _units_for(path, text, _protected_ranges(cache, path, text))
+        cached[path] = (text, units)
+        return units
+
+    def estimate_groups() -> int:
+        """Greedy group count over whole files, the rule the loop below applies.
+
+        Fixes shrink later groups, so a pass can finish just under this; it is
+        progress information only, never a correctness input.
+        """
+        total = 0
+        used = 0
+        for path in sorted(corpus):
+            size = sum(int(len(unit.text) / ratio) + 1 for unit in fresh_units(path))
+            if size and used and used + size > budget:
+                total += 1
+                used = 0
+            used += size
+        return total + (1 if used else 0)
+
+    total = estimate_groups()
+    started = time.monotonic()
+    done = 0
+    found_any = False
+
+    def process(group: list[Unit]) -> bool:
+        """Discover one packed group and review its new candidates; True on quit."""
+        nonlocal done, found_any
+        evidence = asyncio.run(_discover_group(group, budget, client, corpus, cache))
+        done += 1
+        _report_progress(done, max(total, done), started)
+        candidates = build_candidates(
+            group_candidates(evidence), corpus, cache, approved, skipped_sources, skipped_pairs
+        )
+        if not candidates:
+            return False
+        found_any = True
+        return review_candidates(vault, candidates, corpus, cache, approved, skipped_sources, skipped_pairs, reviewer, stats)
+
+    group: list[Unit] = []
+    used = 0
+    for path in sorted(corpus):
+        units = fresh_units(path)
+        if not units:
+            continue
+        size = sum(int(len(unit.text) / ratio) + 1 for unit in units)
+        if group and used + size > budget:
+            if process(group):
+                _finish_progress()
+                return True, found_any
+            group, used = [], 0
+            # The review just ran global replacements: re-derive, since this
+            # file's snapshot may predate them. Every other future file is
+            # re-derived lazily by fresh_units on encounter.
+            units = fresh_units(path)
+            if not units:
+                continue
+            size = sum(int(len(unit.text) / ratio) + 1 for unit in units)
+        group.extend(units)
+        used += size
+    if group:
+        if process(group):
+            _finish_progress()
+            return True, found_any
+    if done:
+        _finish_progress()
+    return False, found_any
 
 
 def _format_elapsed(seconds: float) -> str:
@@ -773,10 +879,10 @@ def _report_progress(done: int, total: int, started: float) -> None:
     elapsed = _format_elapsed(time.monotonic() - started)
     if sys.stderr.isatty():
         if done < total:
-            print(f"\r  {done}/{total} chunks checked ({elapsed} elapsed)", end="", file=sys.stderr, flush=True)
+            print(f"\r  {done}/{total} groups checked ({elapsed} elapsed)", end="", file=sys.stderr, flush=True)
         return
     if done % _PROGRESS_INTERVAL == 0:
-        print(f"  {done}/{total} chunks checked ({elapsed} elapsed)", file=sys.stderr, flush=True)
+        print(f"  {done}/{total} groups checked ({elapsed} elapsed)", file=sys.stderr, flush=True)
 
 
 def _finish_progress() -> None:
@@ -1094,19 +1200,13 @@ def run(
             corpus = load_corpus(vault)
         sweep_approved(corpus, cache, approved, stats)
         print("Checking prose with Apple Foundation Models...")
-        evidence = asyncio.run(discover_vault(corpus, active_client, cache))
-        candidates = build_candidates(
-            group_candidates(evidence), corpus, cache, approved, skipped_sources, skipped_pairs
-        )
-        if not candidates:
-            print("No new spelling candidates found." if pass_no > 1 else "No spelling corrections found.")
-            break
-        if pass_no > 1:
-            print(f"Found {_plural(len(candidates), 'new candidate', 'new candidates')}.")
-        quit_requested = review_candidates(
-            vault, candidates, corpus, cache, approved, skipped_sources, skipped_pairs, active_reviewer, stats
+        quit_requested, found = _review_pass(
+            vault, corpus, cache, active_client, active_reviewer, approved, skipped_sources, skipped_pairs, stats
         )
         if quit_requested:
+            break
+        if not found:
+            print("No new spelling candidates found." if pass_no > 1 else "No spelling corrections found.")
             break
 
     print()
