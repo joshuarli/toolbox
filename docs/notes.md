@@ -239,6 +239,28 @@ proven-unique range over a miscounted number would trade real fixes for no
 safety gain. When it matches repeatedly, the claimed occurrence must be valid
 or the proposal is dropped.
 
+Accepted proposals are then trimmed to the span that actually differs.
+The instructions tell the model to quote surrounding words so a short typo
+stays unambiguous, and it does — observed live, it returned
+`definately wrong receipt arrived too. → definitely wrong receipt arrived
+too.` rather than the typo alone. That matters beyond cosmetics: grouping is
+keyed on `(original, replacement)`, so the same typo quoted two different ways
+would become two candidates and be adjudicated twice, which is precisely what
+`tool notes spellcheck` exists to avoid. Whole identical words are stripped
+from both ends of an already-validated range, so the trimmed mapping is a
+strict sub-span of one that already proved itself.
+
+The model is never shown Markdown it is forbidden to edit. Protected spans are
+blanked in place — replaced with spaces of exactly the same length, newlines
+preserved — before the block is rendered for the model, so what it reads is
+prose and nothing else. This is worth ~15% of the prompt tokens on the current
+vault (measured with the real tokenizer: URLs, paths, and link destinations
+tokenize poorly, and they are 87% of everything protected), and it removes the
+temptation that produced `_frappato_ → frappato`. Same-length blanking is the
+whole trick: offsets need no translation table, because a match the model
+reports still lands on the identical source range. Fenced code and front matter
+are excluded from blocks entirely, so they are never sent at all.
+
 Scope notes: spelling only — the model instructions forbid style, grammar,
 punctuation, and capitalization changes, and uncertain cases must be left
 unchanged (false positives are worse than misses).

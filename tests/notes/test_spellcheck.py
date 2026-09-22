@@ -203,13 +203,29 @@ def test_unicode_before_and_after_correction() -> None:
 
 
 def test_overlapping_proposals_reject_conflict() -> None:
-    text = "the seperate queue"
+    """Two proposals whose real spans overlap: the first wins, the second is
+    dropped. Nothing is guessed between and nothing is partially applied."""
+    text = "the seperate queue now"
     _text, _blocks, edits = pipeline(
         text,
-        {1: [prop(1, "seperate queue", "separate queue"), prop(1, "te queue", "te queue!")]},
+        {1: [prop(1, "seperate queue", "separate queues"), prop(1, "queue now", "queues now")]},
     )
-    assert [(e.original, e.replacement) for e in edits] == [("seperate queue", "separate queue")]
-    assert spellcheck.apply_corrections(text, edits) == "the separate queue"
+    assert [(e.original, e.replacement, e.start, e.end) for e in edits] == [
+        ("seperate queue", "separate queues", 4, 18)
+    ]
+    assert spellcheck.apply_corrections(text, edits) == "the separate queues now"
+
+
+def test_overlapping_edits_cannot_be_applied_together() -> None:
+    """The splice itself refuses to overlap, so a bad range combination can
+    never corrupt a note even if it reached this far."""
+    text = "the seperate queue"
+    overlapping = [
+        AcceptedCorrection(1, "seperate", "separate", 4, 12),
+        AcceptedCorrection(1, "rate q", "rate q!", 8, 14),
+    ]
+    with pytest.raises(ValueError):
+        spellcheck.apply_corrections(text, overlapping)
 
 
 def test_duplicate_proposals_deduplicated() -> None:
@@ -349,8 +365,48 @@ def test_link_destination_rejected_label_accepted() -> None:
     dest = prop(1, "reciever/docs", "receiver/docs")
     label = prop(1, "reciever docs", "receiver docs")
     edits = spellcheck.validate_corrections(text, blocks, protected, [dest, label])
-    assert [(e.original, e.replacement) for e in edits] == [("reciever docs", "receiver docs")]
+    # The label's quoted phrase is trimmed to the word that actually differs.
+    assert [(e.original, e.replacement) for e in edits] == [("reciever", "receiver")]
     assert spellcheck.apply_corrections(text, edits) == "See [receiver docs](https://example.com/reciever/docs)."
+
+
+# --- quote trimming (one typo must stay one candidate) --------------------------
+
+
+def test_quoted_context_is_trimmed_to_the_typo() -> None:
+    text = "I definately want it."
+    _text, _blocks, edits = pipeline(text, {1: [prop(1, "I definately want", "I definitely want")]})
+    assert [(e.original, e.replacement, e.start, e.end) for e in edits] == [("definately", "definitely", 2, 12)]
+    assert spellcheck.apply_corrections(text, edits) == "I definitely want it."
+
+
+def test_differently_quoted_proposals_group_into_one_candidate() -> None:
+    """The model quotes surrounding words for disambiguation, and quotes them
+    differently each time. Grouping is keyed on the mapping, so without
+    trimming the same typo would become several candidates and be adjudicated
+    more than once."""
+    text = "definately wrong here.\n\nand definately right there.\n"
+    protected = markdown.find_protected_ranges(text)
+    blocks = markdown.find_blocks(text)
+    edits = spellcheck.validate_corrections(
+        text,
+        blocks,
+        protected,
+        [prop(1, "definately wrong", "definitely wrong"), prop(2, "and definately", "and definitely")],
+    )
+    assert {(e.original, e.replacement) for e in edits} == {("definately", "definitely")}
+    grouped = spellcheck.group_candidates(
+        [ModelEvidence(Path("a.md"), e.start, e.end, e.original, e.replacement) for e in edits]
+    )
+    assert list(grouped) == [("definately", "definitely")]
+
+
+def test_minimal_span_keeps_the_differing_suffix() -> None:
+    """Trimming works on whole words only, so a fix later in the phrase keeps
+    its own span rather than swallowing the shared prefix."""
+    assert spellcheck._minimal_span("the recieve queue", "the receive queue") == ("recieve", "receive", 4)
+    assert spellcheck._minimal_span("recieve", "receive") == ("recieve", "receive", 0)
+    assert spellcheck._minimal_span("already fine", "already fine") == ("already fine", "already fine", 0)
 
 
 def test_raw_url_wikilink_and_front_matter_rejected() -> None:
@@ -412,7 +468,7 @@ def test_minimal_substitution_gate() -> None:
 
 def units_for(text: str, name: str = "note.md") -> list[spellcheck.Unit]:
     """The note's eligible prose as units, the way vault discovery sees it."""
-    return spellcheck._units_for(Path(name), text)
+    return spellcheck._units_for(Path(name), text, markdown.find_protected_ranges(text))
 
 
 async def _chunks_for(text: str, client: FakeClient) -> list[list[spellcheck.Unit]]:
@@ -420,11 +476,18 @@ async def _chunks_for(text: str, client: FakeClient) -> list[list[spellcheck.Uni
 
 
 def assert_units_trace_to_source(text: str, chunks: list[list[spellcheck.Unit]]) -> None:
-    """Every unit must be an exact, non-empty slice of the note it came from."""
+    """Every unit must be the masked form of an exact, non-empty source slice.
+
+    Masking is same-length, so a unit's length must still equal its source span's
+    even where the text itself was blanked — that equality is what lets a match
+    the model reports map back with no translation table.
+    """
+    masked = spellcheck.mask_protected(text, markdown.find_protected_ranges(text))
     for chunk in chunks:
         for unit in chunk:
             assert unit.text
-            assert text[unit.start : unit.end] == unit.text, f"unit drifted from source: {unit.text!r}"
+            assert len(unit.text) == unit.end - unit.start
+            assert masked[unit.start : unit.end] == unit.text, f"unit drifted from source: {unit.text!r}"
 
 
 def test_single_chunk_for_small_note() -> None:
@@ -507,11 +570,82 @@ def test_prompt_budget_rejects_tiny_window() -> None:
         asyncio.run(spellcheck._prompt_budget(FakeClient(context_size=100, overhead=90)))
 
 
+# --- masking protected spans (model input is prose, not Markdown) --------------
+
+
+def test_mask_blanks_protected_spans_and_preserves_length() -> None:
+    text = "Fix `recieve()` in foo/recieve.md and see https://x.test/recieve.\n\nProse recieve stays.\n"
+    protected = markdown.find_protected_ranges(text)
+    masked = spellcheck.mask_protected(text, protected)
+    assert len(masked) == len(text)
+    assert masked.count("\n") == text.count("\n")
+    assert "recieve()" not in masked
+    assert "foo/recieve.md" not in masked
+    assert "x.test/recieve" not in masked
+    # The only eligible occurrence survives untouched, at its exact offset.
+    prose = text.index("Prose recieve") + len("Prose ")
+    assert spellcheck.find_eligible_occurrences(text, "recieve", protected) == [(prose, prose + 7)]
+    assert masked[prose : prose + 7] == "recieve"
+
+
+def test_mask_is_identity_when_nothing_is_protected() -> None:
+    text = "Just ordinary prose recieve here.\n"
+    assert spellcheck.mask_protected(text, markdown.find_protected_ranges(text)) == text
+
+
+def test_masked_units_hide_protected_text_from_the_model() -> None:
+    """The model must not be shown text it is forbidden to edit."""
+    text = "Call `recieve_packet()` or read [docs](https://x.test/recieve) then recieve mail.\n"
+    unit = units_for(text)[0]
+    assert "recieve_packet" not in unit.text
+    assert "x.test/recieve" not in unit.text
+    assert unit.text.endswith("then recieve mail.")
+    assert len(unit.text) == unit.end - unit.start
+
+
+def test_proposal_spanning_a_masked_span_is_rejected(tmp_path: Path) -> None:
+    """Masking is not the guarantee — the source equality check is. A proposal
+    that matches the blanked buffer but not the real source must be dropped."""
+    text = "Read https://x.test/recieve now.\n"
+    corpus = {Path("a.md"): text}
+    chunk = units_for(text, "a.md")
+    # `recieve` exists in the masked buffer only as part of a blanked URL, so a
+    # proposal naming it can only match a run of spaces, never the source text.
+    proposals = [prop(1, "recieve", "receive")]
+    assert spellcheck.validate_chunk(chunk, proposals, corpus, {}) == []
+
+
+def test_eligible_prose_around_masked_spans_still_validates(tmp_path: Path) -> None:
+    text = "Fix `recieve()` and recieve more, see https://x.test/recieve too.\n"
+    corpus = {Path("a.md"): text}
+    chunk = units_for(text, "a.md")
+    evidence = spellcheck.validate_chunk(chunk, [prop(1, "recieve", "receive", 1)], corpus, {})
+    assert [(item.start, item.end) for item in evidence] == [(text.index("and recieve") + 4, text.index("and recieve") + 11)]
+    assert text[evidence[0].start : evidence[0].end] == "recieve"
+
+
+def test_masking_reaches_the_model_prompt(tmp_path: Path) -> None:
+    """End-to-end: what the model adapter is handed contains prose, not markup."""
+    write_vault(tmp_path, {"a.md": "Use `recieve_x()` then recieve mail at https://x.test/recieve.\n"})
+    client = FakeClient()
+    spellcheck.run(argparse.Namespace(vault=tmp_path), client=client, reviewer=ScriptedReviewer(["q"]))
+    prompts = [block.text for _name, block in client.seen]
+    assert prompts, "model was never called"
+    for prompt in prompts:
+        assert "recieve_x()" not in prompt
+        assert "x.test/recieve" not in prompt
+        assert "recieve mail" in prompt
+
+
 # --- packing across notes (the whole-vault performance property) ----------------
 
 
 def packed_units(corpus: dict[Path, str]) -> list[spellcheck.Unit]:
-    return [unit for path in sorted(corpus) for unit in spellcheck._units_for(path, corpus[path])]
+    return [
+        unit
+        for path in sorted(corpus)
+        for unit in spellcheck._units_for(path, corpus[path], markdown.find_protected_ranges(corpus[path]))
+    ]
 
 
 def test_short_notes_share_one_model_request(tmp_path: Path) -> None:

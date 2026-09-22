@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import itertools
 import os
+import re
 import sys
 import tempfile
 import time
@@ -53,6 +54,8 @@ from tool.notes.markdown import Block
 # A validated edit is word-scale by construction; anything longer is a
 # rewrite attempt, not a spelling correction, and is rejected outright.
 _MAX_EDIT_CHARS = 200
+# Word boundaries for trimming a quoted proposal down to the span that differs.
+_WORD_RE = re.compile(r"\S+")
 # A spelling correction changes letters, never Markdown structure. Any proposal
 # that adds or drops one of these characters is a markup edit wearing a typo's
 # clothes — `_frappato_ → frappato` strips emphasis, `a|b → ab` breaks a table
@@ -174,15 +177,42 @@ async def _prompt_budget(client: ModelClient) -> int:
 class Unit:
     """One paragraph-scale prose unit, bound to the note it was read from.
 
-    ``start``/``end``/``text`` are note-local, exactly like :class:`markdown.Block`;
-    ``path`` is what lets a chunk mix notes and still map every edit home. A unit
-    only acquires a ``block_id`` when its chunk is rendered for the model.
+    ``start``/``end`` are note-local source offsets, exactly like
+    :class:`markdown.Block`; ``path`` is what lets a chunk mix notes and still
+    map every edit home. ``text`` is the *masked* source slice the model sees
+    (see :func:`mask_protected`) — same length as the source, so offsets need no
+    translation. A unit only acquires a ``block_id`` when its chunk is rendered.
     """
 
     path: Path
     start: int
     end: int
     text: str
+
+
+def mask_protected(text: str, protected: Sequence[tuple[int, int]]) -> str:
+    """Blank protected spans in place, keeping every offset identical.
+
+    The model is asked to judge prose, so it is shown prose and nothing else:
+    URLs, slash-bearing paths, link and image destinations, code spans, math,
+    and HTML become runs of spaces. Those regions are ~13% of the prose the
+    model would otherwise read and ~15% of its tokens, and they are exactly the
+    text it must never edit, so removing them is both cheaper and less
+    distracting than asking it to ignore them.
+
+    Offsets are preserved character for character, so a match the model reports
+    still lands on the same source range with no translation table — the
+    invariant the whole validator rests on. Newlines survive so the shape of
+    the prose it *can* edit is unchanged.
+    """
+    if not protected:
+        return text
+    buf = list(text)
+    for start, end in protected:
+        for index in range(start, end):
+            if buf[index] not in "\n\r":
+                buf[index] = " "
+    return "".join(buf)
 
 
 def _blocks_of(chunk: Sequence[Unit]) -> list[Block]:
@@ -306,6 +336,39 @@ def _markup_signature(text: str) -> tuple[int, ...]:
     return tuple(text.count(char) for char in _MARKUP_CHARS)
 
 
+def _minimal_span(original: str, replacement: str) -> tuple[str, str, int]:
+    """Trim shared leading/trailing words, returning ``(original, replacement, offset)``.
+
+    The instructions ask the model to quote a few surrounding words so a short
+    typo stays unambiguous, and it does — but a candidate is a *mapping*, and
+    grouping is keyed on it. If the same typo is quoted as "the recieve queue"
+    in one note and "a recieve" in another, those would become two separate
+    candidates and the same typo would be adjudicated twice. Reducing every
+    accepted proposal to the span that actually differs keeps one typo to one
+    candidate. ``offset`` is where that span starts within ``original``.
+
+    Only whole identical words are trimmed from either end, so every trimmed
+    mapping is a strict sub-span of one that already passed validation.
+    """
+    old_words = list(_WORD_RE.finditer(original))
+    new_words = list(_WORD_RE.finditer(replacement))
+    if not old_words or len(old_words) != len(new_words):
+        return original, replacement, 0
+    first = 0
+    while first < len(old_words) and old_words[first].group() == new_words[first].group():
+        first += 1
+    if first == len(old_words):
+        return original, replacement, 0  # identical; rejected as a no-op elsewhere
+    last = len(old_words) - 1
+    while last > first and old_words[last].group() == new_words[last].group():
+        last -= 1
+    return (
+        original[old_words[first].start() : old_words[last].end()],
+        replacement[new_words[first].start() : new_words[last].end()],
+        old_words[first].start(),
+    )
+
+
 def _minimal_substitution(original: str, replacement: str) -> bool:
     """True when *replacement* only tweaks letters inside the same words.
 
@@ -334,8 +397,13 @@ def _validate_one(
     by_id: dict[int, Block],
     protected: list[tuple[int, int]],
     proposal: ProposedCorrection,
-) -> tuple[int, int] | None:
-    """Map one proposal to an exact document range, or reject it (None)."""
+) -> tuple[int, int, str, str] | None:
+    """Map one proposal to ``(start, end, original, replacement)``, or reject it (None).
+
+    ``original``/``replacement`` are the proposal trimmed to its minimal
+    differing span, so the range refers to that span rather than to any
+    surrounding words the model quoted for context.
+    """
     block_id, occurrence = proposal.block_id, proposal.occurrence
     original, replacement = proposal.original, proposal.replacement
     if type(block_id) is not int or type(occurrence) is not int:
@@ -395,7 +463,11 @@ def _validate_one(
         return None
     if any(prot_start < end and start < prot_end for prot_start, prot_end in protected):
         return None
-    return (start, end)
+    # Quote-trimming happens last, on a range already proven to be real source
+    # text: identical words are removed from both ends, so the trimmed span is
+    # still exact and still inside every boundary just checked.
+    minimal_original, minimal_replacement, offset = _minimal_span(original, replacement)
+    return start + offset, start + offset + len(minimal_original), minimal_original, minimal_replacement
 
 
 def validate_corrections(
@@ -420,8 +492,8 @@ def validate_corrections(
         mapped = _validate_one(text, by_id, ranges, proposal)
         if mapped is None:
             continue
-        start, end = mapped
-        key = (start, end, proposal.original, proposal.replacement)
+        start, end, original, replacement = mapped
+        key = (start, end, original, replacement)
         if key in seen:
             continue
         if any(
@@ -434,8 +506,8 @@ def validate_corrections(
         accepted.append(
             AcceptedCorrection(
                 block_id=proposal.block_id,
-                original=proposal.original,
-                replacement=proposal.replacement,
+                original=original,
+                replacement=replacement,
                 start=start,
                 end=end,
             )
@@ -619,7 +691,7 @@ async def discover_corrections(text: str, client: ModelClient, path: Path | None
     Retained as the single-document seam (and the shape most tests want). The
     vault path uses :func:`discover_vault`, which packs many notes per request.
     """
-    units = _units_for(path if path is not None else Path("<note>"), text)
+    units = _units_for(path if path is not None else Path("<note>"), text, markdown.find_protected_ranges(text))
     if not units:
         return []
     corpus = {units[0].path: text}
@@ -635,9 +707,18 @@ async def discover_corrections(text: str, client: ModelClient, path: Path | None
     return sorted(accepted, key=lambda edit: edit.start)
 
 
-def _units_for(path: Path, text: str) -> list[Unit]:
-    """Eligible prose of one note as units, in document order."""
-    return [Unit(path=path, start=block.start, end=block.end, text=block.text) for block in markdown.find_blocks(text)]
+def _units_for(path: Path, text: str, protected: Sequence[tuple[int, int]]) -> list[Unit]:
+    """Eligible prose of one note as model-visible units, in document order.
+
+    Blocks are located in the source (so fenced code and front matter stay out),
+    then sliced from the masked copy, so the model reads only prose it may edit
+    while every offset still refers to the source.
+    """
+    masked = mask_protected(text, protected)
+    return [
+        Unit(path=path, start=block.start, end=block.end, text=masked[block.start : block.end])
+        for block in markdown.find_blocks(text)
+    ]
 
 
 async def discover_vault(
@@ -651,7 +732,11 @@ async def discover_vault(
     note boundaries, so a short note costs a fraction of a request instead of a
     whole one. A file-level model failure still names the file that caused it.
     """
-    units = [unit for path in sorted(corpus) for unit in _units_for(path, corpus[path])]
+    units = [
+        unit
+        for path in sorted(corpus)
+        for unit in _units_for(path, corpus[path], _protected_ranges(cache, path, corpus[path]))
+    ]
     if not units:
         return []
     chunks = await plan_chunks(units, client)
