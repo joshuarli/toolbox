@@ -12,6 +12,13 @@ mapping interactively; approved mappings apply everywhere safe without
 further AI calls. Up to three discovery passes run until no new candidates
 appear.
 
+Discovery packs prose from *many* notes into each model request
+(:func:`plan_chunks`). On-device generation costs seconds per call almost
+independently of how much prose the call carries, so a request per note — or
+worse, per paragraph — wastes nearly all of its cost on overhead. Each unit
+remembers the note it came from, so a chunk spanning notes still maps every
+edit back to its exact source range (:func:`validate_chunk`).
+
 Usage::
 
     tool notes spellcheck
@@ -25,8 +32,9 @@ import itertools
 import os
 import sys
 import tempfile
+import time
 import unicodedata
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, cast
@@ -45,9 +53,11 @@ from tool.notes.markdown import Block
 # A validated edit is word-scale by construction; anything longer is a
 # rewrite attempt, not a spelling correction, and is rejected outright.
 _MAX_EDIT_CHARS = 200
-# A replacement introducing one of these can corrupt Markdown/HTML/math
-# syntax (code spans, links, tags, math, tables, escapes), so it is rejected.
-_REPLACEMENT_FORBIDDEN = set("`[]<>\\|$")
+# A spelling correction changes letters, never Markdown structure. Any proposal
+# that adds or drops one of these characters is a markup edit wearing a typo's
+# clothes — `_frappato_ → frappato` strips emphasis, `a|b → ab` breaks a table
+# cell — so the counts must match exactly on both sides.
+_MARKUP_CHARS = "_*`#~[]<>|\\$"
 # Context-window reserve covering instructions, guided-generation schema,
 # prompt framing, and response headroom; prompts never fill the window.
 # Fallback overhead estimate when exact measurement fails (instructions +
@@ -61,6 +71,11 @@ _RESPONSE_RESERVE_TOKENS = 512
 _MAX_SECTION_SPLITS = 3
 # Conservative chars-per-token guess used only when exact token counting fails.
 _FALLBACK_CHARS_PER_TOKEN = 3
+# Units sampled to calibrate the packing ratio (a few thousand characters is
+# plenty for a stable estimate; the exact check still governs every chunk).
+_RATIO_SAMPLE_UNITS = 12
+# Chunks between progress lines when stderr is not a terminal.
+_PROGRESS_INTERVAL = 25
 _SNIPPET_WIDTH = 100
 # Upper bound on discovery passes; generative inference is nondeterministic,
 # so a fixed cap guarantees convergence.
@@ -155,57 +170,114 @@ async def _prompt_budget(client: ModelClient) -> int:
     return budget
 
 
-async def _fit_unit(block: Block, budget: int, client: ModelClient) -> list[Block]:
-    """Split one paragraph until each piece fits *budget* alone; never skip text."""
-    if await _measured_tokens(client, render_prompt(block)) <= budget:
-        return [block]
-    if len(block.text) <= 1:
-        # Unsplittable unit (practically impossible at these budgets):
-        # leave it; generation will surface a clear context error.
-        return [block]
-    pieces = markdown.split_range(block.text, 0, len(block.text), max(1, len(block.text) // 2))
+@dataclass(frozen=True, slots=True)
+class Unit:
+    """One paragraph-scale prose unit, bound to the note it was read from.
+
+    ``start``/``end``/``text`` are note-local, exactly like :class:`markdown.Block`;
+    ``path`` is what lets a chunk mix notes and still map every edit home. A unit
+    only acquires a ``block_id`` when its chunk is rendered for the model.
+    """
+
+    path: Path
+    start: int
+    end: int
+    text: str
+
+
+def _blocks_of(chunk: Sequence[Unit]) -> list[Block]:
+    """Render a chunk's units as model-visible blocks with chunk-local ids."""
+    return [Block(block_id=i, start=unit.start, end=unit.end, text=unit.text) for i, unit in enumerate(chunk, 1)]
+
+
+async def _chunk_tokens(client: ModelClient, chunk: Sequence[Unit]) -> int:
+    return await _measured_tokens(client, render_prompt(_blocks_of(chunk)))
+
+
+def _split_unit(unit: Unit) -> list[Unit]:
+    """Halve one unit at a sensible textual seam; single piece if unsplittable."""
+    pieces = markdown.split_range(unit.text, 0, len(unit.text), max(1, len(unit.text) // 2))
     if len(pieces) <= 1:
-        return [block]
-    fitted: list[Block] = []
-    for start, end in pieces:
-        sub = Block(block_id=0, start=block.start + start, end=block.start + end, text=block.text[start:end])
-        fitted.extend(await _fit_unit(sub, budget, client))
+        return [unit]
+    return [
+        Unit(path=unit.path, start=unit.start + start, end=unit.start + end, text=unit.text[start:end])
+        for start, end in pieces
+    ]
+
+
+def _halve(chunk: list[Unit]) -> list[list[Unit]]:
+    """Split a chunk into two, or into one unit's pieces when it holds a single unit."""
+    if len(chunk) > 1:
+        middle = len(chunk) // 2
+        return [chunk[:middle], chunk[middle:]]
+    return [[piece] for piece in _split_unit(chunk[0])]
+
+
+async def _fit_chunk(chunk: list[Unit], budget: int, client: ModelClient) -> list[list[Unit]]:
+    """Split *chunk* until each piece's rendered prompt fits *budget*; never drop text."""
+    if await _chunk_tokens(client, chunk) <= budget:
+        return [chunk]
+    halves = _halve(chunk)
+    if len(halves) <= 1:
+        # Unsplittable unit (practically impossible at these budgets): leave it,
+        # and let generation surface a clear context error.
+        return [chunk]
+    fitted: list[list[Unit]] = []
+    for half in halves:
+        fitted.extend(await _fit_chunk(half, budget, client))
     return fitted
 
 
-def _section(text: str, units: list[Block]) -> Block:
-    """One exact source slice spanning *units* (paragraphs stay in order)."""
-    start, end = units[0].start, units[-1].end
-    return Block(block_id=0, start=start, end=end, text=text[start:end])
+async def _chars_per_token(units: Sequence[Unit], client: ModelClient) -> float:
+    """Calibrate a chars-per-token ratio from a sample of the corpus.
 
-
-async def plan_chunks(blocks: Sequence[Block], text: str, client: ModelClient) -> list[Block]:
-    """Group paragraph blocks into section-scale chunks fitting the context window.
-
-    Chunk prompts are measured with the real ``token_count`` API against the
-    real ``context_size`` — no hard-coded model sizes. Each chunk is a single
-    exact source slice with a fresh stable id, so the model echoes one id per
-    request and occurrence counting stays unambiguous. Every chunk gets a
-    fresh session, so later requests never inherit earlier document text.
+    Packing needs a size estimate for every unit, and measuring each one exactly
+    would cost thousands of round trips before a single correction is found. One
+    sampled measurement is enough, because every assembled chunk is still
+    verified with exact counting before it is sent.
     """
+    sample = "\n\n".join(unit.text for unit in units[:_RATIO_SAMPLE_UNITS])
+    if not sample:
+        return float(_FALLBACK_CHARS_PER_TOKEN)
+    try:
+        tokens = await client.count_tokens(sample)
+    except Exception:
+        return float(_FALLBACK_CHARS_PER_TOKEN)
+    if tokens <= 0:
+        return float(_FALLBACK_CHARS_PER_TOKEN)
+    return max(1.0, len(sample) / tokens)
+
+
+async def plan_chunks(units: Sequence[Unit], client: ModelClient) -> list[list[Unit]]:
+    """Pack prose units from any notes into model requests that fit the window.
+
+    On-device generation costs seconds per call almost independently of how much
+    prose the call carries, so one request covers as much coherent text as the
+    context window allows rather than one note at a time. Budgets come from the
+    real ``context_size`` and measured instruction/schema overhead — no
+    hard-coded model sizes. Every packed chunk is re-measured exactly and split
+    while it does not fit, so no text is skipped and no request overflows.
+    """
+    if not units:
+        return []
     budget = await _prompt_budget(client)
-    units: list[Block] = []
-    for block in blocks:
-        units.extend(await _fit_unit(block, budget, client))
-    sections: list[Block] = []
-    current: list[Block] = []
+    ratio = await _chars_per_token(units, client)
+    packed: list[list[Unit]] = []
+    current: list[Unit] = []
+    used = 0
     for unit in units:
-        candidate: list[Block] = [*current, unit]
-        probe = _section(text, candidate)
-        if await _measured_tokens(client, render_prompt(probe)) <= budget:
-            current = candidate
-            continue
-        if current:
-            sections.append(_section(text, current))
-        current = [unit]
+        size = int(len(unit.text) / ratio) + 1
+        if current and used + size > budget:
+            packed.append(current)
+            current, used = [], 0
+        current.append(unit)
+        used += size
     if current:
-        sections.append(_section(text, current))
-    return [Block(block_id=i + 1, start=s.start, end=s.end, text=s.text) for i, s in enumerate(sections)]
+        packed.append(current)
+    chunks: list[list[Unit]] = []
+    for group in packed:
+        chunks.extend(await _fit_chunk(group, budget, client))
+    return chunks
 
 
 def _within_distance(one: str, two: str, limit: int) -> bool:
@@ -227,6 +299,11 @@ def _within_distance(one: str, two: str, limit: int) -> bool:
             return False
         prev = current
     return prev[-1] <= limit
+
+
+def _markup_signature(text: str) -> tuple[int, ...]:
+    """Count of each Markdown-significant character in *text*."""
+    return tuple(text.count(char) for char in _MARKUP_CHARS)
 
 
 def _minimal_substitution(original: str, replacement: str) -> bool:
@@ -283,7 +360,7 @@ def _validate_one(
         return None
     if not any(char.isalnum() for char in original):
         return None
-    if any(char in _REPLACEMENT_FORBIDDEN for char in replacement):
+    if _markup_signature(original) != _markup_signature(replacement):
         return None
     if not _minimal_substitution(original, replacement):
         return None
@@ -471,74 +548,156 @@ def atomic_write_text(path: Path, text: str) -> None:
         raise NotesError(f"could not write {path}: {exc}") from exc
 
 
-async def discover_corrections(text: str, client: ModelClient, path: Path | None = None) -> list[AcceptedCorrection]:
-    """Document-level discovery primitive: validated model evidence for one note.
+def _note_blocks(chunk: Sequence[Unit], corpus: dict[Path, str]) -> dict[Path, list[Block]]:
+    """Group a chunk's model-visible blocks by the note they came from."""
+    grouped: dict[Path, list[Block]] = {}
+    for block, unit in zip(_blocks_of(chunk), chunk, strict=True):
+        grouped.setdefault(unit.path, []).append(block)
+    return grouped
 
-    Runs token-aware chunking, one fresh model session per chunk, and strict
-    validation. A chunk that still overflows the context window (usually a
-    response-side blowup from many corrections) is halved and retried a few
-    times, then skipped with a loud warning — one pathological note must not
-    abort a whole-vault run. Retained as the test seam for vault passes.
+
+def validate_chunk(
+    chunk: Sequence[Unit],
+    proposals: Sequence[ProposedCorrection],
+    corpus: dict[Path, str],
+    cache: dict[Path, tuple[str, list[tuple[int, int]]]],
+) -> list[ModelEvidence]:
+    """Map one chunk's proposals back to exact source ranges, note by note.
+
+    Validation runs per source note with only that note's blocks in scope, so a
+    proposal naming a block from a neighbouring note in the same request cannot
+    be applied to the wrong file.
     """
-    protected = markdown.find_protected_ranges(text)
-    blocks = markdown.find_blocks(text)
-    if not blocks:
-        return []
-    sections = await plan_chunks(blocks, text, client)
-    fresh_ids = itertools.count(len(sections) + 1)
-    pairs: list[tuple[Block, list[ProposedCorrection]]] = []
-    for section in sections:
-        pairs.extend(await _correct_with_rescue(client, section, path, fresh_ids))
-    # Validate per block so occurrence mapping stays exact after rescue splits.
-    accepted: list[AcceptedCorrection] = []
-    for block, proposals in pairs:
-        accepted.extend(validate_corrections(text, [block], protected, proposals))
-    return sorted(accepted, key=lambda edit: edit.start)
+    evidence: list[ModelEvidence] = []
+    for path, blocks in _note_blocks(chunk, corpus).items():
+        text = corpus[path]
+        for edit in validate_corrections(text, blocks, _protected_ranges(cache, path, text), proposals):
+            evidence.append(
+                ModelEvidence(
+                    path=path, start=edit.start, end=edit.end, original=edit.original, replacement=edit.replacement
+                )
+            )
+    return evidence
 
 
-async def _correct_with_rescue(
-    client: ModelClient, section: Block, path: Path | None, fresh_ids: Iterator[int], depth: int = 0
-) -> list[tuple[Block, list[ProposedCorrection]]]:
-    """Correct one section, halving and retrying on context-window overflow."""
+async def _discover_chunk(
+    client: ModelClient,
+    chunk: list[Unit],
+    corpus: dict[Path, str],
+    cache: dict[Path, tuple[str, list[tuple[int, int]]]],
+    depth: int = 0,
+) -> list[ModelEvidence]:
+    """One model request over a chunk, halving and retrying on context overflow.
+
+    Overflow usually means the response blew up rather than the prompt, so
+    halving the chunk is the fix. A chunk that still overflows after a few
+    splits is skipped with a loud warning: one pathological note must not abort
+    a whole-vault run.
+    """
     try:
-        return [(section, await client.correct_block(section))]
+        proposals = await client.correct(_blocks_of(chunk))
     except ContextTooLargeError:
-        pieces = markdown.split_range(section.text, 0, len(section.text), max(1, len(section.text) // 2))
-        if depth >= _MAX_SECTION_SPLITS or len(pieces) <= 1:
-            label = path.name if path is not None else "note"
+        halves = _halve(chunk)
+        if depth >= _MAX_SECTION_SPLITS or len(halves) <= 1:
+            label = chunk[0].path.name if chunk else "note"
             print(
                 f"warning: skipping a prose section in {label} that exceeds the "
                 "Foundation Models context window; review it manually",
                 file=sys.stderr,
             )
             return []
-        rescued: list[tuple[Block, list[ProposedCorrection]]] = []
-        for start, end in pieces:
-            sub = Block(
-                block_id=next(fresh_ids),
-                start=section.start + start,
-                end=section.start + end,
-                text=section.text[start:end],
-            )
-            rescued.extend(await _correct_with_rescue(client, sub, path, fresh_ids, depth + 1))
+        rescued: list[ModelEvidence] = []
+        for half in halves:
+            rescued.extend(await _discover_chunk(client, half, corpus, cache, depth + 1))
         return rescued
+    return validate_chunk(chunk, proposals, corpus, cache)
 
 
-async def discover_file(path: Path, text: str, client: ModelClient) -> list[ModelEvidence]:
-    """Validated model evidence for one note, with exact source ranges."""
-    seen: set[tuple[int, int, str, str]] = set()
-    evidence: list[ModelEvidence] = []
-    for edit in await discover_corrections(text, client, path):
-        key = (edit.start, edit.end, edit.original, edit.replacement)
-        if key in seen:
-            continue
-        seen.add(key)
-        evidence.append(
-            ModelEvidence(
-                path=path, start=edit.start, end=edit.end, original=edit.original, replacement=edit.replacement
+async def discover_corrections(text: str, client: ModelClient, path: Path | None = None) -> list[AcceptedCorrection]:
+    """Document-level discovery primitive: validated model evidence for one note.
+
+    Retained as the single-document seam (and the shape most tests want). The
+    vault path uses :func:`discover_vault`, which packs many notes per request.
+    """
+    units = _units_for(path if path is not None else Path("<note>"), text)
+    if not units:
+        return []
+    corpus = {units[0].path: text}
+    cache: dict[Path, tuple[str, list[tuple[int, int]]]] = {}
+    accepted: list[AcceptedCorrection] = []
+    for chunk in await plan_chunks(units, client):
+        for item in await _discover_chunk(client, chunk, corpus, cache):
+            accepted.append(
+                AcceptedCorrection(
+                    block_id=0, original=item.original, replacement=item.replacement, start=item.start, end=item.end
+                )
             )
-        )
+    return sorted(accepted, key=lambda edit: edit.start)
+
+
+def _units_for(path: Path, text: str) -> list[Unit]:
+    """Eligible prose of one note as units, in document order."""
+    return [Unit(path=path, start=block.start, end=block.end, text=block.text) for block in markdown.find_blocks(text)]
+
+
+async def discover_vault(
+    corpus: dict[Path, str],
+    client: ModelClient,
+    cache: dict[Path, tuple[str, list[tuple[int, int]]]],
+) -> list[ModelEvidence]:
+    """Validated model evidence for every note, packed into window-sized requests.
+
+    Notes are walked in deterministic path order and their prose is packed across
+    note boundaries, so a short note costs a fraction of a request instead of a
+    whole one. A file-level model failure still names the file that caused it.
+    """
+    units = [unit for path in sorted(corpus) for unit in _units_for(path, corpus[path])]
+    if not units:
+        return []
+    chunks = await plan_chunks(units, client)
+    started = time.monotonic()
+    evidence: list[ModelEvidence] = []
+    for done, chunk in enumerate(chunks, 1):
+        try:
+            evidence.extend(await _discover_chunk(client, chunk, corpus, cache))
+        except NotesError as exc:
+            raise NotesError(f"{chunk[0].path}: {exc}") from exc
+        _report_progress(done, len(chunks), started)
+    if chunks:
+        _finish_progress()
     return evidence
+
+
+def _format_elapsed(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    minutes, rest = divmod(int(seconds), 60)
+    if minutes < 60:
+        return f"{minutes}m{rest:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m"
+
+
+def _report_progress(done: int, total: int, started: float) -> None:
+    """Progress feedback, so a vault run measured in hours never looks hung.
+
+    On a terminal this rewrites one line in place. When stderr is a pipe or a
+    log there is nothing to rewrite, so it prints an occasional full line
+    instead — silence for hours is worse than a little noise.
+    """
+    elapsed = _format_elapsed(time.monotonic() - started)
+    if sys.stderr.isatty():
+        if done < total:
+            print(f"\r  {done}/{total} chunks checked ({elapsed} elapsed)", end="", file=sys.stderr, flush=True)
+        return
+    if done % _PROGRESS_INTERVAL == 0:
+        print(f"  {done}/{total} chunks checked ({elapsed} elapsed)", file=sys.stderr, flush=True)
+
+
+def _finish_progress() -> None:
+    """Clear the progress line so later output starts on a clean row."""
+    if sys.stderr.isatty():
+        print("\r\033[K", end="", file=sys.stderr, flush=True)
 
 
 def load_corpus(vault: Path) -> dict[Path, str]:
@@ -799,22 +958,6 @@ def _read_single_key() -> str:
     return (char or "").strip().lower()[:1]
 
 
-async def _discover_all(corpus: dict[Path, str], client: ModelClient) -> list[ModelEvidence]:
-    """Run model discovery over every corpus note, in deterministic path order."""
-    evidence: list[ModelEvidence] = []
-    for path in sorted(corpus):
-        started = asyncio.get_running_loop().time()
-        try:
-            evidence.extend(await discover_file(path, corpus[path], client))
-        except NotesError as exc:
-            raise NotesError(f"{path}: {exc}") from exc
-        elapsed = asyncio.get_running_loop().time() - started
-        if elapsed > 10:
-            # Multi-hour vault runs otherwise look hung on monster clippings.
-            print(f"  checked {path.name} in {elapsed:.0f}s", file=sys.stderr)
-    return evidence
-
-
 def sweep_approved(
     corpus: dict[Path, str],
     cache: dict[Path, tuple[str, list[tuple[int, int]]]],
@@ -866,7 +1009,7 @@ def run(
             corpus = load_corpus(vault)
         sweep_approved(corpus, cache, approved, stats)
         print("Checking prose with Apple Foundation Models...")
-        evidence = asyncio.run(_discover_all(corpus, active_client))
+        evidence = asyncio.run(discover_vault(corpus, active_client, cache))
         candidates = build_candidates(
             group_candidates(evidence), corpus, cache, approved, skipped_sources, skipped_pairs
         )

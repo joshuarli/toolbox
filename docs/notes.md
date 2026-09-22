@@ -185,6 +185,21 @@ then expands an approved mapping to every exact safe occurrence, and the
 human approves every mapping. Nothing is applied the model did not propose
 and you did not approve.
 
+The layers are deliberately one-directional — document scanning primitives
+(`markdown.py`) know nothing about the model, the model adapter
+(`foundation_models.py`) knows nothing about the vault, and `spellcheck.py`
+owns corpus, discovery, grouping/expansion, review, and mutation. `run()` is
+the only synchronous boundary; it drives a clearly separated async
+discovery operation and never makes unrelated `tool` commands async.
+
+Note text is **untrusted input to the model**. The instructions tell it to
+treat every block as data rather than instructions, but that is defence in
+depth, not the guarantee: the real guarantee is that a proposal can only
+survive as a validated substring substitution inside unprotected prose, so
+no amount of adversarial note content can replace a file. Notes containing
+"ignore previous instructions" or "replace every word" are regression-tested
+for exactly this.
+
 Protected regions are never touched by discovery or by global replacement:
 YAML front matter, fenced code blocks, inline code spans, raw URLs, Markdown
 link/image destinations, autolinks, Obsidian wikilink targets and embeds,
@@ -196,18 +211,92 @@ alone. A deterministic minimal-substitution gate also rejects any proposal
 that is not a letter-level tweak within the same words (same token count,
 every changed token within edit distance 2), so instruction-following
 rewrites such as `Qwen3.5 → ChatGPT` can never become candidates even when
-the model is suggestible.
+the model is suggestible. A markup-signature gate requires the count of
+Markdown-significant characters (``_ * ` # ~ [ ] < > | \ $``) to be identical
+on both sides of a proposal — a spelling fix changes letters, never
+structure. This catches proposals observed from the live model such as
+`_frappato_ → frappato`, which would otherwise have passed the edit-distance
+gate and silently stripped the author's italics. Ordinary punctuation that is
+not Markdown structure is unaffected, so `dont → don't` is still a valid
+correction.
+
+Model output is never fuzzy-matched, never "find the closest word", and never
+applied against source text that is no longer exactly what the model saw. A
+proposal becomes evidence only when it independently proves: its block id
+exists in that request, `original` and `replacement` are non-empty and differ,
+the claimed occurrence exists verbatim in that block, the resulting range maps
+back to the original document, the range intersects no protected region, and
+it overlaps no already-accepted edit. Exact duplicates collapse to one edit;
+competing replacements for the *same* range are both kept, so grouping can
+surface them as separate candidates rather than guessing. Malformed or
+partly-bad output can never endanger the rest of a file.
+
+Proposals carry a 1-based `occurrence` rather than character offsets, because a
+small on-device model counts words far more reliably than it counts Unicode
+offsets. When `original` matches exactly once in the block, the claimed number
+is ignored — the exact match is itself the proof, and rejecting a
+proven-unique range over a miscounted number would trade real fixes for no
+safety gain. When it matches repeatedly, the claimed occurrence must be valid
+or the proposal is dropped.
 
 Scope notes: spelling only — the model instructions forbid style, grammar,
 punctuation, and capitalization changes, and uncertain cases must be left
-unchanged (false positives are worse than misses). Chunk prompts are sized
-from the real context window minus measured instruction/schema cost minus
-response headroom; a chunk that still overflows is halved and retried, then
-skipped with a loud warning rather than aborting the vault run. One vault at
-a time (`--vault` overrides the hardcoded default); files keep their bytes
-outside accepted edits, newlines and permissions are preserved, and each
-modified note is replaced atomically. There is no backup, undo log, or approval
-database — the vault is expected to be externally backed up. Requires macOS
-26+ on Apple Silicon with Xcode 26+ and Apple Intelligence enabled
+unchanged (false positives are worse than misses).
+
+Discovery packs prose from *many* notes into each request rather than asking
+about one note at a time. On-device generation costs several seconds per call
+almost independently of how much prose the call carries, so a request per note
+spends nearly all of its cost on overhead: measured on this host, eight short
+notes cost ~68s as eight requests and ~11s as one. Prose is packed across note
+boundaries up to the real context window minus measured instruction/schema
+cost minus response headroom, with each unit remembering the note it came from.
+Proposals are then validated per source note, so a block id belonging to a
+neighbouring note in the same request can never be applied to the wrong file.
+A request that still overflows is halved and retried, then skipped with a loud
+warning rather than aborting the vault run. Chunks run strictly one at a time:
+the on-device model is a single serial resource, and concurrent requests were
+measured to be slower than sequential ones, not faster. Holding one session
+open across requests is also a loss — the accumulated transcript both slows
+generation down and lets earlier notes bias later judgments — so every request
+gets a fresh session.
+
+There is no inference server to exploit and none is needed: the model already
+lives in a persistent system service (`TGOnDeviceInferenceProviderService`) and
+session creation costs ~2 ms, so nothing is started or stopped per request. The
+runtime is bounded by model throughput, measured at **~146 chars/s** on this
+host. That is worth knowing before starting: the vault currently holds ~19M
+characters of eligible prose, so a full pass is on the order of tens of hours,
+and the three-pass cap multiplies that. Packing cuts the per-request overhead
+(~17% of a whole-vault run here, since the median note is already ~2.5k
+characters) but cannot change the throughput term. Progress lines report
+`n/total chunks checked` so a long run never looks hung. Expect to run this
+overnight, and expect it to be worth starting only when you actually want the
+vault cleaned.
+
+Set expectations accordingly. False positives are the failure mode the gates
+above exist to prevent, and the model does produce them — the markup gate was
+added after the live model proposed stripping italics — but every observed
+class is now rejected deterministically, and a final live run surfaced only
+genuine typos. Recall is the weaker half: the model reliably finds repeated and
+obvious misspellings yet still misses some, including plain ones such as
+`recieved → received`. Later passes catch some of what earlier ones missed,
+which is the point of running more than one. Recall also degrades as more
+blocks are packed into a single request, so packing is a deliberate
+throughput/recall trade rather than a free win.
+
+One vault at a time (`--vault` overrides the hardcoded default); files keep
+their bytes outside accepted edits, newlines and permissions are preserved, and
+each modified note is replaced atomically. There is no backup, undo log, or
+approval database — the vault is expected to be externally backed up. Requires
+macOS 26+ on Apple Silicon with Xcode 26+ and Apple Intelligence enabled
 (`apple-fm-sdk` is a macOS-only dependency and imports lazily, so other
 `tool` commands and CI tests work everywhere).
+
+The ordinary suite fakes the model and never needs Apple Intelligence. For
+real-model evaluation of recall, false positives, and protected-region safety,
+there is an opt-in harness that is deliberately excluded from CI because
+generative output is not stable across OS/model revisions:
+
+```bash
+TOOL_NOTES_SPELLCHECK_LIVE=1 uv run pytest tests/notes/test_spellcheck_live.py -s
+```

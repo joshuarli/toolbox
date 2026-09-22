@@ -9,6 +9,7 @@ review, multi-pass convergence, and vault orchestration.
 import argparse
 import asyncio
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -27,7 +28,11 @@ from tool.notes.spellcheck import (
 
 
 class FakeClient:
-    """Deterministic model: canned proposals per file and section, char-based tokens."""
+    """Deterministic model: canned proposals per file and block, char-based tokens.
+
+    ``correct`` receives a whole chunk (1..N blocks, potentially spanning notes)
+    and answers per block, exactly like the real guided-generation client.
+    """
 
     def __init__(
         self,
@@ -41,6 +46,7 @@ class FakeClient:
         self._chars_per_token = chars_per_token
         self._overhead = overhead
         self.seen: list[tuple[str, Block]] = []
+        self.requests = 0
         self._current_file = ""
 
     @property
@@ -53,27 +59,33 @@ class FakeClient:
     async def prompt_overhead_tokens(self) -> int:
         return self._overhead
 
-    async def correct_block(self, block: Block) -> list[ProposedCorrection]:
-        self.seen.append((self._current_file, block))
-        return list(self._by_file.get(self._current_file, {}).get(block.block_id, []))
+    async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+        self.requests += 1
+        out: list[ProposedCorrection] = []
+        for block in blocks:
+            self.seen.append((self._current_file, block))
+            out.extend(self._by_file.get(self._current_file, {}).get(block.block_id, []))
+        return out
 
 
 class ContentFake(FakeClient):
-    """A deterministic stand-in 'model' that reacts to current file content.
+    """A deterministic stand-in 'model' that reacts to current block content.
 
-    Proposes ``recieve → receive`` (occurrence 1) whenever a section still
+    Proposes ``recieve → receive`` (occurrence 1) whenever a block still
     contains a safe-looking ``recieve``, and ``teh → the`` only once no
-    ``recieve`` remains anywhere in the section, simulating mistakes exposed
+    ``recieve`` remains anywhere in that block, simulating mistakes exposed
     by a later pass.
     """
 
-    async def correct_block(self, block: Block) -> list[ProposedCorrection]:
-        self.seen.append((self._current_file, block))
-        if "recieve" in block.text:
-            return [ProposedCorrection(block.block_id, "recieve", "receive", 1)]
-        if "teh" in block.text:
-            return [ProposedCorrection(block.block_id, "teh", "the", 1)]
-        return []
+    async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+        out: list[ProposedCorrection] = []
+        for block in blocks:
+            self.seen.append((self._current_file, block))
+            if "recieve" in block.text:
+                out.append(ProposedCorrection(block.block_id, "recieve", "receive", 1))
+            elif "teh" in block.text:
+                out.append(ProposedCorrection(block.block_id, "teh", "the", 1))
+        return out
 
 
 async def _discover_with(client: FakeClient, vault_files: dict[str, str]) -> list[ModelEvidence]:
@@ -259,6 +271,34 @@ def test_markdown_mutation_proposal_rejected() -> None:
     assert edits == []
 
 
+def test_markup_character_changes_rejected() -> None:
+    """Emphasis and table syntax are not typos. Observed live: the model proposed
+    `_frappato_ → frappato`, which would have silently stripped the author's
+    italics — a markup edit that passes an edit-distance gate."""
+    text = "Though _frappato_ is fruity, the *vineyard* is not. Use a|b for cells."
+    _text, _blocks, edits = pipeline(
+        text,
+        {
+            1: [
+                prop(1, "_frappato_", "frappato"),
+                prop(1, "*vineyard*", "vineyard"),
+                prop(1, "fruity", "*fruity*"),
+                prop(1, "a|b", "ab"),
+            ]
+        },
+    )
+    assert edits == []
+
+
+def test_non_markup_punctuation_correction_still_allowed() -> None:
+    """The markup guard must not block genuine spelling fixes that touch an
+    apostrophe or hyphen: `dont → don't` is a real correction."""
+    text = "I dont know."
+    _text, _blocks, edits = pipeline(text, {1: [prop(1, "dont", "don't")]})
+    assert [(e.original, e.replacement) for e in edits] == [("dont", "don't")]
+    assert spellcheck.apply_corrections(text, edits) == "I don't know."
+
+
 def test_punctuation_only_original_rejected() -> None:
     text = "a - b"
     _text, _blocks, edits = pipeline(text, {1: [prop(1, "-", "–")]})
@@ -370,52 +410,71 @@ def test_minimal_substitution_gate() -> None:
 # --- chunking (document primitives, unchanged) ---------------------------------
 
 
-async def _chunks_for(text: str, client: FakeClient) -> list[Block]:
-    blocks = markdown.find_blocks(text)
-    return await spellcheck.plan_chunks(blocks, text, client)
+def units_for(text: str, name: str = "note.md") -> list[spellcheck.Unit]:
+    """The note's eligible prose as units, the way vault discovery sees it."""
+    return spellcheck._units_for(Path(name), text)
+
+
+async def _chunks_for(text: str, client: FakeClient) -> list[list[spellcheck.Unit]]:
+    return await spellcheck.plan_chunks(units_for(text), client)
+
+
+def assert_units_trace_to_source(text: str, chunks: list[list[spellcheck.Unit]]) -> None:
+    """Every unit must be an exact, non-empty slice of the note it came from."""
+    for chunk in chunks:
+        for unit in chunk:
+            assert unit.text
+            assert text[unit.start : unit.end] == unit.text, f"unit drifted from source: {unit.text!r}"
 
 
 def test_single_chunk_for_small_note() -> None:
     text = "First recieve.\n\nSecond recieve.\n"
-    sections = asyncio.run(_chunks_for(text, FakeClient()))
-    assert len(sections) == 1
-    assert sections[0].text == text.strip()
-    assert sections[0].block_id == 1
+    chunks = asyncio.run(_chunks_for(text, FakeClient()))
+    assert len(chunks) == 1
+    assert [unit.text for unit in chunks[0]] == ["First recieve.", "Second recieve."]
+    assert_units_trace_to_source(text, chunks)
 
 
 def test_token_budget_exceeded_splits_into_several_chunks() -> None:
     text = "\n\n".join(f"Paragraph {i} recieve." for i in range(6))
     client = FakeClient(context_size=1600, overhead=1020)
-    sections = asyncio.run(_chunks_for(text, client))
-    assert len(sections) > 1
-    assert [s.block_id for s in sections] == list(range(1, len(sections) + 1))
-    assert "".join(s.text for s in sections).replace("\n\n", "") == text.replace("\n\n", "")
+    chunks = asyncio.run(_chunks_for(text, client))
+    assert len(chunks) > 1
+    assert [unit.text for chunk in chunks for unit in chunk] == [
+        f"Paragraph {i} recieve." for i in range(6)
+    ]
+    assert_units_trace_to_source(text, chunks)
 
 
 def test_oversized_paragraph_split_not_skipped() -> None:
     text = "Word recieve " * 200
     client = FakeClient(context_size=1600, overhead=1020)
-    sections = asyncio.run(_chunks_for(text, client))
-    assert len(sections) > 1
-    assert "".join(s.text for s in sections) == text.strip()
+    chunks = asyncio.run(_chunks_for(text, client))
+    assert len(chunks) > 1
+    assert "".join(unit.text for chunk in chunks for unit in chunk) == text.strip()
+    assert_units_trace_to_source(text, chunks)
 
 
 def test_corrections_keep_mapping_across_chunks() -> None:
     text = "\n\n".join(f"Paragraph {i} recieve." for i in range(4))
-    blocks = markdown.find_blocks(text)
 
     async def go() -> list[AcceptedCorrection]:
         client = FakeClient(context_size=1600, overhead=1020)
-        sections = await spellcheck.plan_chunks(blocks, text, client)
+        chunks = await spellcheck.plan_chunks(units_for(text), client)
         proposals = [
-            prop(section.block_id, "recieve", "receive", occurrence)
-            for section in sections
-            for occurrence in range(1, section.text.count("recieve") + 1)
+            prop(block.block_id, "recieve", "receive", occurrence)
+            for chunk in chunks
+            for block in spellcheck._blocks_of(chunk)
+            for occurrence in range(1, block.text.count("recieve") + 1)
         ]
-        protected = markdown.find_protected_ranges(text)
-        return spellcheck.validate_corrections(text, sections, protected, proposals)
+        corpus = {Path("note.md"): text}
+        return [
+            AcceptedCorrection(0, item.original, item.replacement, item.start, item.end)
+            for chunk in chunks
+            for item in spellcheck.validate_chunk(chunk, proposals, corpus, {})
+        ]
 
-    edits = asyncio.run(go())
+    edits = sorted(asyncio.run(go()), key=lambda edit: edit.start)
     assert len(edits) == 4
     assert spellcheck.apply_corrections(text, edits) == text.replace("recieve", "receive")
 
@@ -426,8 +485,9 @@ def test_token_count_failure_falls_back_without_skipping() -> None:
             raise RuntimeError("tokenizer down")
 
     text = "First recieve.\n\nSecond recieve.\n"
-    sections = asyncio.run(_chunks_for(text, BrokenCounter()))
-    assert len(sections) >= 1
+    chunks = asyncio.run(_chunks_for(text, BrokenCounter()))
+    assert len(chunks) >= 1
+    assert_units_trace_to_source(text, chunks)
 
 
 def test_prompt_budget_uses_measured_overhead() -> None:
@@ -447,17 +507,105 @@ def test_prompt_budget_rejects_tiny_window() -> None:
         asyncio.run(spellcheck._prompt_budget(FakeClient(context_size=100, overhead=90)))
 
 
+# --- packing across notes (the whole-vault performance property) ----------------
+
+
+def packed_units(corpus: dict[Path, str]) -> list[spellcheck.Unit]:
+    return [unit for path in sorted(corpus) for unit in spellcheck._units_for(path, corpus[path])]
+
+
+def test_short_notes_share_one_model_request(tmp_path: Path) -> None:
+    """On-device generation costs seconds per call whatever the call carries, so
+    a request per note is what made whole-vault runs intractable. Many short
+    notes must collapse into far fewer requests."""
+    files = {f"n{i}.md": f"Note {i} recieve here.\n" for i in range(12)}
+    write_vault(tmp_path, files)
+    client = ContentFake()
+    spellcheck.run(argparse.Namespace(vault=tmp_path), client=client, reviewer=ScriptedReviewer(["q"]))
+    assert client.requests < len(files)
+
+
+def test_packed_chunk_carries_blocks_from_several_notes(tmp_path: Path) -> None:
+    write_vault(tmp_path, {f"n{i}.md": f"Note {i} recieve here.\n" for i in range(6)})
+    corpus = spellcheck.load_corpus(tmp_path)
+    chunks = asyncio.run(spellcheck.plan_chunks(packed_units(corpus), ContentFake()))
+    assert len(chunks) == 1
+    assert {unit.path.name for unit in chunks[0]} == {path.name for path in corpus}
+
+
+def test_packed_proposal_edits_only_the_note_its_block_belongs_to(tmp_path: Path) -> None:
+    """A block id is chunk-local, so the same text can legitimately appear in
+    several notes of one request. Validation must scope each proposal to the
+    note whose block it names, not to every note that happens to match."""
+    write_vault(tmp_path, {"a.md": "recieve alpha.\n", "b.md": "recieve beta.\n"})
+    corpus = spellcheck.load_corpus(tmp_path)
+    chunks = asyncio.run(spellcheck.plan_chunks(packed_units(corpus), ContentFake()))
+    proposals = [prop(2, "recieve", "receive")]  # block 2 is b.md's only block
+    evidence = spellcheck.validate_chunk(chunks[0], proposals, corpus, {})
+    assert [(item.path.name, item.start, item.end) for item in evidence] == [("b.md", 0, 7)]
+
+
+def test_packed_block_id_from_another_note_cannot_cross_apply(tmp_path: Path) -> None:
+    """`recieve` occurs only in b.md; a proposal claiming a.md's block must be
+    rejected rather than fuzzy-matched onto whatever text is nearby."""
+    write_vault(tmp_path, {"a.md": "clean prose here.\n", "b.md": "recieve beta.\n"})
+    corpus = spellcheck.load_corpus(tmp_path)
+    chunks = asyncio.run(spellcheck.plan_chunks(packed_units(corpus), ContentFake()))
+    assert spellcheck.validate_chunk(chunks[0], [prop(1, "recieve", "receive")], corpus, {}) == []
+
+
+def test_packing_never_drops_text_across_notes(tmp_path: Path) -> None:
+    files = {f"n{i}.md": (f"Note {i} recieve " * 40) for i in range(3)}
+    write_vault(tmp_path, files)
+    corpus = spellcheck.load_corpus(tmp_path)
+    client = FakeClient(context_size=1600, overhead=1020)
+    chunks = asyncio.run(spellcheck.plan_chunks(packed_units(corpus), client))
+    assert len(chunks) > 1
+    for path, text in corpus.items():
+        units = [unit for chunk in chunks for unit in chunk if unit.path == path]
+        assert "".join(unit.text for unit in units) == text.strip()
+        for unit in units:
+            assert text[unit.start : unit.end] == unit.text
+
+
+def test_oversized_note_split_still_maps_to_its_own_source(tmp_path: Path) -> None:
+    """Splitting an oversized note must keep note-local offsets exact, so every
+    rescued piece still validates against that note's own text."""
+    text = "Word recieve " * 200
+    write_vault(tmp_path, {"big.md": text})
+    corpus = spellcheck.load_corpus(tmp_path)
+    chunks = asyncio.run(spellcheck.plan_chunks(packed_units(corpus), FakeClient(context_size=1600, overhead=1020)))
+    assert len(chunks) > 1
+    assert {unit.path.name for chunk in chunks for unit in chunk} == {"big.md"}
+    evidence = [
+        item
+        for chunk in chunks
+        for item in spellcheck.validate_chunk(
+            chunk,
+            [prop(block.block_id, "recieve", "receive", 1) for block in spellcheck._blocks_of(chunk)],
+            corpus,
+            {},
+        )
+    ]
+    assert {item.original for item in evidence} == {"recieve"}
+    for item in evidence:
+        assert item.path.name == "big.md"
+        assert text[item.start : item.end] == "recieve"
+
+
 def test_context_overflow_splits_section_and_retries() -> None:
     from tool.notes.common import ContextTooLargeError
 
     class OverflowOnceFake(FakeClient):
-        async def correct_block(self, block: Block) -> list[ProposedCorrection]:
-            self.seen.append((self._current_file, block))
-            if len(block.text) > 40:
-                raise ContextTooLargeError("too big")
-            if "recieve" in block.text:
-                return [ProposedCorrection(block.block_id, "recieve", "receive", 1)]
-            return []
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+            out: list[ProposedCorrection] = []
+            for block in blocks:
+                self.seen.append((self._current_file, block))
+                if len(block.text) > 40:
+                    raise ContextTooLargeError("too big")
+                if "recieve" in block.text:
+                    out.append(ProposedCorrection(block.block_id, "recieve", "receive", 1))
+            return out
 
     text = "recieve alpha beta gamma delta epsilon zeta eta theta recieve iota kappa lambda mu nu recieve xi."
     edits = asyncio.run(spellcheck.discover_corrections(text, OverflowOnceFake()))
@@ -469,7 +617,7 @@ def test_context_overflow_exhausted_skips_with_loud_warning(capsys: pytest.Captu
     from tool.notes.common import ContextTooLargeError
 
     class AlwaysOverflowFake(FakeClient):
-        async def correct_block(self, block: Block) -> list[ProposedCorrection]:
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
             raise ContextTooLargeError("too big")
 
     edits = asyncio.run(spellcheck.discover_corrections("recieve here", AlwaysOverflowFake()))
@@ -487,7 +635,7 @@ def test_model_error_names_the_file(tmp_path: Path) -> None:
     write_vault(tmp_path, {"bad.md": "recieve here\n"})
 
     class BoomFake(FakeClient):
-        async def correct_block(self, block: Block) -> list[ProposedCorrection]:
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
             raise NotesError("boom")
 
     with pytest.raises(NotesError, match=r"bad\.md.*boom"):
@@ -497,7 +645,7 @@ def test_model_error_names_the_file(tmp_path: Path) -> None:
 def test_code_only_note_needs_no_model() -> None:
     async def go() -> None:
         class ExplodingClient(FakeClient):
-            async def correct_block(self, block: Block) -> list[ProposedCorrection]:
+            async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
                 raise AssertionError("model must not be contacted")
 
         assert await spellcheck.discover_corrections("```\nrecieve\n```\n", ExplodingClient()) == []
@@ -678,13 +826,14 @@ def test_skip_spelling_suppresses_later_candidates(tmp_path: Path, capsys: pytes
     write_vault(tmp_path, {"a.md": "recieve here.\n\nseperate there.\n"})
 
     class TwoTypoFake(FakeClient):
-        async def correct_block(self, block: Block) -> list[ProposedCorrection]:
-            self.seen.append((self._current_file, block))
-            out = []
-            if "recieve" in block.text:
-                out.append(ProposedCorrection(block.block_id, "recieve", "receive", 1))
-            if "seperate" in block.text:
-                out.append(ProposedCorrection(block.block_id, "seperate", "separate", 1))
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+            out: list[ProposedCorrection] = []
+            for block in blocks:
+                self.seen.append((self._current_file, block))
+                if "recieve" in block.text:
+                    out.append(ProposedCorrection(block.block_id, "recieve", "receive", 1))
+                if "seperate" in block.text:
+                    out.append(ProposedCorrection(block.block_id, "seperate", "separate", 1))
             return out
 
     result, reviewer = run_vault(tmp_path, TwoTypoFake(), ["s", "a"])
@@ -700,12 +849,14 @@ def test_skip_candidate_keeps_distinct_replacement(tmp_path: Path) -> None:
     write_vault(tmp_path, {"a.md": "cheif cook\n"})
 
     class CompetingFake(FakeClient):
-        async def correct_block(self, block: Block) -> list[ProposedCorrection]:
-            self.seen.append((self._current_file, block))
-            return [
-                ProposedCorrection(block.block_id, "cheif", "chief", 1),
-                ProposedCorrection(block.block_id, "cheif", "chef", 1),
-            ]
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+            out: list[ProposedCorrection] = []
+            for block in blocks:
+                self.seen.append((self._current_file, block))
+                if "cheif" in block.text:
+                    out.append(ProposedCorrection(block.block_id, "cheif", "chief", 1))
+                    out.append(ProposedCorrection(block.block_id, "cheif", "chef", 1))
+            return out
 
     result, reviewer = run_vault(tmp_path, CompetingFake(), ["n", "a"])
     assert result == 0
@@ -725,10 +876,14 @@ def test_quit_leaves_applied_edits_intact(tmp_path: Path) -> None:
 
 
 def test_second_pass_exposes_new_mistakes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    write_vault(tmp_path, {"a.md": "recieve one.\n\nteh two.\n"})
+    # Both typos share one paragraph, so the fake reports only `recieve` until
+    # it is fixed and can no longer be reported: the second typo can only
+    # surface on a later pass. That generative blind spot is what multi-pass
+    # discovery exists to cover.
+    write_vault(tmp_path, {"a.md": "recieve one and teh two.\n"})
     result, _reviewer = run_vault(tmp_path, ContentFake(), ["a", "a"])
     assert result == 0
-    assert (tmp_path / "a.md").read_text(encoding="utf-8") == "receive one.\n\nthe two.\n"
+    assert (tmp_path / "a.md").read_text(encoding="utf-8") == "receive one and the two.\n"
     out = capsys.readouterr().out
     assert "Pass 2: checking for remaining spelling errors..." in out
     assert "2 mappings approved" in out
@@ -764,10 +919,13 @@ def test_max_passes_stop_nondeterministic_loops(tmp_path: Path, capsys: pytest.C
             super().__init__()
             self.calls = 0
 
-        async def correct_block(self, block: Block) -> list[ProposedCorrection]:
-            self.seen.append((self._current_file, block))
-            self.calls += 1
-            return [ProposedCorrection(block.block_id, "wobbly", f"wobbl{self.calls}", 1)]
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+            out: list[ProposedCorrection] = []
+            for block in blocks:
+                self.seen.append((self._current_file, block))
+                self.calls += 1
+                out.append(ProposedCorrection(block.block_id, "wobbly", f"wobbl{self.calls}", 1))
+            return out
 
     # Each pass invents a new typo the reviewer skips; passes must stop at 3.
     result, _reviewer = run_vault(tmp_path, AlwaysNewFake(), ["n"] * 10)
