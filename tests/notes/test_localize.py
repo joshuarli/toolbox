@@ -367,15 +367,15 @@ def test_resolve_roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     note = vault / "sub" / "n.md"
     note.write_text("x")
     # Absolute paths pass through.
-    assert localize._resolve_roots(vault, [note]) == [note]
+    assert localize.resolve_roots(vault, [note]) == [note]
     # Relative paths fall back to the vault when absent from cwd.
     monkeypatch.chdir(tmp_path)
-    assert localize._resolve_roots(vault, [Path("sub")]) == [vault / "sub"]
-    assert localize._resolve_roots(vault, [Path("sub/n.md")]) == [note]
+    assert localize.resolve_roots(vault, [Path("sub")]) == [vault / "sub"]
+    assert localize.resolve_roots(vault, [Path("sub/n.md")]) == [note]
     # Missing and outside-vault paths are explicit errors, never silent.
     with pytest.raises(NotesError, match="does not exist"):
-        localize._resolve_roots(vault, [Path("missing.md")])
+        localize.resolve_roots(vault, [Path("missing.md")])
     outside = tmp_path / "elsewhere.md"
     outside.write_text("![](https://x.test/1.png)\n")
     with pytest.raises(NotesError, match="outside the notes vault"):
-        localize._resolve_roots(vault, [outside])
+        localize.resolve_roots(vault, [outside])

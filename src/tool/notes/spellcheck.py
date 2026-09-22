@@ -1,9 +1,14 @@
-"""Precision-first deterministic spellchecking for Markdown notes.
+"""Note-oriented spelling review and structured output for the notes vault.
 
-The checker proposes only exact mechanical typo corrections from a pinned
-curated dataset. Review is note-oriented: repeated instances of one exact
-``original -> replacement`` pair are grouped inside the current note, while
-vault-wide application requires a fresh concrete plan and confirmation.
+``checker.SpellChecker`` returns structured ``Finding`` records; this module
+turns them into either an interactive review (one note at a time, repeated
+instances of one ``original -> replacement`` pair grouped per note) or
+machine-readable output (``--format json|jsonl|diff``) that never prompts or
+writes notes.
+
+User decisions override the checker: a rejection suppresses one exact pair in
+one note, and a protection suppresses every proposal inside a remembered word
+or phrase in its scope.
 
 Offsets are Python Unicode code-point offsets into the exact decoded UTF-8
 source. File snapshot hashes are checked again before every write, so an
@@ -13,30 +18,43 @@ external edit cannot be silently overwritten.
 from __future__ import annotations
 
 import argparse
+import difflib
+import json
 import os
-import re
+import select
 import sys
 import tempfile
 import termios
 import tty
 import unicodedata
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
 from tool.notes import markdown
+from tool.notes.checker import DEFAULT_LANGUAGES, Finding, SpellChecker
 from tool.notes.common import VAULT, NotesError, resolve_vault
-from tool.notes.detector import DETECTOR_VERSION, Finding, MechanicalTypoDetector
-from tool.notes.localize import collect_markdown_files
+from tool.notes.localize import collect_markdown_files, resolve_roots
 from tool.notes.state import Decision, Operation, StateStore, default_state_path, sha256_bytes
 
 _CONTEXT_RADIUS = 80
-_TOKEN_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
-_WORD_RE = re.compile(r"[^\W_]+(?:['’][^\W_]+)*\Z", re.UNICODE)
 _RED = "\033[31m"
 _GREEN = "\033[32m"
 _RESET = "\033[0m"
+FORMATS = ("review", "json", "jsonl", "diff")
+
+
+class Checker(Protocol):
+    """What the review needs from ``checker.SpellChecker`` (fakes implement this in tests)."""
+
+    def prepare(self, notes: Mapping[str, str], log: Callable[[str], None] | None = None) -> None:
+        """Index the whole vault before any note is analyzed."""
+        ...
+
+    def analyze(self, note_id: str, text: str, only: frozenset[str] | None = None) -> list[Finding]:
+        """Return source-ordered findings for one note."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,19 +68,24 @@ class Occurrence:
     original: str
     replacement: str
     snapshot: str
-    detector: str = DETECTOR_VERSION
 
 
 @dataclass(slots=True)
 class Candidate:
-    """One exact mapping grouped only within the current note."""
+    """One exact mapping grouped only within the current note.
+
+    ``bulk_safe`` is true only when every occurrence is a context-free known
+    misspelling; only those may be applied across the vault with ``A``.
+    """
 
     path: Path
     note_id: str
     original: str
     replacement: str
+    reason: str = ""
+    bulk_safe: bool = False
     occurrences: list[Occurrence] = field(default_factory=list)
-    detector: str = DETECTOR_VERSION
+    findings: list[Finding] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -95,15 +118,6 @@ class BatchPlan:
     @property
     def files(self) -> tuple[str, ...]:
         return tuple(sorted({occurrence.note_id for occurrence in self.occurrences}))
-
-
-class Detector(Protocol):
-    version: str
-    policy_version: str
-
-    def detect(self, text: str) -> list[Finding]:
-        """Return deterministic exact findings in source order."""
-        ...
 
 
 class Reviewer(Protocol):
@@ -143,21 +157,17 @@ def _read_snapshot(path: Path) -> tuple[bytes, str, str]:
         raise NotesError(f"could not read note {path}: {exc}") from exc
 
 
-def load_corpus(vault: Path) -> dict[Path, str]:
-    """Compatibility helper that loads readable notes without normalizing newlines."""
-    corpus: dict[Path, str] = {}
-    for path in collect_markdown_files(vault):
+def load_corpus(vault: Path, paths: Iterable[Path]) -> dict[str, str]:
+    """Read notes by vault-relative id without normalizing newlines; unreadable notes are reported and skipped."""
+    corpus: dict[str, str] = {}
+    for path in paths:
         try:
             _, text, _ = _read_snapshot(path)
         except NotesError as exc:
-            print(str(exc), file=sys.stderr)
+            print(f"warning: {exc}", file=sys.stderr)
             continue
-        corpus[path] = text
+        corpus[_note_id(vault, path)] = text
     return corpus
-
-
-def _protected(text: str) -> list[tuple[int, int]]:
-    return markdown.find_protected_ranges(text)
 
 
 def _overlaps(start: int, end: int, ranges: Iterable[tuple[int, int]]) -> bool:
@@ -172,43 +182,6 @@ def _whole_token(text: str, start: int, end: int) -> bool:
         if char == "_" or char.isalnum() or unicodedata.category(char).startswith("M"):
             return False
     return True
-
-
-def find_eligible_occurrences(
-    text: str, original: str, protected: Sequence[tuple[int, int]] = ()
-) -> list[tuple[int, int]]:
-    """Find complete exact tokens, retained as a small public utility."""
-    if not original or not _WORD_RE.fullmatch(original):
-        return []
-    return [
-        match.span()
-        for match in _TOKEN_RE.finditer(text)
-        if match.group() == original and _whole_token(text, *match.span()) and not _overlaps(*match.span(), protected)
-    ]
-
-
-def _json_finding(finding: Finding) -> dict[str, Any]:
-    return {
-        "start": finding.start,
-        "end": finding.end,
-        "original": finding.original,
-        "replacement": finding.replacement,
-        "detector": finding.detector,
-    }
-
-
-def _finding_from_json(item: dict[str, Any]) -> Finding | None:
-    if not all(isinstance(item.get(key), int) for key in ("start", "end")):
-        return None
-    if not all(isinstance(item.get(key), str) for key in ("original", "replacement")):
-        return None
-    return Finding(
-        int(item["start"]),
-        int(item["end"]),
-        str(item["original"]),
-        str(item["replacement"]),
-        str(item.get("detector", DETECTOR_VERSION)),
-    )
 
 
 def _scope_applies(decision: Decision, note_id: str) -> bool:
@@ -254,79 +227,69 @@ def _protection_contains(
 
 
 class NoteAnalyzer:
-    """Lazy per-note detector/cache boundary."""
+    """Per-note boundary between checker findings, saved decisions, and review groups."""
 
-    def __init__(self, vault: Path, detector: Detector, state: StateStore) -> None:
+    def __init__(self, vault: Path, checker: Checker, state: StateStore) -> None:
         self.vault = vault
-        self.detector = detector
+        self.checker = checker
         self.state = state
 
-    def analyze(self, path: Path) -> NoteAnalysis | None:
+    def analyze(self, path: Path, only: frozenset[str] | None = None) -> NoteAnalysis | None:
         try:
             _, text, snapshot = _read_snapshot(path)
         except NotesError as exc:
-            print(str(exc), file=sys.stderr)
+            print(f"warning: {exc}", file=sys.stderr)
             return None
         note_id = _note_id(self.vault, path)
-        raw_payload = self.state.get_cached(note_id, snapshot, self.detector.version, self.detector.policy_version)
-        if raw_payload is None:
-            findings = self.detector.detect(text)
-            raw_payload = [_json_finding(finding) for finding in findings]
-            self.state.put_cached(note_id, snapshot, self.detector.version, self.detector.policy_version, raw_payload)
-        else:
-            findings = [_finding_from_json(item) for item in raw_payload]
-            findings = [finding for finding in findings if finding is not None]
-
-        decisions = self.state.active_decisions()
-        protected = _protected(text)
+        findings = self.checker.analyze(note_id, text, only)
+        decisions = self.state.active_decisions() if findings else []
+        # Defense in depth: the real checker never proposes inside Markdown
+        # structure, but every write path re-verifies it.
+        protected = markdown.find_protected_ranges(text) if findings else []
         groups: dict[tuple[str, str], Candidate] = {}
-        order: list[tuple[str, str]] = []
         excluded: dict[tuple[str, str], dict[str, int]] = {}
+
+        def exclude(key: tuple[str, str], reason: str) -> None:
+            reasons = excluded.setdefault(key, {})
+            reasons[reason] = reasons.get(reason, 0) + 1
+
         for finding in findings:
             if not (0 <= finding.start < finding.end <= len(text)):
                 continue
             if text[finding.start : finding.end] != finding.original:
                 continue
             key = (finding.original, finding.replacement)
-            reasons = excluded.setdefault(key, {})
             if _overlaps(finding.start, finding.end, protected):
-                reasons["protected Markdown region"] = reasons.get("protected Markdown region", 0) + 1
+                exclude(key, "protected Markdown region")
                 continue
             if not _whole_token(text, finding.start, finding.end):
-                reasons["part of an identifier-like token"] = reasons.get(
-                    "part of an identifier-like token", 0
-                ) + 1
+                exclude(key, "part of an identifier-like token")
                 continue
-            rejection = any(
+            rejected = any(
                 decision.kind == "rejection"
                 and _scope_applies(decision, note_id)
                 and decision.source == finding.original
                 and decision.replacement == finding.replacement
                 for decision in decisions
             )
-            if rejection:
-                reasons["rejected by a saved note decision"] = reasons.get("rejected by a saved note decision", 0) + 1
+            if rejected:
+                exclude(key, "rejected by a saved note decision")
                 continue
             if _protection_contains(text, (finding.start, finding.end), decisions, note_id, protected):
-                reasons["protected by a saved word or phrase decision"] = reasons.get(
-                    "protected by a saved word or phrase decision", 0
-                ) + 1
+                exclude(key, "protected by a saved word or phrase decision")
                 continue
             occurrence = Occurrence(
-                path=path,
-                note_id=note_id,
-                start=finding.start,
-                end=finding.end,
-                original=finding.original,
-                replacement=finding.replacement,
-                snapshot=snapshot,
-                detector=finding.detector,
+                path, note_id, finding.start, finding.end, finding.original, finding.replacement, snapshot
             )
-            if key not in groups:
-                groups[key] = Candidate(path, note_id, finding.original, finding.replacement, detector=finding.detector)
-                order.append(key)
-            groups[key].occurrences.append(occurrence)
-        return NoteAnalysis(path, note_id, text, snapshot, [groups[key] for key in order], excluded)
+            group = groups.get(key)
+            if group is None:
+                group = groups[key] = Candidate(
+                    path, note_id, finding.original, finding.replacement, finding.reason, finding.bulk_safe
+                )
+            group.bulk_safe = group.bulk_safe and finding.bulk_safe
+            group.occurrences.append(occurrence)
+            group.findings.append(finding)
+        return NoteAnalysis(path, note_id, text, snapshot, list(groups.values()), excluded)
 
 
 def _display_chunk(text: str) -> str:
@@ -360,7 +323,7 @@ def render_candidate(analysis: NoteAnalysis, candidate: Candidate, index: int, t
         analysis.note_id,
         f"{candidate.original} → {candidate.replacement}",
         f"{len(candidate.occurrences)} eligible occurrence(s) in this note",
-        "Reason: known mechanical misspelling",
+        f"Reason: {candidate.reason}",
         "",
     ]
     for occurrence in candidate.occurrences:
@@ -371,11 +334,12 @@ def render_candidate(analysis: NoteAnalysis, candidate: Candidate, index: int, t
                 f"      + {new}",
             ]
         )
+    vault_action = "  [A] apply across vault" if candidate.bulk_safe else ""
     lines.extend(
         [
             "",
             f"Proposal {index}/{total}",
-            "[a] apply in note  [A] apply across vault",
+            f"[a] apply in note{vault_action}",
             "[n] reject here   [d] remember…",
             "[u] undo          [q] quit",
         ]
@@ -405,7 +369,6 @@ def render_batch_preview(plan: BatchPlan, analyses: dict[str, NoteAnalysis]) -> 
                 f"  + {new}",
             ]
         )
-    lines.extend(["", "Confirm this frozen plan? Press A again or answer yes; anything else cancels."])
     return "\n".join(lines)
 
 
@@ -465,8 +428,7 @@ def apply_plan(vault: Path, plan: BatchPlan, state: StateStore, kind: str) -> tu
         {"original": plan.original, "replacement": plan.replacement, "notes": list(plan.files)},
     )
     try:
-        for note_id, (path, before, after) in prepared.items():
-            _ = path
+        for note_id, (_path, before, after) in prepared.items():
             state.add_operation_file(operation_id, note_id, before, after)
         for note_id, (path, _before, after) in prepared.items():
             atomic_write_bytes(path, after)
@@ -517,24 +479,25 @@ def _make_batch_plan(
     paths: Sequence[Path],
     analyzer: NoteAnalyzer,
 ) -> tuple[BatchPlan, dict[str, NoteAnalysis]]:
+    """Collect every currently eligible bulk-safe occurrence of one exact pair."""
     occurrences = list(candidate.occurrences)
     analyses: dict[str, NoteAnalysis] = {}
     excluded = 0
     reasons: dict[str, int] = {}
+    key = (candidate.original, candidate.replacement)
+    only = frozenset({candidate.original})
     for path in paths:
-        analysis = analyzer.analyze(path)
+        analysis = analyzer.analyze(path, only)
         if analysis is None:
             continue
         analyses[analysis.note_id] = analysis
         for other in analysis.groups:
-            if (other.original, other.replacement) == (candidate.original, candidate.replacement):
+            if (other.original, other.replacement) == key and other.bulk_safe:
                 occurrences.extend(other.occurrences)
-        for reason, count in analysis.excluded.get((candidate.original, candidate.replacement), {}).items():
+        for reason, count in analysis.excluded.get(key, {}).items():
             excluded += count
             reasons[reason] = reasons.get(reason, 0) + count
-    unique = {
-        (occurrence.note_id, occurrence.start, occurrence.end): occurrence for occurrence in occurrences
-    }
+    unique = {(occurrence.note_id, occurrence.start, occurrence.end): occurrence for occurrence in occurrences}
     frozen = tuple(sorted(unique.values(), key=lambda occurrence: (occurrence.note_id, occurrence.start)))
     return BatchPlan(
         candidate.original,
@@ -545,22 +508,18 @@ def _make_batch_plan(
     ), analyses
 
 
-def _normalize_remember(value: Any, candidate: Candidate) -> RememberChoice | None:
+def _normalize_remember(value: object, candidate: Candidate) -> RememberChoice | None:
     if value is None:
         return None
     if isinstance(value, RememberChoice):
         return value
     if isinstance(value, str):
         return RememberChoice(value or candidate.original, "note", candidate.note_id)
-    if isinstance(value, tuple) and len(value) == 3 and all(isinstance(item, str) for item in value):
-        source, scope_kind, scope_value = value
-        return RememberChoice(source or candidate.original, scope_kind, scope_value)
     return None
 
 
 def _add_decision(
     state: StateStore,
-    candidate: Candidate,
     *,
     kind: str,
     source: str,
@@ -603,13 +562,38 @@ def _read_single_key() -> str:
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        char = sys.stdin.read(1)
+        # Read straight from the fd, not the buffered sys.stdin, so a trailing
+        # Enter typed out of habit after the key is never pulled into Python's
+        # stdin buffer. Then drain any bytes already queued (that Enter) so
+        # they can't leak into a later cooked-mode input() call and silently
+        # answer it.
+        char = os.read(fd, 1).decode(errors="replace")
+        while select.select([fd], [], [], 0)[0]:
+            os.read(fd, 1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
     print(char if char.isprintable() else "")
     if char in ("\x03", "\x04"):
         raise KeyboardInterrupt
     return cast(str, char)
+
+
+def _flush_stale_enter(timeout: float = 0.3) -> None:
+    """Discard a lone Enter the user may have habitually typed after the prior
+    single-key answer. That keystroke can lag slightly behind the raw read that
+    consumed the key itself, so this waits briefly for it right before a
+    cooked-mode ``input()`` prompt starts, rather than letting it arrive late
+    and silently answer that prompt with an empty line.
+    """
+    if not sys.stdin.isatty():
+        return
+    fd = sys.stdin.fileno()
+    try:
+        while select.select([fd], [], [], timeout)[0]:
+            os.read(fd, 1)
+            timeout = 0
+    except (OSError, termios.error):
+        pass
 
 
 class InteractiveReviewer:
@@ -621,6 +605,7 @@ class InteractiveReviewer:
 
     def remember(self, candidate: Candidate) -> RememberChoice | None:
         print("Remember the exact source word or a containing phrase.")
+        _flush_stale_enter()
         try:
             source = input(f"Phrase (Enter for {candidate.original!r}): ").strip() or candidate.original
             scope = input("Scope [n] note [d] directory [v] vault (default n): ").strip()[:1] or "n"
@@ -637,24 +622,6 @@ class InteractiveReviewer:
             print("Unknown scope; no decision recorded.")
             return None
         return RememberChoice(source, scope_kind, scope_value)
-
-    def confirm_batch(self, plan: BatchPlan) -> bool:
-        _ = plan
-        try:
-            answer = input("Confirm [A/yes] or cancel: ").strip()
-        except EOFError:
-            return False
-        return answer in {"A", "yes", "y"}
-
-
-def _confirm_batch(reviewer: Reviewer, candidate: Candidate, plan: BatchPlan) -> bool:
-    callback = getattr(reviewer, "confirm_batch", None)
-    if callable(callback):
-        return bool(callback(plan))
-    callback = getattr(reviewer, "decide", None)
-    if callable(callback):
-        return callback(candidate) in {"A", "yes", "y"}
-    return False
 
 
 def _remember(reviewer: Reviewer, candidate: Candidate) -> RememberChoice | None:
@@ -716,15 +683,15 @@ def _review_note(
                 restart = True
                 break
             if action == "A":
+                if not candidate.bulk_safe:
+                    print("A is only offered for known misspellings; this correction depends on context. Use a.")
+                    continue
                 plan, analyses = _make_batch_plan(candidate, paths, analyzer)
                 print(render_batch_preview(plan, analyses))
                 if not plan.occurrences:
                     print("No currently eligible occurrences remain; nothing applied.")
                     restart = True
                     break
-                if not _confirm_batch(reviewer, candidate, plan):
-                    print("Batch cancelled; no decision recorded.")
-                    continue
                 try:
                     count, files = apply_plan(analyzer.vault, plan, state, "vault-apply")
                 except ExternalEditError as exc:
@@ -739,7 +706,6 @@ def _review_note(
             if action == "n":
                 _add_decision(
                     state,
-                    candidate,
                     kind="rejection",
                     source=candidate.original,
                     replacement=candidate.replacement,
@@ -759,7 +725,6 @@ def _review_note(
                     continue
                 _add_decision(
                     state,
-                    candidate,
                     kind="protection",
                     source=choice.source,
                     replacement=None,
@@ -810,76 +775,187 @@ def _journaled_completed_files(vault: Path, operation: Operation) -> list[str]:
     return completed
 
 
+def _languages(value: str) -> tuple[str, ...]:
+    languages = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not languages:
+        raise argparse.ArgumentTypeError("expected a comma-separated list such as en,en_GB,fr")
+    return languages
+
+
+def _explain_words(args: argparse.Namespace) -> int:
+    vault = resolve_vault(args.vault).resolve()
+    with StateStore(args.state) as store:
+        checker = SpellChecker(store, languages=args.languages)
+        checker.prepare(load_corpus(vault, collect_markdown_files(vault)), log=_log)
+        for word in args.words:
+            print("\n".join(checker.explain_word(word)))
+    return 0
+
+
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.description = "Review high-confidence mechanical spelling proposals locally; no model or network access is used."
+    parser.description = (
+        "Review spelling proposals note by note, or print them with --format. "
+        "Local only: macOS system dictionaries plus a curated typo list."
+    )
     parser.set_defaults(handler=run, spellcheck_action="review")
     parser.add_argument("--vault", type=Path, default=VAULT, help="notes vault (default: %(default)s)")
     parser.add_argument(
         "--state", type=Path, default=None, help=f"private SQLite state path (default: {default_state_path()})"
+    )
+    parser.add_argument(
+        "--languages",
+        type=_languages,
+        default=DEFAULT_LANGUAGES,
+        help="comma-separated macOS dictionaries whose union is accepted; the first is the default "
+        "sentence language (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=FORMATS,
+        default="review",
+        help="review interactively (default), or print findings as json, jsonl, or a unified diff; "
+        "non-review formats never prompt or modify notes",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="print why every unknown word was or was not proposed (stderr)",
+    )
+    parser.add_argument(
+        "--note",
+        dest="notes",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="limit review/output to this note or directory; repeatable (vault usage is still counted vault-wide)",
     )
     sub = parser.add_subparsers(dest="spellcheck_action")
     decisions = sub.add_parser("decisions", help="inspect or remove saved note/directory/vault decisions")
     decisions.add_argument("--state", type=Path, default=None, help="private SQLite state path")
     decisions.add_argument("--remove", type=int, action="append", default=[], metavar="ID")
     decisions.set_defaults(handler=_list_decisions)
+    explain = sub.add_parser("explain", help="show how the checker judges specific words")
+    explain.add_argument("words", nargs="+")
+    explain.set_defaults(handler=_explain_words)
+
+
+def _log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def _collect_findings(analyzer: NoteAnalyzer, paths: Sequence[Path]) -> list[tuple[NoteAnalysis, list[Finding]]]:
+    results: list[tuple[NoteAnalysis, list[Finding]]] = []
+    for path in paths:
+        analysis = analyzer.analyze(path)
+        if analysis is None or not analysis.groups:
+            continue
+        findings = sorted((f for group in analysis.groups for f in group.findings), key=lambda f: f.start)
+        results.append((analysis, findings))
+    return results
+
+
+def _render_diff(analysis: NoteAnalysis, findings: Sequence[Finding]) -> str:
+    edits = [
+        Occurrence(analysis.path, analysis.note_id, f.start, f.end, f.original, f.replacement, analysis.snapshot)
+        for f in findings
+    ]
+    updated = _apply_edits(analysis.text, edits)
+    lines = difflib.unified_diff(
+        analysis.text.splitlines(keepends=True),
+        updated.splitlines(keepends=True),
+        f"a/{analysis.note_id}",
+        f"b/{analysis.note_id}",
+    )
+    return "".join(line if line.endswith("\n") else line + "\n\\ No newline at end of file\n" for line in lines)
+
+
+def emit_structured(output_format: str, results: Sequence[tuple[NoteAnalysis, list[Finding]]]) -> None:
+    """Write findings to stdout in note path then offset order; never prompts or writes notes."""
+    if output_format == "json":
+        payload = [finding.to_json() for _analysis, findings in results for finding in findings]
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif output_format == "jsonl":
+        for _analysis, findings in results:
+            for finding in findings:
+                print(json.dumps(finding.to_json(), ensure_ascii=False))
+    elif output_format == "diff":
+        for analysis, findings in results:
+            sys.stdout.write(_render_diff(analysis, findings))
+    else:
+        raise ValueError(f"unknown structured format: {output_format}")
+
+
+def _print_verbose(checker: SpellChecker, analyzer: NoteAnalyzer, paths: Sequence[Path]) -> None:
+    for path in paths:
+        try:
+            _, text, _ = _read_snapshot(path)
+        except NotesError:
+            continue
+        note_id = _note_id(analyzer.vault, path)
+        for token, verdict in checker.explain_note(note_id, text):
+            line = _line_number(text, token.start)
+            outcome = f"→ {verdict.replacement}" if verdict.replacement else "skip"
+            _log(f"{note_id}:{line}: {token.word} {outcome}: {verdict.reason}")
 
 
 def run(
     args: argparse.Namespace,
-    detector: Detector | None = None,
+    checker: Checker | None = None,
     reviewer: Reviewer | None = None,
     state: StateStore | None = None,
-    client: object | None = None,
 ) -> int:
-    """Run the local review loop.
-
-    ``client`` remains an ignored compatibility keyword so callers importing
-    the old test seam fail safely rather than trying to initialize a model.
-    The default path never imports ``foundation_models``.
-    """
-    _ = client
+    """Index the vault, then review interactively or emit structured findings."""
     vault = resolve_vault(args.vault).resolve()
-    active_detector = detector or MechanicalTypoDetector()
-    active_reviewer = reviewer or InteractiveReviewer()
+    output_format = getattr(args, "format", "review")
     owned_state = state is None
     store = state or StateStore(getattr(args, "state", None))
     try:
-        pending = store.pending_operations()
-        if pending:
-            print(f"warning: {len(pending)} interrupted operation(s) remain journaled:", file=sys.stderr)
-            for operation in pending:
-                completed = _journaled_completed_files(vault, operation)
-                names = ", ".join(completed) if completed else "(none)"
-                print(f"  operation {operation.id}: completed files: {names}", file=sys.stderr)
-            print("  press u during review to undo a journaled operation.", file=sys.stderr)
-        paths = collect_markdown_files(vault)
-        stats = ReviewStats()
-        analyzer = NoteAnalyzer(vault, active_detector, store)
-        print(f"Reviewing {len(paths)} notes with local mechanical spelling rules...")
-        for index, path in enumerate(paths, 1):
-            try:
-                relative = path.relative_to(vault).as_posix()
-            except ValueError:
-                relative = str(path)
-            print(f"Checking {index}/{len(paths)}: {relative}")
-            try:
-                if _review_note(paths, index - 1, analyzer, store, active_reviewer, stats):
-                    print("Spellcheck paused; completed actions and decisions were kept.")
-                    return 0
-            except KeyboardInterrupt:
-                print("\nSpellcheck interrupted; completed actions and decisions were kept.", file=sys.stderr)
-                return 130
-            except NotesError as exc:
-                print(f"warning: {exc}", file=sys.stderr)
-                stats.notes_skipped += 1
-        if stats.prompts == 0:
-            print("No high-confidence spelling issues found.")
-        else:
-            print(
-                f"Spellcheck complete: {stats.occurrences_corrected} occurrence(s) corrected, "
-                f"{stats.decisions_added} decision(s) saved, {stats.notes_skipped} note(s) skipped."
-            )
-        return 0
+        all_paths = collect_markdown_files(vault)
+        roots = resolve_roots(vault, list(getattr(args, "notes", None) or []))
+        paths = collect_markdown_files(vault, roots) if roots else all_paths
+        active_checker = checker or SpellChecker(store, languages=getattr(args, "languages", DEFAULT_LANGUAGES))
+        active_checker.prepare(load_corpus(vault, all_paths), log=_log)
+        analyzer = NoteAnalyzer(vault, active_checker, store)
+        if getattr(args, "verbose", False) and isinstance(active_checker, SpellChecker):
+            _print_verbose(active_checker, analyzer, paths)
+        if output_format != "review":
+            emit_structured(output_format, _collect_findings(analyzer, paths))
+            return 0
+        return _review(vault, paths, analyzer, store, reviewer or InteractiveReviewer())
     finally:
         if owned_state:
             store.close()
+
+
+def _review(vault: Path, paths: Sequence[Path], analyzer: NoteAnalyzer, store: StateStore, reviewer: Reviewer) -> int:
+    pending = store.pending_operations()
+    if pending:
+        print(f"warning: {len(pending)} interrupted operation(s) remain journaled:", file=sys.stderr)
+        for operation in pending:
+            completed = _journaled_completed_files(vault, operation)
+            names = ", ".join(completed) if completed else "(none)"
+            print(f"  operation {operation.id}: completed files: {names}", file=sys.stderr)
+        print("  press u during review to undo a journaled operation.", file=sys.stderr)
+    stats = ReviewStats()
+    print(f"Reviewing {len(paths)} notes...")
+    for index in range(len(paths)):
+        try:
+            if _review_note(paths, index, analyzer, store, reviewer, stats):
+                print("Spellcheck paused; completed actions and decisions were kept.")
+                return 0
+        except KeyboardInterrupt:
+            print("\nSpellcheck interrupted; completed actions and decisions were kept.", file=sys.stderr)
+            return 130
+        except NotesError as exc:
+            print(f"warning: {exc}", file=sys.stderr)
+            stats.notes_skipped += 1
+    if stats.prompts == 0:
+        print("No spelling proposals.")
+    else:
+        print(
+            f"Spellcheck complete: {stats.occurrences_corrected} occurrence(s) corrected, "
+            f"{stats.decisions_added} decision(s) saved, {stats.notes_skipped} note(s) skipped."
+        )
+    return 0

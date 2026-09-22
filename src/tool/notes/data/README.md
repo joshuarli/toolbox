@@ -12,6 +12,6 @@ texts are retained in this directory. The original attribution is
 `Copyright (c) Individual contributors`.
 
 To refresh deliberately, download the same path from a reviewed upstream tag,
-verify its hash, update `DETECTOR_VERSION` and `DATA_SHA256` in
-`src/tool/notes/detector.py`, and record the new provenance here. The command
+verify its hash, update `TYPOS_VERSION` and `DATA_SHA256` in
+`src/tool/notes/typos.py`, and record the new provenance here. The command
 never downloads this file at runtime.

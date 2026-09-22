@@ -1,7 +1,8 @@
-"""Private SQLite state for the deterministic notes spellchecker.
+"""Private SQLite state for the notes spellchecker.
 
 The database deliberately separates durable user decisions from disposable
-detection cache rows and from the operation journal.  Note identities are
+caches (per-note scans, per-word dictionary verdicts and guesses) and from the
+operation journal.  Note identities are
 vault-relative POSIX paths; the database never writes metadata into notes.
 """
 
@@ -104,14 +105,25 @@ class StateStore:
             );
             CREATE INDEX IF NOT EXISTS decisions_active_idx
                 ON decisions(active, kind, scope_kind, scope_value);
-            CREATE TABLE IF NOT EXISTS findings_cache (
-                note_id TEXT NOT NULL,
+            DROP TABLE IF EXISTS findings_cache;
+            CREATE TABLE IF NOT EXISTS note_scans (
+                note_id TEXT PRIMARY KEY,
+                scan_key TEXT NOT NULL,
                 content_hash TEXT NOT NULL,
-                detector_version TEXT NOT NULL,
-                policy_version TEXT NOT NULL,
-                payload TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                PRIMARY KEY(note_id, content_hash, detector_version, policy_version)
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS spelling_words (
+                word_key TEXT NOT NULL,
+                word TEXT NOT NULL,
+                accepted INTEGER NOT NULL,
+                PRIMARY KEY(word_key, word)
+            );
+            CREATE TABLE IF NOT EXISTS spelling_guesses (
+                speller_key TEXT NOT NULL,
+                language TEXT NOT NULL,
+                word TEXT NOT NULL,
+                guesses TEXT NOT NULL,
+                PRIMARY KEY(speller_key, language, word)
             );
             CREATE TABLE IF NOT EXISTS operations (
                 id INTEGER PRIMARY KEY,
@@ -151,40 +163,44 @@ class StateStore:
     def __exit__(self, _type: object, _value: object, _traceback: object) -> None:
         self.close()
 
-    def get_cached(
-        self,
-        note_id: str,
-        content_hash: str,
-        detector_version: str,
-        policy_version: str,
-    ) -> list[dict[str, Any]] | None:
-        row = self._connection.execute(
-            """
-            SELECT payload FROM findings_cache
-            WHERE note_id = ? AND content_hash = ? AND detector_version = ? AND policy_version = ?
-            """,
-            (note_id, content_hash, detector_version, policy_version),
-        ).fetchone()
-        if row is None:
-            return None
-        payload = json.loads(row[0])
-        return payload if isinstance(payload, list) else []
+    def note_scans(self, scan_key: str) -> dict[str, tuple[str, dict[str, Any]]]:
+        """Cached scans made with *scan_key*: note id → (content hash, payload)."""
+        rows = self._connection.execute(
+            "SELECT note_id, content_hash, payload FROM note_scans WHERE scan_key = ?", (scan_key,)
+        )
+        return {str(note_id): (str(digest), json.loads(payload)) for note_id, digest, payload in rows}
 
-    def put_cached(
-        self,
-        note_id: str,
-        content_hash: str,
-        detector_version: str,
-        policy_version: str,
-        findings: list[dict[str, Any]],
-    ) -> None:
+    def put_note_scans(self, scan_key: str, scans: dict[str, tuple[str, dict[str, Any]]]) -> None:
+        """Replace each note's single cached scan row."""
+        self._connection.executemany(
+            "INSERT OR REPLACE INTO note_scans(note_id, scan_key, content_hash, payload) VALUES (?, ?, ?, ?)",
+            [(note_id, scan_key, digest, json.dumps(payload)) for note_id, (digest, payload) in scans.items()],
+        )
+        self._connection.commit()
+
+    def spelling_words(self, word_key: str) -> dict[str, int]:
+        """Cached dictionary verdicts: word → bitmask of accepting languages."""
+        rows = self._connection.execute("SELECT word, accepted FROM spelling_words WHERE word_key = ?", (word_key,))
+        return {str(word): int(accepted) for word, accepted in rows}
+
+    def put_spelling_words(self, word_key: str, verdicts: dict[str, int]) -> None:
+        self._connection.executemany(
+            "INSERT OR REPLACE INTO spelling_words(word_key, word, accepted) VALUES (?, ?, ?)",
+            [(word_key, word, accepted) for word, accepted in verdicts.items()],
+        )
+        self._connection.commit()
+
+    def spelling_guesses(self, speller_key: str, language: str, word: str) -> list[str] | None:
+        row = self._connection.execute(
+            "SELECT guesses FROM spelling_guesses WHERE speller_key = ? AND language = ? AND word = ?",
+            (speller_key, language, word),
+        ).fetchone()
+        return None if row is None else [str(guess) for guess in json.loads(row[0])]
+
+    def put_spelling_guesses(self, speller_key: str, language: str, word: str, guesses: list[str]) -> None:
         self._connection.execute(
-            """
-            INSERT OR REPLACE INTO findings_cache(
-                note_id, content_hash, detector_version, policy_version, payload, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (note_id, content_hash, detector_version, policy_version, json.dumps(findings), _now()),
+            "INSERT OR REPLACE INTO spelling_guesses(speller_key, language, word, guesses) VALUES (?, ?, ?, ?)",
+            (speller_key, language, word, json.dumps(guesses)),
         )
         self._connection.commit()
 

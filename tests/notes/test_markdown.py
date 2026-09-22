@@ -3,7 +3,6 @@
 import itertools
 
 from tool.notes import markdown
-from tool.notes.markdown import Block
 
 
 def covered(text: str) -> list[str]:
@@ -141,60 +140,3 @@ def test_ranges_sorted_and_merged() -> None:
     assert ranges == sorted(ranges)
     for (_start1, end1), (start2, _end2) in itertools.pairwise(ranges):
         assert end1 <= start2
-
-
-def test_blocks_exclude_front_matter_and_fences() -> None:
-    text = "---\nt: recieve\n---\n\n# Heading recieve\n\nBody recieve.\n\n```\ncode recieve\n```\n\nTail recieve.\n"
-    blocks = markdown.find_blocks(text)
-    assert [block.text for block in blocks] == ["# Heading recieve", "Body recieve.", "Tail recieve."]
-    assert [block.block_id for block in blocks] == [1, 2, 3]
-    for block in blocks:
-        assert text[block.start : block.end] == block.text
-
-
-def test_blocks_split_paragraphs_and_keep_prose_around_constructs() -> None:
-    text = "First recieve.\n\nSecond with `code recieve` and https://x.test/recieve inline.\n"
-    blocks = markdown.find_blocks(text)
-    assert len(blocks) == 2
-    assert blocks[0].text == "First recieve."
-    assert "code recieve" in blocks[1].text  # inline guards stay visible; validator enforces
-
-
-def test_blocks_empty_and_code_only() -> None:
-    assert markdown.find_blocks("") == []
-    assert markdown.find_blocks("```\nrecieve\n```\n") == []
-    assert markdown.find_blocks("\n\n   \n") == []
-
-
-def test_blocks_cover_eligible_text_exactly() -> None:
-    text = "# T\n\nA recieve.\n\n- list recieve\n\n> quote recieve\n"
-    blocks = markdown.find_blocks(text)
-    assert [block.text for block in blocks] == ["# T", "A recieve.", "- list recieve", "> quote recieve"]
-
-
-def test_split_range_prefers_blank_lines() -> None:
-    text = "aaa recieve bbb\n\nccc recieve ddd\n\neee recieve fff"
-    pieces = markdown.split_range(text, 0, len(text), 20)
-    assert all(end - start <= 20 for start, end in pieces)
-    assert "".join(text[start:end] for start, end in pieces) == text
-    assert all(text[start:end].strip() for start, end in pieces)
-
-
-def test_split_range_hard_splits_word_salad() -> None:
-    text = "x" * 100
-    pieces = markdown.split_range(text, 0, len(text), 30)
-    assert [(end - start) for start, end in pieces] == [30, 30, 30, 10]
-
-
-def test_split_range_sentence_and_space_boundaries() -> None:
-    text = "First recieve here. Second recieve here! Third recieve here?"
-    pieces = markdown.split_range(text, 0, len(text), 25)
-    assert all(end - start <= 25 for start, end in pieces)
-    assert "".join(text[start:end] for start, end in pieces) == text
-
-
-def test_block_slice_round_trip_with_unicode() -> None:
-    text = "μSkia recieve 😀 test\n\nTail recieve.\n"
-    for block in markdown.find_blocks(text):
-        assert isinstance(block, Block)
-        assert text[block.start : block.end] == block.text

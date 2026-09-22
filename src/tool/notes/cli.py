@@ -27,7 +27,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
     p_spellcheck = sub.add_parser(
         "spellcheck",
-        help="review high-confidence mechanical spelling proposals locally",
+        help="review or print high-confidence spelling proposals (local macOS dictionaries)",
     )
     spellcheck.configure_parser(p_spellcheck)
     p_spellcheck.set_defaults(handler=spellcheck.run)

@@ -1,14 +1,11 @@
 """Conservative Markdown structural scanner for ``notes spellcheck``.
 
 This module understands enough Markdown structure to guarantee document
-integrity. It does no linguistic judgment: its only jobs are to identify
-source regions in which spelling edits are forbidden, and to split the
-remaining prose into stable checkable blocks.
+integrity. It does no linguistic judgment: its only job is to identify
+source regions in which spelling edits are forbidden.
 
 All offsets refer to the original source text, so validated edits can be
-spliced back byte-for-byte. Block ``text`` is always an exact slice
-``source[start:end]``; the model-input block and the validator therefore
-agree on occurrence counting by construction.
+spliced back byte-for-byte.
 
 Protected regions (edits forbidden inside them):
 
@@ -34,7 +31,6 @@ Markdown is not.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 
 _FENCE_RE = re.compile(r"^( {0,3})(`{3,}|~{3,})")
 _FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\r?\n.*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|\Z)", re.DOTALL)
@@ -53,16 +49,6 @@ _PATH_TOKEN_RE = re.compile(
 )
 _LINK_DEF_RE = re.compile(r"(?m)^ {0,3}\[[^\]\n]+\]:[ \t]*<?(\S+?)>?(?:[ \t]+.*)?$")
 _LIST_ITEM_RE = re.compile(r"^(?:[*+-]|\d{1,9}[.)])\s")
-
-
-@dataclass(frozen=True, slots=True)
-class Block:
-    """One checkable prose unit: ``source[start:end]`` with a stable 1-based id."""
-
-    block_id: int
-    start: int
-    end: int
-    text: str
 
 
 def _is_escaped(text: str, pos: int) -> bool:
@@ -435,95 +421,3 @@ def find_protected_ranges(text: str) -> list[tuple[int, int]]:
     protected.extend(_path_ranges(text, inline_skip))
     protected.extend(_indented_code_ranges(text, inline_skip))
     return _merge(protected)
-
-
-def _eligible_ranges(text: str) -> list[tuple[int, int]]:
-    """Complement of front matter + fenced ranges; inline guards stay in blocks."""
-    front = _front_matter_range(text)
-    structural = _merge(([front] if front is not None else []) + _fenced_ranges(text))
-    eligible: list[tuple[int, int]] = []
-    cursor = 0
-    for start, end in structural:
-        if cursor < start:
-            eligible.append((cursor, start))
-        cursor = max(cursor, end)
-    if cursor < len(text):
-        eligible.append((cursor, len(text)))
-    return eligible
-
-
-_BLANK_RUN_RE = re.compile(r"\r?\n[ \t]*(?:\r?\n)+")
-
-
-def find_blocks(text: str) -> list[Block]:
-    """Split eligible prose into paragraph-scale blocks with stable 1-based ids.
-
-    Block text is the exact source slice, so model-visible occurrence
-    counting maps back to document offsets without ambiguity.
-    """
-    blocks: list[Block] = []
-    for start, end in _eligible_ranges(text):
-        cursor = start
-        for match in _BLANK_RUN_RE.finditer(text, start, end):
-            blocks.extend(_trimmed_blocks(text, cursor, match.start(), len(blocks)))
-            cursor = match.end()
-        blocks.extend(_trimmed_blocks(text, cursor, end, len(blocks)))
-    return [Block(block_id=i + 1, start=b.start, end=b.end, text=b.text) for i, b in enumerate(blocks)]
-
-
-def _trimmed_blocks(text: str, start: int, end: int, offset: int) -> list[Block]:
-    segment = text[start:end]
-    stripped = segment.strip()
-    if not stripped:
-        return []
-    leading = len(segment) - len(segment.lstrip())
-    trailing = len(segment) - len(segment.rstrip())
-    return [Block(block_id=offset + 1, start=start + leading, end=end - trailing, text=stripped)]
-
-
-_SENTENCE_END_RE = re.compile(r"[.!?]\s")
-
-
-def split_range(text: str, start: int, end: int, max_chars: int) -> list[tuple[int, int]]:
-    """Split ``[start:end)`` into pieces of at most *max_chars* characters.
-
-    Prefers blank-line, newline, sentence-end, then space boundaries so
-    oversized prose units divide at sensible seams. Always makes progress:
-    a unit with no usable boundary is hard-split.
-    """
-    if max_chars < 1:
-        raise ValueError(f"max_chars must be positive: {max_chars}")
-    out: list[tuple[int, int]] = []
-    cursor = start
-    while end - cursor > max_chars:
-        window_end = cursor + max_chars
-        piece = text[cursor:window_end]
-        cut = _cut_point(piece)
-        if cut is None:
-            cut = max_chars
-        cut += cursor
-        # Never emit an empty or whitespace-only piece; hard-split instead.
-        if text[cursor:cut].strip():
-            out.append((cursor, cut))
-            cursor = cut
-        else:
-            out.append((cursor, window_end))
-            cursor = window_end
-    if cursor < end:
-        out.append((cursor, end))
-    return [(s, e) for s, e in out if e > s]
-
-
-def _cut_point(piece: str) -> int | None:
-    """Return the best split offset within *piece*, or None for a hard split."""
-    for pattern in (r"\n[ \t]*\n", r"\n"):
-        matches = list(re.finditer(pattern, piece))
-        if matches:
-            return matches[-1].end()
-    matches = list(_SENTENCE_END_RE.finditer(piece))
-    if matches:
-        return matches[-1].end()
-    idx = piece.rfind(" ")
-    if idx > 0:
-        return idx + 1
-    return None

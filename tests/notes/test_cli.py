@@ -36,6 +36,14 @@ def test_spellcheck_decisions_subcommand() -> None:
     assert args.state.name == "notes.sqlite3"
 
 
+def test_spellcheck_structured_formats_and_explain() -> None:
+    args = build_parser().parse_args(["spellcheck", "--format", "jsonl", "--note", "a.md", "--languages", "en,fr"])
+    assert (args.format, args.languages, [str(note) for note in args.notes]) == ("jsonl", ("en", "fr"), ["a.md"])
+    args = build_parser().parse_args(["spellcheck", "explain", "recieve", "Chambord"])
+    assert args.handler is spellcheck._explain_words
+    assert args.words == ["recieve", "Chambord"]
+
+
 def test_tool_cli_names_notes() -> None:
     from tool import cli
 

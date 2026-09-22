@@ -442,7 +442,7 @@ def sha256_name(webp_bytes: bytes) -> str:
     return hashlib.sha256(webp_bytes).hexdigest() + ".webp"
 
 
-def _resolve_roots(vault: Path, roots: list[Path]) -> list[Path] | None:
+def resolve_roots(vault: Path, roots: list[Path]) -> list[Path] | None:
     """Resolve CLI *roots* to absolute vault paths.
 
     Relative paths resolve against the current directory, falling back to the
@@ -661,7 +661,7 @@ def run(args: argparse.Namespace) -> int:
     if args.quality < 1 or args.quality > 100:
         raise NotesError(f"invalid --quality: {args.quality} (expected 1-100)")
     vault = resolve_vault(args.vault).resolve()
-    files = collect_markdown_files(vault, _resolve_roots(vault, args.paths))
+    files = collect_markdown_files(vault, resolve_roots(vault, args.paths))
     occurrences, pages = _scan_notes(files)
     if not occurrences:
         if pages:
