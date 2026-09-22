@@ -27,7 +27,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
     p_spellcheck = sub.add_parser(
         "spellcheck",
-        help="interactively spellcheck the whole vault with the on-device Foundation Models model",
+        help="review high-confidence mechanical spelling proposals locally",
     )
     spellcheck.configure_parser(p_spellcheck)
     p_spellcheck.set_defaults(handler=spellcheck.run)

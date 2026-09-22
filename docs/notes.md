@@ -3,357 +3,222 @@
 Three CLI tools for the hardcoded Obsidian vault at
 `~/iCloud~md~obsidian/Documents/Notes`:
 
-- **`clean`** — move files in `z-images/` that no markdown note references,
-  plus duplicate and empty notes, to the Trash. Dry run by default;
-  `--apply` deletes via the system `trash` command (recoverable from the
-  Trash).
+- **`clean`** — move unreferenced `z-images/` files, duplicate notes, and empty
+  notes to the Trash. Dry run by default; `--apply` is recoverable from Trash.
 - **`localize`** — download remote `![alt](https://...)` images into
-  `z-images/` as WebP and rewrite the embeds to `![[<sha>.webp]]`. Dry run by
-  default; `--apply` downloads and rewrites.
-- **`spellcheck`** — interactively clean spelling across the whole vault
-  with Apple's on-device Foundation Models model. The model discovers likely
-  typos, repeated mappings are grouped into one candidate each, you approve
-  each mapping (`a` fixes that spelling everywhere safe), and up to three
-  discovery passes run until no new candidates appear.
+  `z-images/` as WebP and rewrite the embeds. Dry run by default; `--apply`
+  downloads and rewrites.
+- **`spellcheck`** — review exact, high-confidence mechanical typo proposals
+  one note at a time. It is local and deterministic; it does not initialize a
+  model, contact a network service, or make free-form edits.
 
 ```bash
-uv run tool notes spellcheck                    # scan vault, review each typo mapping
-uv run tool notes clean                       # dry run: list unreferenced images + duplicate notes
-uv run tool notes clean --apply               # move them to the Trash
-uv run tool notes localize                    # dry run: list remote images
-uv run tool notes localize --apply            # download + convert + rewrite
-uv run tool notes localize --apply Clippings/  # limit to a note or directory
+uv run tool notes spellcheck
+uv run tool notes spellcheck --vault ~/Notes --state ~/.local/state/tool/notes.sqlite3
+uv run tool notes spellcheck decisions --state ~/.local/state/tool/notes.sqlite3
+uv run tool notes spellcheck decisions --state ~/.local/state/tool/notes.sqlite3 --remove 12
+uv run tool notes clean
+uv run tool notes clean --apply
+uv run tool notes localize
+uv run tool notes localize --apply
 make fmtlint
 uv run pytest tests/notes
 ```
-
-`localize` positional paths are optional scope limiters: relative paths
-resolve against the current directory, falling back to the vault; missing
-paths and paths outside the vault are errors, never silent no-ops.
+`localize` positional paths are optional scope limiters: relative paths resolve
+against the current directory, falling back to the vault; missing paths and
+paths outside the vault are errors. Spellcheck always processes the vault in
+stable relative-path order.
 
 ## Layout
 
 ```
 src/tool/notes/
-├── __init__.py         # empty
-├── common.py           # hardcoded VAULT, z-images/ name, WebP quality, NotesError
-├── clean.py            # rg reference scan, md5 duplicate scan, trash deletion, run()
-├── localize.py         # remote-image parser, downloader, ffmpeg WebP, rewriter, run()
-├── markdown.py         # protected-region scanner, checkable blocks, range splitting
-├── foundation_models.py # apple-fm-sdk adapter: instructions, guided schema, ModelClient
-├── spellcheck.py       # vault corpus, discovery, grouping, expansion, review, run()
-└── cli.py              # configure_parser()/build_parser() for clean + localize + spellcheck
+├── common.py       # vault path, shared errors, image conventions
+├── clean.py        # image reference and duplicate-note cleanup
+├── localize.py     # remote-image parser, downloader, WebP rewrite
+├── markdown.py     # protected-region scanner and prose ranges
+├── detector.py     # pinned typos-dict loader and exact mechanical detector
+├── state.py        # SQLite decisions, cache, and operation journal
+├── spellcheck.py   # lazy note review, exact edits, scopes, undo, and CLI
+└── data/
+    ├── typos_words.csv
+    └── TYPOS-LICENSE-{MIT,APACHE}
 ```
 
-## `clean` reference detection
+## `clean`
 
-`clean` lists files directly inside `z-images/` (the webp-paste attachment
-folder; flat by convention) and shells out to `rg` — Python never scans note
-contents. All basenames go into a patterns file and one
-`rg -o -F -f patterns -g '*.md'` pass reports which names occur anywhere in
-the vault. Plain fixed-string matching covers every Obsidian reference style:
+`clean` lists files directly inside `z-images/` and shells out to `rg` for one
+fixed-string reference scan. It excludes `.trash` and `.obsidian`. `--apply`
+moves files with the system `trash` command, so the operation remains
+recoverable from the Trash. Duplicate and empty-note cleanup uses exact file
+bytes and keeps the shortest vault-relative path, with alphabetical tie
+breaking.
 
-- `![[abc.webp]]`, `![[abc.webp|300]]`, `[[abc.webp]]`
-- `![](z-images/abc.webp)`, `![alt](abc.webp)`
-- folder-prefixed `![[z-images/abc.webp]]` (what Loupe imports emit)
+## `localize`
 
-Files whose exact basename (with extension) appears nowhere are unreferenced.
-Extensionless `[[note]]` links are note links, not image references, and do
-not keep images alive. The vault's `.trash` and `.obsidian` directories are
-excluded: a note rotting in `.trash` must not pin its images.
+`localize` handles inline `![alt](https://...)` image embeds outside fenced and
+inline code. Local paths, data URLs, HTML image tags, reference-style images,
+and known video/social page URLs remain unchanged. Downloads use bounded
+retries, reject oversized/non-image responses, and store content-addressed
+WebP files. Failed downloads leave their original embeds intact.
 
-`--apply` moves files with the system `trash` command (`/usr/bin/trash`,
-macOS 15+) in batches of 100, up to 8 batches concurrently (`-j/--jobs`;
-one batch at a time is latency-bound on FileProvider coordination, so
-concurrency is the speed lever), so deletions are recoverable. A preamble
-and a progress line per completed batch print while it works, and per-file
-`trashed ...` lines print only after the move completes.
+## `spellcheck`
 
-## `clean` duplicate detection
+### Scope and detector
 
-Non-empty `*.md` files are grouped by md5 of their exact bytes; empty
-(0-byte) notes are listed separately and every one is trashed. In each
-duplicate group the survivor is the shortest vault-relative path, ties
-broken alphabetically — so `hackernews.md` is kept over `hackernews 2.md`
-and `Custom Linux Kernel.md`, and `dev/Linux/Oasis Linux Server.md` is
-kept over its `archive/` copy. The vault's `.trash` and `.obsidian`
-directories are excluded from the scan, same as the image reference scan.
+Spellcheck is intentionally a **mechanical-spelling-only** checker. It emits a
+proposal only when the pinned curated dataset contains an exact misspelling and
+one unambiguous replacement. It does not generate candidates from unfamiliar
+words, word frequency, grammar, style, agreement, pluralization, punctuation,
+case-only changes, or semantic context. It never splits or joins words.
 
-## `localize` scope and naming
+The vendored data is `typos-dict` 0.14.1 from the `crate-ci/typos` project,
+source commit `67e851f0011378f3c32597df0225931cb6ee56a` (the
+`typos-dict-v0.14.1` tag), with SHA-256
+`9f527a304e4ea717a4dc1b6fc5f3a4d50b8c872f17792097e28422bb595226db`.
+Rows with multiple replacements, such as `aache,ache,cache`, are treated as
+ambiguous and ignored. The source is dual-licensed MIT or Apache-2.0; both
+license texts and attribution are stored beside the data. Refreshing the list
+is a deliberate source update, never a runtime download.
 
-Scope matches the webp-paste plugin's Loupe import
-(`~/d/obsidian-webp-paste`, `src/loupe-import.ts`): inline
-`![alt](destination)` embeds with absolute `http(s)` destinations. Out of
-scope, left byte-for-byte intact: `data:` URLs, local paths, HTML
-`<img src>`, reference-style images, and anything inside fenced code blocks
-or inline code spans (detected with a line-based fence tracker plus
-best-effort per-line backtick pairing; exotic nested-backtick cases may slip
-through — check dry-run output).
+Lowercase, title-case, and uppercase source forms are separate exact mappings.
+Mixed-case forms abstain. Approving `recieve → receive` never approves
+`Recieve → Receive` or any other spelling implicitly.
 
-Video and social *page* URLs are also skipped, never attempted: clipping
-pipelines sometimes serialize a video as `![](https://www.youtube.com/watch?v=…)`,
-and those routes never serve image bytes. `is_page_url()` matches only
-routes that provably never serve images — YouTube `watch`/`shorts`/`live`/
-`embed`/`playlist`/`clips`, `youtu.be`, `vimeo.com`/`player.vimeo.com` pages,
-and X/Twitter status and `/i/` routes — while thumbnails on dedicated image
-hosts (`i.ytimg.com`, `i.vimeocdn.com`, `pbs.twimg.com`) stay localizable.
-Skipped page embeds are listed separately in dry-run output so a
-misclassification stays visible.
-
-Downloads send the plugin's browser-like headers (`Accept: image/...`,
-Chrome `User-Agent`) with 3 attempts and exponential backoff for transient
-network errors and HTTP 408/425/429/5xx. Responses larger than 100 MB are
-refused; responses served as HTML/text are skipped without further work;
-anything else is handed to the converter, whose failure also leaves the
-embed remote.
-
-## WebP conventions
-
-Follow `~/d/obsidian-webp-paste`:
-
-- Quality 85 (`--quality` overrides, 1–100), lossy for every source format.
-- Already-WebP bytes (RIFF `....WEBP` magic) are stored as-is, never
-  re-encoded — a lossy re-encode would only shed quality.
-- Conversion runs `ffmpeg -c:v libwebp -quality 85` (libwebp is the same
-  encoder family as the plugin's Chromium canvas path and `cwebp -q 85`).
-- The filename is `sha256(final webp bytes).hexdigest() + ".webp"`, so
-  identical images deduplicate to one file and reruns converge.
-- The rewrite format is `![[<sha>.webp]]` (bare filename, no `z-images/`
-  prefix, no size suffix), matching existing vault embeds.
-
-`--apply` downloads unique URLs concurrently (`-j/--jobs`, default 8) and
-stores each image with an atomic temp-file-plus-rename so a crash can never
-leave a truncated file behind under a valid hash name. Existing files are
-never rewritten (same hash implies identical bytes), then each note is
-rescanned and rewritten, preserving everything else byte-for-byte. Partial
-localization is normal: failures keep their remote embeds and are reported
-as `skipped <url> (<reason>)`.
-
-## `spellcheck` interactive vault cleanup
-
-```bash
-uv run tool notes spellcheck
-```
-
-Scans every `*.md` note in the vault (excluding `.trash/` and `.obsidian/`),
-asks Apple's on-device Foundation Models model to discover likely spelling
-mistakes, groups repeated mistakes into one candidate per
-`original → replacement` mapping, and lets you adjudicate each candidate
-interactively. Approving a mapping (`a`) fixes that spelling in all eligible
-prose throughout the vault at once, without further AI calls. Up to three
-discovery passes run until a full pass yields no new candidates.
+The detector returns occurrence-level records:
 
 ```text
-$ tool notes spellcheck
-
-Scanning 2,481 notes...
-Checking prose with Apple Foundation Models...
-
-[1/61] recieve → receive
-17 eligible occurrences in 9 notes
-AI flagged this independently in 4 contexts
-
-  Projects/foo.md
-    - "... didn't recieve the response ..."
-    + "... didn't receive the response ..."
-
-  Notes/bar.md
-    - "... once we recieve it ..."
-    + "... once we receive it ..."
-
-  Clippings/baz.md
-    - "... never recieved ..."
-    + "... never received ..."
-
-[a] all  [y] one  [n] next  [s] skip spelling  [q] quit
-> a
-
-Replaced 17 occurrences in 9 notes.
+vault-relative note identity
+Unicode source range [start:end)
+exact original and replacement
+detector provenance
+exact file snapshot hash
 ```
 
-Actions per candidate: `a` replaces all safe occurrences of the mapping
-immediately and continues; `y` replaces only the first shown occurrence and
-re-presents the rest; `s` ignores that source spelling for the rest of the
-run (ephemeral — nothing is persisted); `n` skips just that mapping;
-`q` quits, leaving already-applied edits in place. Keys are single
-keystrokes on a macOS terminal, line input otherwise. Candidates are ordered
-within each streamed group by number of safe occurrences, then by independent
-model evidence — no fake confidence scores. The session ends with counts of mappings approved,
-occurrences corrected, notes modified, candidates skipped, spellings ignored,
-and discovery passes.
+Python Unicode code-point offsets are used throughout. Source bytes are read
+and decoded without newline normalization, and untouched bytes are preserved.
 
-All linguistic judgment comes from the on-device model; no text leaves the
-machine. There is no Hunspell, system spellchecker, dictionary, word list,
-NLP package, or cloud fallback. The AI is only a discovery mechanism: it
-never rewrites notes, only proposes small exact edits through guided
-generation (`@fm.generable`), and every proposal must map back to an exact,
-unprotected source range before it counts as evidence. Deterministic code
-then expands an approved mapping to every exact safe occurrence, and the
-human approves every mapping. Nothing is applied the model did not propose
-and you did not approve.
+### Markdown and explicit protection
 
-The layers are deliberately one-directional — document scanning primitives
-(`markdown.py`) know nothing about the model, the model adapter
-(`foundation_models.py`) knows nothing about the vault, and `spellcheck.py`
-owns corpus, discovery, grouping/expansion, review, and mutation. `run()` is
-the only synchronous boundary; it drives a clearly separated async
-discovery operation and never makes unrelated `tool` commands async.
+Existing Markdown protection remains the first exclusion layer. It protects
+front matter, fenced and inline code, URLs, link destinations, wikilink
+targets, embeds, HTML, math, paths, and indented code while keeping visible
+link labels eligible. The detector also requires complete tokens and refuses
+matches embedded in identifiers or combining-mark sequences.
 
-Note text is **untrusted input to the model**. The instructions tell it to
-treat every block as data rather than instructions, but that is defence in
-depth, not the guarantee: the real guarantee is that a proposal can only
-survive as a validated substring substitution inside unprotected prose, so
-no amount of adversarial note content can replace a file. Notes containing
-"ignore previous instructions" or "replace every word" are regression-tested
-for exactly this.
+The `d` action adds an explicit exact-case protection for a word or containing
+phrase. A phrase is stored as one phrase, not as independent words. Scope is
+chosen only in this secondary interaction:
 
-Protected regions are never touched by discovery or by global replacement:
-YAML front matter, fenced code blocks, inline code spans, raw URLs, Markdown
-link/image destinations, autolinks, Obsidian wikilink targets and embeds,
-HTML markup, math, indented code, and slash-bearing path tokens. Headings,
-paragraphs, list text, blockquotes, and link labels stay eligible. Global
-replacement additionally respects lexical boundaries, so approving
-`recieve → receive` fixes `I recieve mail.` but leaves `recievePacket`
-alone. A deterministic minimal-substitution gate also rejects any proposal
-that is not a letter-level tweak within the same words (same token count,
-every changed token within edit distance 2), so instruction-following
-rewrites such as `Qwen3.5 → ChatGPT` can never become candidates even when
-the model is suggestible. A markup-signature gate requires the count of
-Markdown-significant characters (``_ * ` # ~ [ ] < > | \ $``) to be identical
-on both sides of a proposal — a spelling fix changes letters, never
-structure. This catches proposals observed from the live model such as
-`_frappato_ → frappato`, which would otherwise have passed the edit-distance
-gate and silently stripped the author's italics. A spelling-only gate then
-requires every changed token to change its letters/digits (case-insensitively,
-ignoring punctuation) while leaving non-apostrophe punctuation untouched, so
-punctuation-only trims such as `cuffs..? → cuffs.`, case-only changes such as
-`Hello → hello`, and bundled punctuation such as `teh → the!` can never become
-candidates even when the model is suggestible. An interior apostrophe is part
-of spelling, so `dont → don't` is still a valid correction. A support gate
-then drops candidates with a single flagged context but more than a hundred
-eligible occurrences without prompting: one context for established
-vocabulary is context-dependent by the model's own behavior — it saw the
-token hundreds of times and flagged exactly one — so offering it as a
-vault-wide replace would turn one judgment call into hundreds of edits.
-Observed live: `say → says` from a single context expanded to 917 eligible
-occurrences in 314 notes (and the lone evidence was itself wrong: "i have
-to say" needs no fix). True typos are either rare or flagged everywhere the
-model looks, so they pass either side of the gate.
+- current note (the default)
+- current directory subtree
+- whole vault
 
-Model output is never fuzzy-matched, never "find the closest word", and never
-applied against source text that is no longer exactly what the model saw. A
-proposal becomes evidence only when it independently proves: its block id
-exists in that request, `original` and `replacement` are non-empty and differ,
-the claimed occurrence exists verbatim in that block, the resulting range maps
-back to the original document, the range intersects no protected region, and
-it overlaps no already-accepted edit. Exact duplicates collapse to one edit;
-competing replacements for the *same* range are both kept, so grouping can
-surface them as separate candidates rather than guessing. Malformed or
-partly-bad output can never endanger the rest of a file.
+Protections suppress proposals; they do not modify the detector dataset or
+create permanent autocorrection rules.
 
-Proposals carry a 1-based `occurrence` rather than character offsets, because a
-small on-device model counts words far more reliably than it counts Unicode
-offsets. When `original` matches exactly once in the block, the claimed number
-is ignored — the exact match is itself the proof, and rejecting a
-proven-unique range over a miscounted number would trade real fixes for no
-safety gain. When it matches repeatedly, the claimed occurrence must be valid
-or the proposal is dropped.
+### Review flow and keybindings
 
-Accepted proposals are then trimmed to the span that actually differs.
-The instructions tell the model to quote surrounding words so a short typo
-stays unambiguous, and it does — observed live, it returned
-`definately wrong receipt arrived too. → definitely wrong receipt arrived
-too.` rather than the typo alone. That matters beyond cosmetics: grouping is
-keyed on `(original, replacement)`, so the same typo quoted two different ways
-would become two candidates and be adjudicated twice, which is precisely what
-`tool notes spellcheck` exists to avoid. Whole identical words are stripped
-from both ends of an already-validated range, so the trimmed mapping is a
-strict sub-span of one that already proved itself.
+Notes are read and analyzed lazily in stable order, so the first note can be
+reviewed before later notes are detected. Repeated occurrences of one exact
+mapping are grouped only inside the current note:
 
-The model is never shown Markdown it is forbidden to edit. Protected spans are
-blanked in place — replaced with spaces of exactly the same length, newlines
-preserved — before the block is rendered for the model, so what it reads is
-prose and nothing else. This is worth ~15% of the prompt tokens on the current
-vault (measured with the real tokenizer: URLs, paths, and link destinations
-tokenize poorly, and they are 87% of everything protected), and it removes the
-temptation that produced `_frappato_ → frappato`. Same-length blanking is the
-whole trick: offsets need no translation table, because a match the model
-reports still lands on the identical source range. Fenced code and front matter
-are excluded from blocks entirely, so they are never sent at all.
+```text
+reading.md
 
-Scope notes: spelling only — the model instructions forbid style, grammar,
-punctuation, and capitalization changes, and uncertain cases must be left
-unchanged (false positives are worse than misses). The deterministic
-spelling-only gate above is the real enforcement: punctuation-only,
-case-only, and whitespace-only proposals are rejected even when the model
-ignores its instructions. Each sampled occurrence renders as a diff-style
-`-`/`+` pair with 100 characters of context on each side, the original
-highlighted red and the replacement green.
+  42  ... I still haven't recieved the book ...
+  58  ... recieved another copy ...
 
-Discovery packs prose from *many* notes into each request rather than asking
-about one note at a time. On-device generation costs several seconds per call
-almost independently of how much prose the call carries, so a request per note
-spends nearly all of its cost on overhead: measured on this host, eight short
-notes cost ~68s as eight requests and ~11s as one. Whole files are packed
-into each group up to the real context window minus measured
-instruction/schema cost minus response headroom, with each unit remembering
-the note it came from. Proposals are then validated per source note, so a
-block id belonging to a neighbouring note in the same request can never be
-applied to the wrong file. A request that still overflows is halved and
-retried, then skipped with a loud warning rather than aborting the vault run.
-Groups run strictly one at a time: the on-device model is a single serial
-resource, and concurrent requests were measured to be slower than sequential
-ones, not faster. Holding one session open across requests is also a loss —
-the accumulated transcript both slows generation down and lets earlier notes
-bias later judgments — so every request gets a fresh session.
+recieved → received
+2 eligible occurrence(s) in this note
+Reason: known mechanical misspelling
 
-Each pass streams those groups in path order: discover one group, review its
-candidates immediately, then move on. Approving a mapping fixes it vault-wide
-at once, so later groups are read from text that already contains earlier
-fixes — a typo approved early is never re-reported later, and the first prompt
-arrives after the first productive group instead of after the whole vault
-scan. Each file's units are derived fresh from the current text, so approved
-edits can never stale later offsets. This changes interaction latency, not
-throughput: the model still reads every character once per pass.
+[a] apply in note  [A] apply across vault
+[n] reject here   [d] remember…
+[u] undo          [q] quit
+```
 
-There is no inference server to exploit and none is needed: the model already
-lives in a persistent system service (`TGOnDeviceInferenceProviderService`) and
-session creation costs ~2 ms, so nothing is started or stopped per request. The
-runtime is bounded by model throughput, measured at **~146 chars/s** on this
-host. That is worth knowing before starting: the vault currently holds ~19M
-characters of eligible prose, so a full pass is on the order of tens of hours,
-and the three-pass cap multiplies that. Packing cuts the per-request overhead
-(~17% of a whole-vault run here, since the median note is already ~2.5k
-characters) but cannot change the throughput term. Progress lines report
-`n/total groups checked` against a start-of-pass estimate — fixes shrink
-later groups, so a pass can finish just under its estimate — so a long run
-never looks hung. Expect to run this overnight, and expect it to be worth
-starting only when you actually want the vault cleaned.
+- **`a`** applies the displayed mapping to the currently eligible exact
+  occurrences in this note. It does not affect another note or create a rule.
+- **`A`** scans other notes on demand using the detector and builds a frozen
+  occurrence-level plan. The preview shows source/replacement, every planned
+  location and context, file/occurrence counts, and exclusions from saved
+  decisions. Press `A` again or answer `yes` to confirm one multi-file batch.
+  Cancellation records nothing. `A` means apply this plan now, not autocorrect
+  future text.
+- **`n`** rejects the exact `original → replacement` pair in the current note.
+  The decision covers repeated instances, survives unrelated edits, does not
+  become global, and does not suppress another replacement for the same
+  original.
+- **`d`** remembers an exact word or phrase as legitimate, then asks for the
+  explicit scope above. It is a protection decision, not a dictionary entry.
+- **`u`** undoes the latest completed or partially completed mutating action,
+  including a decision action. A vault batch is one logical undo operation.
+- **`q`**, EOF, interruption, and unknown input leave completed work intact.
+  Unknown keys reprompt and never become rejection decisions. TTY raw mode is
+  restored on every exit, and uppercase `A` is preserved in TTY and line-input
+  paths.
 
-Set expectations accordingly. False positives are the failure mode the gates
-above exist to prevent, and the model does produce them — the markup gate was
-added after the live model proposed stripping italics — but every observed
-class is now rejected deterministically, and a final live run surfaced only
-genuine typos. Recall is the weaker half: the model reliably finds repeated and
-obvious misspellings yet still misses some, including plain ones such as
-`recieved → received`. Later passes catch some of what earlier ones missed,
-which is the point of running more than one. Recall also degrades as more
-blocks are packed into a single request, so packing is a deliberate
-throughput/recall trade rather than a free win.
+### Persistence and decision management
 
-One vault at a time (`--vault` overrides the hardcoded default); files keep
-their bytes outside accepted edits, newlines and permissions are preserved, and
-each modified note is replaced atomically. There is no backup, undo log, or
-approval database — the vault is expected to be externally backed up. Requires
-macOS 26+ on Apple Silicon with Xcode 26+ and Apple Intelligence enabled
-(`apple-fm-sdk` is a macOS-only dependency and imports lazily, so other
-`tool` commands and CI tests work everywhere).
+State is stored in one private SQLite database, outside the vault by default:
 
-The ordinary suite fakes the model and never needs Apple Intelligence. For
-real-model evaluation of recall, false positives, and protected-region safety,
-there is an opt-in harness that is deliberately excluded from CI because
-generative output is not stable across OS/model revisions:
+- macOS: `~/Library/Application Support/tool/notes.sqlite3`
+- other systems: `$XDG_STATE_HOME/tool/notes.sqlite3`, or
+  `~/.local/state/tool/notes.sqlite3`
+- override with `--state` or `TOOL_NOTES_STATE`
+
+The database contains separate tables for rejected proposal pairs, accepted
+word/phrase protections, deterministic findings cache, and operation
+journaling. Note identities are vault-relative paths. Renaming a note does not
+transfer its note-local decisions; a same-named file in another directory is a
+different identity. Directory and vault scopes apply only when explicitly
+selected. More-specific rejection decisions override broader protections.
+
+Inspect or remove active decisions with:
 
 ```bash
-TOOL_NOTES_SPELLCHECK_LIVE=1 uv run pytest tests/notes/test_spellcheck_live.py -s
+tool notes spellcheck decisions --state PATH
+tool notes spellcheck decisions --state PATH --remove DECISION_ID
+```
+
+Removing a decision makes the relevant cached finding eligible again. The
+database is private because the cache and journal can contain note-derived
+text and complete before/after file bytes.
+
+### Cache, resume, undo, and conflicts
+
+Every note has a cache key containing its relative identity, exact content
+hash, detector version, and parser/policy version. Empty findings are cached
+too. An unchanged, fully reviewed vault therefore reuses detector results and
+does not repeat prompts. Editing one note invalidates only that note's cache
+entry. User decisions remain when the detector version changes.
+
+Before writing, every planned range is checked against the reviewed snapshot,
+the exact original source, protection rules, and non-overlap constraints. Each
+file is replaced atomically with its original permissions and newline bytes.
+The operation journal records before/after bytes and which files completed;
+this is atomic per file, not a claim of multi-file filesystem transactions.
+
+If a vault batch is interrupted after partial completion, the journal remains
+recoverable and the next invocation reports it. `u` restores completed files
+only when their current bytes still match the journaled after-snapshot. An
+external edit causes undo or apply to stop rather than overwrite it, and the
+affected proposal is surfaced again after re-reading the note.
+
+### Requirements and limitations
+
+No Apple Foundation Models runtime, macOS Intelligence feature, spellchecking
+service, model dependency, or network access is required. The `apple-fm-sdk`
+dependency is not part of this command's installation requirements. The first
+version deliberately favors precision over recall: if the curated dataset
+does not provide one unambiguous mechanical correction, it abstains. Broader
+dictionary generation and contextual checking are future capabilities, not
+part of this workflow.
+
+The relevant deterministic suite uses fake detector boundaries for state and
+write tests and also exercises the real vendored dataset:
+
+```bash
+uv run pytest tests/notes
 ```

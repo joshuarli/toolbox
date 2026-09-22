@@ -30,6 +30,12 @@ def test_spellcheck_operates_on_vault_without_positional() -> None:
     assert args.handler is spellcheck.run
 
 
+def test_spellcheck_decisions_subcommand() -> None:
+    args = build_parser().parse_args(["spellcheck", "decisions", "--state", "/tmp/notes.sqlite3"])
+    assert args.handler is spellcheck._list_decisions
+    assert args.state.name == "notes.sqlite3"
+
+
 def test_tool_cli_names_notes() -> None:
     from tool import cli
 
