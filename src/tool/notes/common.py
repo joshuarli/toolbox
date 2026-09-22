@@ -23,6 +23,10 @@ class NotesError(Exception):
     """Fatal ``notes`` error; the CLI reports it as exit code 2."""
 
 
+class ContextTooLargeError(NotesError):
+    """A single chunk exceeds the Foundation Models context window."""
+
+
 def resolve_vault(override: Path | None) -> Path:
     """Return the vault directory, raising :class:`NotesError` if it is missing."""
     vault = Path(override) if override is not None else VAULT

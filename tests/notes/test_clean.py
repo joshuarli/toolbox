@@ -129,11 +129,14 @@ def test_trash_files_chunk_error_falls_back_per_file(tmp_path: Path) -> None:
             result.stdout = ""
         return result
 
-    with patch("tool.notes.clean.subprocess.run", side_effect=fake_run):
-        with patch("tool.notes.clean.require_tool", return_value="/usr/bin/trash"):
-            clean.trash_files([good, bad])  # must not raise: files are gone
+    with (
+        patch("tool.notes.clean.subprocess.run", side_effect=fake_run),
+        patch("tool.notes.clean.require_tool", return_value="/usr/bin/trash"),
+    ):
+        clean.trash_files([good, bad])  # must not raise: files are gone
     assert [c[0] for c in calls] == ["trash"] * 3
-    assert not good.exists() and not bad.exists()
+    assert not good.exists()
+    assert not bad.exists()
 
 
 def test_missing_vault(tmp_path: Path) -> None:

@@ -557,10 +557,14 @@ async def scrape_direct(
 
     declared_type: str = info.get("type", "image")
     script_urls_raw = await tab.evaluate(_SCRIPT_SLIDE_URLS_JS)
-    script_urls: list[str] = cast("list[str]", script_urls_raw) if isinstance(script_urls_raw, list) else []
+    script_urls: list[str] = (
+        [url for url in script_urls_raw if isinstance(url, str)] if isinstance(script_urls_raw, list) else []
+    )
     script_video_urls_raw = await tab.evaluate(_SCRIPT_VIDEO_URLS_JS)
     script_video_urls: list[str] = _downloadable_video_urls(
-        script_video_urls_raw if isinstance(script_video_urls_raw, list) else []
+        [url for url in script_video_urls_raw if isinstance(url, str)]
+        if isinstance(script_video_urls_raw, list)
+        else []
     )
     has_video_element: bool = bool(await tab.evaluate('!!document.querySelector("article video, main video")'))
     has_carousel_button: bool = bool(

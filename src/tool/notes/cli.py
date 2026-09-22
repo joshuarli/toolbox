@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 
-from tool.notes import clean, localize
+from tool.notes import clean, localize, spellcheck
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.description = "Clean and localize images in the Obsidian notes vault."
+    parser.description = "Clean, localize, and spellcheck the Obsidian notes vault."
     sub = parser.add_subparsers(dest="notes_cmd", required=True)
 
     p_clean = sub.add_parser(
@@ -24,6 +24,13 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     )
     localize.configure_parser(p_localize)
     p_localize.set_defaults(handler=localize.run)
+
+    p_spellcheck = sub.add_parser(
+        "spellcheck",
+        help="interactively spellcheck the whole vault with the on-device Foundation Models model",
+    )
+    spellcheck.configure_parser(p_spellcheck)
+    p_spellcheck.set_defaults(handler=spellcheck.run)
 
 
 def build_parser() -> argparse.ArgumentParser:

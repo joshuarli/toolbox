@@ -5,6 +5,7 @@ description = "various tools"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "apple-fm-sdk; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "blessed>=1.20",
     "mutagen>=1.48.1",
     "shadowdriver",

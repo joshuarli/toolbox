@@ -229,8 +229,7 @@ def run(args: argparse.Namespace) -> int:
     note_targets: list[tuple[Path, str]] = [(p, "empty note") for p in empty]
     for group in groups:
         survivor = group[0].relative_to(vault).as_posix()
-        for dup in group[1:]:
-            note_targets.append((dup, f"duplicate of {survivor}"))
+        note_targets.extend((dup, f"duplicate of {survivor}") for dup in group[1:])
     # Deterministic order for output and trashing.
     note_targets.sort(key=lambda item: item[0].relative_to(vault).as_posix())
 
@@ -257,15 +256,11 @@ def run(args: argparse.Namespace) -> int:
         kept = len(files) - len(unreferenced)
         if dry_run:
             print(
-                f"\n{len(targets)} unreferenced ({_format_size(total_bytes)}) would be trashed, "
-                f"{kept} referenced kept."
+                f"\n{len(targets)} unreferenced ({_format_size(total_bytes)}) would be trashed, {kept} referenced kept."
             )
         else:
             trash_files([path for path, _ in targets])
-            print(
-                f"\n{len(targets)} unreferenced ({_format_size(total_bytes)}) trashed, "
-                f"{kept} referenced kept."
-            )
+            print(f"\n{len(targets)} unreferenced ({_format_size(total_bytes)}) trashed, {kept} referenced kept.")
 
     if not note_targets:
         print("No duplicate or empty notes. Nothing to do.")
