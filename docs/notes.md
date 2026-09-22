@@ -229,7 +229,16 @@ ignoring punctuation) while leaving non-apostrophe punctuation untouched, so
 punctuation-only trims such as `cuffs..? → cuffs.`, case-only changes such as
 `Hello → hello`, and bundled punctuation such as `teh → the!` can never become
 candidates even when the model is suggestible. An interior apostrophe is part
-of spelling, so `dont → don't` is still a valid correction.
+of spelling, so `dont → don't` is still a valid correction. A support gate
+then drops candidates with a single flagged context but more than a hundred
+eligible occurrences without prompting: one context for established
+vocabulary is context-dependent by the model's own behavior — it saw the
+token hundreds of times and flagged exactly one — so offering it as a
+vault-wide replace would turn one judgment call into hundreds of edits.
+Observed live: `say → says` from a single context expanded to 917 eligible
+occurrences in 314 notes (and the lone evidence was itself wrong: "i have
+to say" needs no fix). True typos are either rare or flagged everywhere the
+model looks, so they pass either side of the gate.
 
 Model output is never fuzzy-matched, never "find the closest word", and never
 applied against source text that is no longer exactly what the model saw. A

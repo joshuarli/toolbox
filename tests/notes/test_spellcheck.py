@@ -71,7 +71,8 @@ class FakeClient:
 class ContentFake(FakeClient):
     """A deterministic stand-in 'model' that reacts to current block content.
 
-    Proposes ``recieve → receive`` (occurrence 1) whenever a block still
+    Flags every occurrence in each block (the real instructions ask for one
+    correction per occurrence), ``recieve → receive`` whenever a block still
     contains a safe-looking ``recieve``, and ``teh → the`` only once no
     ``recieve`` remains anywhere in that block, simulating mistakes exposed
     by a later pass.
@@ -82,9 +83,15 @@ class ContentFake(FakeClient):
         for block in blocks:
             self.seen.append((self._current_file, block))
             if "recieve" in block.text:
-                out.append(ProposedCorrection(block.block_id, "recieve", "receive", 1))
+                out.extend(
+                    ProposedCorrection(block.block_id, "recieve", "receive", occurrence)
+                    for occurrence in range(1, block.text.count("recieve") + 1)
+                )
             elif "teh" in block.text:
-                out.append(ProposedCorrection(block.block_id, "teh", "the", 1))
+                out.extend(
+                    ProposedCorrection(block.block_id, "teh", "the", occurrence)
+                    for occurrence in range(1, block.text.count("teh") + 1)
+                )
         return out
 
 
@@ -118,6 +125,50 @@ class ScriptedReviewer:
 
 def prop(block_id: int, original: str, replacement: str, occurrence: int = 1) -> ProposedCorrection:
     return ProposedCorrection(block_id=block_id, original=original, replacement=replacement, occurrence=occurrence)
+
+
+def test_single_evidence_common_word_never_prompted(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Live case: `say → says` from one flagged context with hundreds of
+    eligible occurrences must never prompt, let alone offer vault-wide
+    replace. One context is a judgment call (here grammar, and wrong even
+    there); a vault-wide typo would be flagged everywhere the model looks."""
+    text = "say " * 917
+    write_vault(tmp_path, {"a.md": text})
+
+    class SingleFlagFake(FakeClient):
+        async def correct(self, blocks: Sequence[Block]) -> list[ProposedCorrection]:
+            out: list[ProposedCorrection] = []
+            for block in blocks:
+                self.seen.append((self._current_file, block))
+                if "say" in block.text:
+                    out.append(ProposedCorrection(block.block_id, "say", "says", 1))
+                    break
+            return out
+
+    result, reviewer = run_vault(tmp_path, SingleFlagFake(), ["a"])
+    assert result == 0
+    assert reviewer.seen == []
+    assert (tmp_path / "a.md").read_text(encoding="utf-8") == text
+    out = capsys.readouterr().out
+    assert "Skipped say → says" in out
+    assert "1 candidate skipped" in out
+
+
+def test_established_word_support_gate() -> None:
+    many = [VaultOccurrence(path=Path("a.md"), start=i, end=i + 3) for i in range(917)]
+    few = [VaultOccurrence(path=Path("a.md"), start=0, end=3)]
+    assert spellcheck._auto_skip_reason(_cand("say", "says", 1, many)) is not None
+    assert spellcheck._auto_skip_reason(_cand("say", "says", 2, many)) is None
+    assert spellcheck._auto_skip_reason(_cand("say", "says", 1, few)) is None
+
+
+def _cand(original: str, replacement: str, evidence_count: int, occurrences: list[VaultOccurrence]) -> Candidate:
+    return Candidate(
+        original=original,
+        replacement=replacement,
+        evidence=[ModelEvidence(Path("a.md"), 0, 3, original, replacement)] * evidence_count,
+        occurrences=occurrences,
+    )
 
 
 def pipeline(

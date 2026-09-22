@@ -97,6 +97,16 @@ _RESET = "\033[0m"
 _MAX_PASSES = 3
 # Occurrences sampled per candidate display, preferably from distinct files.
 _SAMPLE_SIZE = 3
+# A token occurring more than this many times vault-wide is established
+# vocabulary, not a typo waiting to happen. A single flagged context for
+# such a token is a context-dependent judgment (observed live: grammar such
+# as `say → says`), never a vault-wide typo — a real one would be flagged
+# everywhere the model looks.
+_ESTABLISHED_OCCURRENCES = 100
+# Independent flagged contexts required before an established token is
+# surfaced at all. One context is a judgment call; two is the start of a
+# pattern.
+_MIN_EVIDENCE_FOR_ESTABLISHED = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -912,10 +922,24 @@ def _review_pass(
         candidates = build_candidates(
             group_candidates(evidence), corpus, cache, approved, skipped_sources, skipped_pairs
         )
-        if not candidates:
+        prompted: list[Candidate] = []
+        for candidate in candidates:
+            reason = _auto_skip_reason(candidate)
+            if reason is None:
+                prompted.append(candidate)
+                continue
+            stats.candidates_skipped += 1
+            skipped_pairs.add((candidate.original, candidate.replacement))
+            print(
+                f"Skipped {candidate.original} → {candidate.replacement} "
+                f"({reason} — looks context-dependent, not a vault-wide typo)."
+            )
+        if not prompted:
             return False
         found_any = True
-        return review_candidates(vault, candidates, corpus, cache, approved, skipped_sources, skipped_pairs, reviewer, stats)
+        return review_candidates(
+            vault, prompted, corpus, cache, approved, skipped_sources, skipped_pairs, reviewer, stats
+        )
 
     group: list[Unit] = []
     used = 0
@@ -1060,6 +1084,25 @@ def build_candidates(
             candidates.append(candidate)
     candidates.sort(key=lambda cand: (-len(cand.occurrences), -len(cand.evidence), cand.original, cand.replacement))
     return candidates
+
+
+def _auto_skip_reason(candidate: Candidate) -> str | None:
+    """Reason to drop *candidate* without prompting, or None to surface it.
+
+    One flagged context for established vocabulary is context-dependent by
+    the model's own behavior: it saw the token hundreds of times and flagged
+    exactly one. Surfacing that as a vault-wide replace turns one judgment
+    call into hundreds of edits. True typos are either rare (few safe
+    occurrences) or flagged everywhere the model looks.
+    """
+    if len(candidate.evidence) >= _MIN_EVIDENCE_FOR_ESTABLISHED:
+        return None
+    if len(candidate.occurrences) > _ESTABLISHED_OCCURRENCES:
+        return (
+            f"{_plural(len(candidate.evidence), 'flagged context', 'flagged contexts')} for "
+            f"{_plural(len(candidate.occurrences), 'occurrence', 'occurrences')}"
+        )
+    return None
 
 
 def _plural(count: int, singular: str, plural: str) -> str:
