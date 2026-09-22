@@ -16,6 +16,7 @@ broken alphabetically; the rest are trashed.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import subprocess
 import sys
@@ -41,6 +42,13 @@ def configure_parser(p: argparse.ArgumentParser) -> None:
         type=Path,
         default=VAULT,
         help="notes vault (default: %(default)s)",
+    )
+    p.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=8,
+        help="concurrent trash batches (default: %(default)s)",
     )
 
 
@@ -176,13 +184,39 @@ def find_duplicate_targets(vault: Path) -> tuple[list[Path], list[list[Path]]]:
     return find_empty_notes(vault), find_duplicate_groups(vault)
 
 
-def trash_files(paths: list[Path]) -> None:
+def _trash_chunk(chunk: list[Path]) -> list[str]:
+    """Trash one batch; return per-file error strings (empty on success).
+
+    A failed batch falls back to one file per ``trash`` invocation so a
+    single flaky file cannot fail the whole batch. Files that vanish
+    mid-batch count as success: the scan-then-trash gap races iCloud sync.
+    """
+    proc = subprocess.run(["trash", *(str(p) for p in chunk)], capture_output=True, text=True)
+    if proc.returncode == 0:
+        return []
+    detail = proc.stderr.strip() or proc.stdout.strip()
+    failures: list[str] = []
+    for path in chunk:
+        if not path.exists():
+            continue  # moved despite the batch error; goal achieved
+        retry = subprocess.run(["trash", str(path)], capture_output=True, text=True)
+        if retry.returncode != 0 and path.exists():
+            err = retry.stderr.strip() or retry.stdout.strip() or detail
+            failures.append(f"{path}: {err}")
+        elif retry.returncode != 0:
+            print(f"warning: trash reported an error for {path} but it is gone", file=sys.stderr)
+    return failures
+
+
+def trash_files(paths: list[Path], *, jobs: int = 8) -> None:
     """Move *paths* to the Trash with the system ``trash`` command.
 
     Missing files are skipped with a warning: the scan-then-trash gap races
     iCloud sync, so a file can vanish (or land in the Trash) between listing
-    and trashing. A failed chunk falls back to one file per ``trash``
-    invocation so a single flaky file cannot fail the whole batch.
+    and trashing. Files go in batches of 100 trashed by up to *jobs*
+    concurrent ``trash`` processes — one process per batch is latency-bound
+    on FileProvider coordination (~20 files/s measured), so concurrency is
+    the speed lever. A progress line prints after each batch completes.
     """
     pending = []
     for path in paths:
@@ -193,24 +227,21 @@ def trash_files(paths: list[Path]) -> None:
     if not pending:
         return
     require_tool("trash", "The trash command ships with macOS 15+.")
-    for i in range(0, len(pending), 500):
-        chunk = pending[i : i + 500]
-        proc = subprocess.run(["trash", *(str(p) for p in chunk)], capture_output=True, text=True)
-        if proc.returncode == 0:
-            continue
-        detail = proc.stderr.strip() or proc.stdout.strip()
-        failures: list[str] = []
-        for path in chunk:
-            if not path.exists():
-                continue  # moved despite the chunk error; goal achieved
-            retry = subprocess.run(["trash", str(path)], capture_output=True, text=True)
-            if retry.returncode != 0 and path.exists():
-                err = retry.stderr.strip() or retry.stdout.strip() or detail
-                failures.append(f"{path}: {err}")
-            elif retry.returncode != 0:
-                print(f"warning: trash reported an error for {path} but it is gone", file=sys.stderr)
-        if failures:
-            raise NotesError(f"trash failed for {len(failures)} file(s): {failures[0]}")
+    workers = max(1, jobs)
+    chunk_size = 100
+    chunks = [pending[i : i + chunk_size] for i in range(0, len(pending), chunk_size)]
+    total = len(chunks)
+    print(f"trashing {len(pending)} files in {total} batches ({workers} at a time) ...", flush=True)
+    failures: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        future_to_batch = {pool.submit(_trash_chunk, chunk): n for n, chunk in enumerate(chunks, start=1)}
+        done = 0
+        for future in concurrent.futures.as_completed(future_to_batch):
+            failures.extend(future.result())
+            done += 1
+            print(f"trashed {done}/{total} batches", flush=True)
+    if failures:
+        raise NotesError(f"trash failed for {len(failures)} file(s): {failures[0]}")
 
 
 def _format_size(size_bytes: int) -> str:
@@ -250,8 +281,8 @@ def run(args: argparse.Namespace) -> int:
                 print(f"warning: skipping {IMAGE_FOLDER}/{path.name} ({exc})", file=sys.stderr)
                 continue
             targets.append((path, size))
-            verb = "would trash" if dry_run else "trashing"
-            print(f"{verb} {IMAGE_FOLDER}/{path.name} ({_format_size(size)})")
+            if dry_run:
+                print(f"would trash {IMAGE_FOLDER}/{path.name} ({_format_size(size)})", flush=True)
         total_bytes = sum(size for _, size in targets)
         kept = len(files) - len(unreferenced)
         if dry_run:
@@ -259,23 +290,27 @@ def run(args: argparse.Namespace) -> int:
                 f"\n{len(targets)} unreferenced ({_format_size(total_bytes)}) would be trashed, {kept} referenced kept."
             )
         else:
-            trash_files([path for path, _ in targets])
+            trash_files([path for path, _ in targets], jobs=args.jobs)
+            for path, size in targets:
+                print(f"trashed {IMAGE_FOLDER}/{path.name} ({_format_size(size)})", flush=True)
             print(f"\n{len(targets)} unreferenced ({_format_size(total_bytes)}) trashed, {kept} referenced kept.")
 
     if not note_targets:
         print("No duplicate or empty notes. Nothing to do.")
         return 0
-    verb = "would trash" if dry_run else "trashing"
-    for path, reason in note_targets:
-        print(f"{verb} {path.relative_to(vault)} ({reason})")
-    n_dupes = len(note_targets) - len(empty)
     if dry_run:
+        for path, reason in note_targets:
+            print(f"would trash {path.relative_to(vault)} ({reason})", flush=True)
+        n_dupes = len(note_targets) - len(empty)
         print(
             f"\n{len(note_targets)} duplicate/empty notes would be trashed "
             f"({len(empty)} empty, {n_dupes} duplicates in {len(groups)} groups)."
         )
         return 0
-    trash_files([path for path, _ in note_targets])
+    trash_files([path for path, _ in note_targets], jobs=args.jobs)
+    for path, reason in note_targets:
+        print(f"trashed {path.relative_to(vault)} ({reason})", flush=True)
+    n_dupes = len(note_targets) - len(empty)
     print(
         f"\n{len(note_targets)} duplicate/empty notes trashed "
         f"({len(empty)} empty, {n_dupes} duplicates in {len(groups)} groups)."

@@ -26,7 +26,7 @@ def vault(tmp_path: Path) -> Path:
 
 
 def _args(vault: Path, *, apply: bool = False) -> argparse.Namespace:
-    return argparse.Namespace(vault=vault, apply=apply)
+    return argparse.Namespace(vault=vault, apply=apply, jobs=8)
 
 
 @needs_rg
@@ -94,6 +94,41 @@ def test_trash_files_batches_and_fails(tmp_path: Path) -> None:
         run.return_value.stdout = ""
         with pytest.raises(NotesError, match="trash failed"):
             clean.trash_files([target])
+
+
+def test_trash_files_reports_batch_progress(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    a = tmp_path / "a.webp"
+    b = tmp_path / "b.webp"
+    a.write_bytes(b"a")
+    b.write_bytes(b"b")
+    with (
+        patch("tool.notes.clean.subprocess.run") as run,
+        patch("tool.notes.clean.require_tool", return_value="/usr/bin/trash"),
+    ):
+        run.return_value.returncode = 0
+        clean.trash_files([a, b])
+        run.assert_called_once()
+    out = capsys.readouterr().out
+    assert "trashing 2 files in 1 batches" in out
+    assert "trashed 1/1 batches" in out
+
+
+def test_trash_files_batches_of_100_in_parallel(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    files = []
+    for i in range(150):
+        p = tmp_path / f"{i:03d}.webp"
+        p.write_bytes(b"x")
+        files.append(p)
+    with (
+        patch("tool.notes.clean.subprocess.run") as run,
+        patch("tool.notes.clean.require_tool", return_value="/usr/bin/trash"),
+    ):
+        run.return_value.returncode = 0
+        clean.trash_files(files, jobs=2)
+        assert run.call_count == 2
+        sizes = sorted(len(call.args[0]) - 1 for call in run.call_args_list)
+        assert sizes == [50, 100]
+    assert "trashed 2/2 batches" in capsys.readouterr().out
 
 
 def test_trash_files_skips_missing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

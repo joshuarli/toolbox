@@ -63,7 +63,11 @@ not keep images alive. The vault's `.trash` and `.obsidian` directories are
 excluded: a note rotting in `.trash` must not pin its images.
 
 `--apply` moves files with the system `trash` command (`/usr/bin/trash`,
-macOS 15+) in chunks of 500, so deletions are recoverable.
+macOS 15+) in batches of 100, up to 8 batches concurrently (`-j/--jobs`;
+one batch at a time is latency-bound on FileProvider coordination, so
+concurrency is the speed lever), so deletions are recoverable. A preamble
+and a progress line per completed batch print while it works, and per-file
+`trashed ...` lines print only after the move completes.
 
 ## `clean` duplicate detection
 
