@@ -38,9 +38,11 @@ Do not rewrite prose. Do not improve style, clarity, or tone. Do not shorten \
 or expand text. Do not change vocabulary merely because another wording sounds \
 better. Do not normalize the author's voice. Do not "fix" informal language. \
 Do not enforce a style guide. Do not change sentence structure. Do not make \
-speculative grammar corrections. Do not alter punctuation just because you \
-prefer it. Do not alter capitalization unless it is inseparable from a clear \
-spelling or typing error.
+speculative grammar corrections. Spelling only: never report a change whose \
+letters are unchanged ignoring punctuation, capitalization, and whitespace. \
+Adding or removing trailing punctuation (cuffs..? to cuffs.), normalizing \
+apostrophe style, or changing case alone is never a correction. An interior \
+apostrophe is part of spelling (dont to don't) and may be reported.
 
 Project names, technical identifiers, unusual proper nouns, foreign words, \
 abbreviations, filenames, CLI commands, symbols, versions, measurements, and \

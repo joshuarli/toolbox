@@ -154,13 +154,16 @@ Checking prose with Apple Foundation Models...
 AI flagged this independently in 4 contexts
 
   Projects/foo.md
-    "... didn't recieve the response ..."
+    - "... didn't recieve the response ..."
+    + "... didn't receive the response ..."
 
   Notes/bar.md
-    "... once we recieve it ..."
+    - "... once we recieve it ..."
+    + "... once we receive it ..."
 
   Clippings/baz.md
-    "... never recieved ..."
+    - "... never recieved ..."
+    + "... never received ..."
 
 [a] all  [y] one  [n] next  [s] skip spelling  [q] quit
 > a
@@ -220,9 +223,13 @@ Markdown-significant characters (``_ * ` # ~ [ ] < > | \ $``) to be identical
 on both sides of a proposal — a spelling fix changes letters, never
 structure. This catches proposals observed from the live model such as
 `_frappato_ → frappato`, which would otherwise have passed the edit-distance
-gate and silently stripped the author's italics. Ordinary punctuation that is
-not Markdown structure is unaffected, so `dont → don't` is still a valid
-correction.
+gate and silently stripped the author's italics. A spelling-only gate then
+requires every changed token to change its letters/digits (case-insensitively,
+ignoring punctuation) while leaving non-apostrophe punctuation untouched, so
+punctuation-only trims such as `cuffs..? → cuffs.`, case-only changes such as
+`Hello → hello`, and bundled punctuation such as `teh → the!` can never become
+candidates even when the model is suggestible. An interior apostrophe is part
+of spelling, so `dont → don't` is still a valid correction.
 
 Model output is never fuzzy-matched, never "find the closest word", and never
 applied against source text that is no longer exactly what the model saw. A
@@ -267,7 +274,12 @@ are excluded from blocks entirely, so they are never sent at all.
 
 Scope notes: spelling only — the model instructions forbid style, grammar,
 punctuation, and capitalization changes, and uncertain cases must be left
-unchanged (false positives are worse than misses).
+unchanged (false positives are worse than misses). The deterministic
+spelling-only gate above is the real enforcement: punctuation-only,
+case-only, and whitespace-only proposals are rejected even when the model
+ignores its instructions. Each sampled occurrence renders as a diff-style
+`-`/`+` pair with 100 characters of context on each side, the original
+highlighted red and the replacement green.
 
 Discovery packs prose from *many* notes into each request rather than asking
 about one note at a time. On-device generation costs several seconds per call

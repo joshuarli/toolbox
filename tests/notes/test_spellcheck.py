@@ -321,6 +321,58 @@ def test_punctuation_only_original_rejected() -> None:
     assert edits == []
 
 
+def test_trailing_punctuation_trim_rejected() -> None:
+    """Observed live: `cuffs..? → cuffs.` is punctuation, not spelling."""
+    text = "i really like those long cuffs..?"
+    _text, _blocks, edits = pipeline(text, {1: [prop(1, "cuffs..?", "cuffs.")]})
+    assert edits == []
+    _text, _blocks, quoted = pipeline(text, {1: [prop(1, "long cuffs..?", "long cuffs.")]})
+    assert quoted == []
+
+
+def test_case_only_change_rejected() -> None:
+    _text, _blocks, edits = pipeline("Hello there.", {1: [prop(1, "Hello", "hello")]})
+    assert edits == []
+
+
+def test_bundled_trailing_punctuation_rejected() -> None:
+    _text, _blocks, edits = pipeline("teh here.", {1: [prop(1, "teh", "the!")]})
+    assert edits == []
+
+
+def test_hyphen_preserving_letter_fix_allowed() -> None:
+    text = "call recieve-packet now"
+    _text, _blocks, edits = pipeline(text, {1: [prop(1, "recieve-packet", "receive-packet")]})
+    assert [(e.original, e.replacement) for e in edits] == [("recieve-packet", "receive-packet")]
+
+
+def test_spelling_gate_shape() -> None:
+    assert spellcheck._is_spelling_change("recieve", "receive")
+    assert spellcheck._is_spelling_change("dont", "don't")
+    assert not spellcheck._is_spelling_change("cuffs..?", "cuffs.")
+    assert not spellcheck._is_spelling_change("Hello", "hello")
+    assert not spellcheck._is_spelling_change("teh", "the!")
+    assert not spellcheck._is_spelling_change("wellknown", "well-known")
+
+
+def test_diff_rendering_highlights_with_context(tmp_path: Path) -> None:
+    text = "x " * 150 + "recieve" + " y" * 150
+    path = tmp_path / "a.md"
+    corpus = {path: text}
+    start = text.index("recieve")
+    candidate = Candidate(
+        original="recieve",
+        replacement="receive",
+        evidence=[],
+        occurrences=[VaultOccurrence(path=path, start=start, end=start + 7)],
+    )
+    rendered = spellcheck.render_candidate(tmp_path, candidate, 1, 1, corpus)
+    assert "\033[31mrecieve\033[0m" in rendered
+    assert "\033[32mreceive\033[0m" in rendered
+    assert '    - "' in rendered
+    assert '    + "' in rendered
+
+
 def test_oversized_proposal_rejected() -> None:
     text = "I recieved it."
     long_original = "I recieved it." + "x" * 300

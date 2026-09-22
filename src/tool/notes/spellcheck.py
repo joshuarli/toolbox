@@ -87,7 +87,11 @@ _FALLBACK_CHARS_PER_TOKEN = 3
 _RATIO_SAMPLE_UNITS = 12
 # Chunks between progress lines when stderr is not a terminal.
 _PROGRESS_INTERVAL = 25
-_SNIPPET_WIDTH = 100
+# Context characters shown on each side of an occurrence in review output.
+_CONTEXT_RADIUS = 100
+_RED = "\033[31m"
+_GREEN = "\033[32m"
+_RESET = "\033[0m"
 # Upper bound on discovery passes; generative inference is nondeterministic,
 # so a fixed cap guarantees convergence.
 _MAX_PASSES = 3
@@ -377,6 +381,53 @@ def _minimal_span(original: str, replacement: str) -> tuple[str, str, int]:
     )
 
 
+def _spelling_key(word: str) -> str:
+    """Casefolded letters/digits plus normalized interior apostrophe.
+
+    Spelling-only gate: a correction must change this key. Stripping
+    punctuation such as ``cuffs..? → cuffs.`` leaves ``cuffs`` on both
+    sides and is rejected, while ``dont → don't`` (``dont`` vs ``don't``)
+    still counts as spelling.
+    """
+    normalized = word.replace("’", "'").replace("‘", "'")
+    return "".join(char for char in normalized.casefold() if char.isalnum() or char == "'")
+
+
+def _punct_skeleton(word: str) -> str:
+    """Punctuation in *word* other than the spelling apostrophe.
+
+    A spelling fix may add/remove an interior apostrophe but must leave
+    every other punctuation mark untouched, so ``teh → the!`` is rejected
+    even though its letters change.
+    """
+    normalized = word.replace("’", "'").replace("‘", "'")
+    return "".join(char for char in normalized if not char.isalnum() and char != "'")
+
+
+def _is_spelling_change(original: str, replacement: str) -> bool:
+    """True when every changed token changes spelling, not just punctuation.
+
+    Token counts must match; each differing token must change its
+    :func:`_spelling_key` (rejecting punctuation-only and case-only edits
+    such as ``cuffs..? → cuffs.`` or ``Hello → hello``) while keeping its
+    non-apostrophe punctuation identical (rejecting ``teh → the!``).
+    """
+    old_words = original.split()
+    new_words = replacement.split()
+    if len(old_words) != len(new_words) or not old_words:
+        return False
+    changed = False
+    for old, new in zip(old_words, new_words, strict=True):
+        if old == new:
+            continue
+        changed = True
+        if _spelling_key(old) == _spelling_key(new):
+            return False
+        if _punct_skeleton(old) != _punct_skeleton(new):
+            return False
+    return changed
+
+
 def _minimal_substitution(original: str, replacement: str) -> bool:
     """True when *replacement* only tweaks letters inside the same words.
 
@@ -440,6 +491,8 @@ def _validate_one(
         return None
     if not _minimal_substitution(original, replacement):
         return None
+    if not _is_spelling_change(original, replacement):
+        return None
     if occurrence < 1:
         return None
     # Exact substring search only: never fuzzy-match, never find-closest.
@@ -475,6 +528,8 @@ def _validate_one(
     # text: identical words are removed from both ends, so the trimmed span is
     # still exact and still inside every boundary just checked.
     minimal_original, minimal_replacement, offset = _minimal_span(original, replacement)
+    if not _is_spelling_change(minimal_original, minimal_replacement):
+        return None
     return start + offset, start + offset + len(minimal_original), minimal_original, minimal_replacement
 
 
@@ -587,8 +642,41 @@ def _splice_ranges(text: str, ranges: Sequence[tuple[int, int]], replacement: st
     return "".join(parts)
 
 
-def snippet_for(text: str, start: int, end: int, width: int = _SNIPPET_WIDTH) -> str:
-    """One trimmed source line around ``[start:end)`` for human context."""
+def _display_chunk(text: str) -> str:
+    """Collapse newlines/tabs so a context window stays on one review line."""
+    return text.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+
+
+def snippet_diff_lines(
+    text: str, start: int, end: int, replacement: str, radius: int = _CONTEXT_RADIUS
+) -> tuple[str, str]:
+    """Diff-style context around ``[start:end)``: 100 chars each side.
+
+    Returns ``(old, new)`` strings sharing the same before/after window,
+    with the original highlighted red and the replacement green. Callers
+    add their own ``-``/``+`` prefixes and quoting.
+    """
+    before_start = max(0, start - radius)
+    after_end = min(len(text), end + radius)
+    before = _display_chunk(text[before_start:start])
+    after = _display_chunk(text[end:after_end])
+    original = _display_chunk(text[start:end])
+    repl = _display_chunk(replacement)
+    prefix = "..." if before_start > 0 else ""
+    suffix = "..." if after_end < len(text) else ""
+    old = f"{prefix}{before}{_RED}{original}{_RESET}{after}{suffix}"
+    new = f"{prefix}{before}{_GREEN}{repl}{_RESET}{after}{suffix}"
+    return old, new
+
+
+def snippet_for(text: str, start: int, end: int, width: int = _CONTEXT_RADIUS) -> str:
+    """One trimmed source line around ``[start:end)`` for human context.
+
+    Retained for compatibility; review output now uses
+    :func:`snippet_diff_lines`, which shows ``_CONTEXT_RADIUS`` characters
+    on each side with red/green highlighting instead of a single
+    line-based window.
+    """
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", end)
     if line_end == -1:
@@ -850,10 +938,9 @@ def _review_pass(
             size = sum(int(len(unit.text) / ratio) + 1 for unit in units)
         group.extend(units)
         used += size
-    if group:
-        if process(group):
-            _finish_progress()
-            return True, found_any
+    if group and process(group):
+        _finish_progress()
+        return True, found_any
     if done:
         _finish_progress()
     return False, found_any
@@ -980,7 +1067,12 @@ def _plural(count: int, singular: str, plural: str) -> str:
 
 
 def render_candidate(vault: Path, candidate: Candidate, index: int, total: int, corpus: dict[Path, str]) -> str:
-    """Render one candidate with a small sample of distinct-file occurrences."""
+    """Render one candidate with a small sample of distinct-file occurrences.
+
+    Each sampled occurrence shows a diff-style before/after pair with 100
+    characters of context on each side: the original highlighted red on the
+    ``-`` line, the replacement green on the ``+`` line.
+    """
     occurrences = candidate.occurrences
     files = {occurrence.path for occurrence in occurrences}
     sample: list[VaultOccurrence] = []
@@ -1008,7 +1100,11 @@ def render_candidate(vault: Path, candidate: Candidate, index: int, total: int, 
         except ValueError:
             rel = str(occurrence.path)
         lines.append(f"  {rel}")
-        lines.append(f'    "{snippet_for(corpus[occurrence.path], occurrence.start, occurrence.end)}"')
+        old, new = snippet_diff_lines(
+            corpus[occurrence.path], occurrence.start, occurrence.end, candidate.replacement
+        )
+        lines.append(f'    - "{old}"')
+        lines.append(f'    + "{new}"')
         lines.append("")
     lines.append("[a] all  [y] one  [n] next  [s] skip spelling  [q] quit")
     return "\n".join(lines)
