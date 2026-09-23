@@ -14,6 +14,6 @@ Current tools:
 - `movies` — encode/audit video files and manage a Letterboxd-backed movie library. See `docs/movies.md`.
 - `music` — scan/tag/transcode a local audio library. See `docs/music.md`.
 - `ig` — log in to, scan, and archive Instagram profiles and posts. See `docs/ig.md`.
-- `notes` — clean unreferenced `z-images/` files, localize remote images, and interactively spellcheck the Obsidian vault. See `docs/notes.md`.
+- `notes` — clean unreferenced `z-images/` files and localize remote images. See `docs/notes.md`.
 
 Lint, format, and type-check with `make fmtlint`. Run tests with `uv run pytest`.

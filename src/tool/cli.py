@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     notes_parser = subparsers.add_parser(
         "notes",
-        help="clean, localize, and spellcheck the Obsidian notes vault",
+        help="clean and localize the Obsidian notes vault",
     )
     notes_cli.configure_parser(notes_parser)
     return parser

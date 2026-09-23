@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 
-from tool.notes import clean, localize, spellcheck
+from tool.notes import clean, localize
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.description = "Clean, localize, and spellcheck the Obsidian notes vault."
+    parser.description = "Clean and localize the Obsidian notes vault."
     sub = parser.add_subparsers(dest="notes_cmd", required=True)
 
     p_clean = sub.add_parser(
@@ -24,14 +24,6 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     )
     localize.configure_parser(p_localize)
     p_localize.set_defaults(handler=localize.run)
-
-    p_spellcheck = sub.add_parser(
-        "spellcheck",
-        help="review or print high-confidence spelling proposals (local macOS dictionaries)",
-    )
-    spellcheck.configure_parser(p_spellcheck)
-    p_spellcheck.set_defaults(handler=spellcheck.run)
-
 
 def build_parser() -> argparse.ArgumentParser:
     """Standalone ``notes`` parser, for direct testing outside the ``tool`` CLI."""
