@@ -287,18 +287,8 @@ wheels = [
 
 [[package]]
 name = "shadowdriver"
-source = { directory = "../shadowdriver/py" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "maturin", specifier = ">=1.15,<2" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
-    { name = "ruff", specifier = ">=0.16" },
-    { name = "ty", specifier = ">=0.0.42" },
-]
+version = "0.1.0"
+source = { git = "ssh://git@github.com/joshuarli/shadowdriver.git?subdirectory=py#eba94d9418b490d8174526b878fd43254e549fc4" }
 
 [[package]]
 name = "tool"
@@ -308,10 +298,14 @@ dependencies = [
     { name = "blessed" },
     { name = "mutagen" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
-    { name = "shadowdriver" },
     { name = "urllib3" },
     { name = "uvloop" },
     { name = "websockets" },
+]
+
+[package.optional-dependencies]
+browser = [
+    { name = "shadowdriver" },
 ]
 
 [package.dev-dependencies]
@@ -330,11 +324,12 @@ requires-dist = [
     { name = "blessed", specifier = ">=1.20" },
     { name = "mutagen", specifier = ">=1.48.1" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=11" },
-    { name = "shadowdriver", directory = "../shadowdriver/py" },
+    { name = "shadowdriver", marker = "extra == 'browser'", git = "ssh://git@github.com/joshuarli/shadowdriver.git?subdirectory=py" },
     { name = "urllib3", specifier = ">=2.7.0" },
     { name = "uvloop", specifier = ">=0.22.1" },
     { name = "websockets", specifier = ">=16.0" },
 ]
+provides-extras = ["browser"]
 
 [package.metadata.requires-dev]
 dev = [

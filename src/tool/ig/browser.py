@@ -8,12 +8,32 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-import shadowdriver
+# Browser adapter over the optional shadowdriver extension. Plain installs omit
+# the ``browser`` extra, so this module must import without shadowdriver
+# present. Browser entry points call ``require_shadowdriver()`` to fail
+# with the install hint.
 
-ProtocolError = shadowdriver.ProtocolError
-BrowserInUseError = shadowdriver.BrowserInUseError
-BrowserCrashedError = shadowdriver.BrowserCrashedError
-UblockError = shadowdriver.UblockError
+from tool.browser_require import require_shadowdriver
+from tool.browser_require import shadowdriver as _shadowdriver
+
+if _shadowdriver is not None:
+    ProtocolError = _shadowdriver.ProtocolError
+    BrowserInUseError = _shadowdriver.BrowserInUseError
+    BrowserCrashedError = _shadowdriver.BrowserCrashedError
+    UblockError = _shadowdriver.UblockError
+else:
+
+    class ProtocolError(Exception):
+        pass
+
+    class BrowserInUseError(Exception):
+        pass
+
+    class BrowserCrashedError(Exception):
+        pass
+
+    class UblockError(Exception):
+        pass
 
 BLOCKED_URL_PATTERNS = (
     {
@@ -25,11 +45,11 @@ BLOCKED_URL_PATTERNS = (
 
 
 async def _profile_process_commands() -> list[str]:
-    return list(await shadowdriver.profile_process_commands())
+    return list(await require_shadowdriver().profile_process_commands())
 
 
 async def _browser_log_tail(lines: int = 40) -> str:
-    return str(await shadowdriver.browser_log_tail(lines))
+    return str(await require_shadowdriver().browser_log_tail(lines))
 
 
 async def close_browser(browser: Any, *, terminate: bool = False) -> None:
@@ -84,14 +104,15 @@ async def ensure_browser(
     ublock: bool = True,
 ):
     ext_paths = [Path(p) if isinstance(p, str) else p for p in (extensions or [])]
+    sd = require_shadowdriver()
     if ublock:
         try:
-            ublock_dir = await shadowdriver.ensure_ublock_origin()
+            ublock_dir = await sd.ensure_ublock_origin()
             ext_paths.append(Path(ublock_dir))
         except UblockError as exc:
             print(f"uBlock Origin setup failed: {exc}", flush=True)
 
-    browser, tab = await shadowdriver.ensure_browser(
+    browser, tab = await sd.ensure_browser(
         headless=headless,
         persistent=True,
         stealth=True,
@@ -146,18 +167,28 @@ async def _setup_tab(
     await enable_network_logging(tab)
 
 
-async def fetch_bytes(tab: shadowdriver.Tab, url: str) -> bytes:
+async def fetch_bytes(tab, url: str) -> bytes:
     return await tab.fetch_bytes(url)
 
 
 async def navigate(tab, url: str, timeout: float = 15.0) -> None:
-    await shadowdriver.navigate(tab, url, timeout)
+    await require_shadowdriver().navigate(tab, url, timeout)
 
 
-human_click = shadowdriver.human_click
-human_scroll = shadowdriver.human_scroll
-think = shadowdriver.think
-sleep = shadowdriver.sleep
+async def human_click(*args, **kwargs):
+    return await require_shadowdriver().human_click(*args, **kwargs)
+
+
+async def human_scroll(*args, **kwargs):
+    return await require_shadowdriver().human_scroll(*args, **kwargs)
+
+
+async def think(*args, **kwargs):
+    return await require_shadowdriver().think(*args, **kwargs)
+
+
+async def sleep(*args, **kwargs):
+    return await require_shadowdriver().sleep(*args, **kwargs)
 
 # uBlock block notices are noise for normal runs; `ig --verbose` opts into them.
 _net_verbose = False
@@ -317,6 +348,7 @@ async def _apply_resource_observation(
 
 
 async def _kill() -> None:
-    profile_dir = await shadowdriver.default_profile_dir()
-    await shadowdriver.kill()
+    sd = require_shadowdriver()
+    profile_dir = await sd.default_profile_dir()
+    await sd.kill()
     print(f"browser stopped ({profile_dir})")

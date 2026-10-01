@@ -8,7 +8,7 @@ Runtime Letterboxd data defaults to `var/letterboxd`, overrideable with `MOVIES_
 |---|---|
 | `var/letterboxd/letterboxd.db` | SQLite movie database, ignored by git |
 
-`movies.scraper` drives Chromium via the reusable `shadowdriver` Python extension from `~/d/shadowdriver/py` (same library the `~/d/ig` scraper uses): `ensure_browser()` on the managed profile, one tab per worker, `tab.navigate()` + `tab.evaluate()` for the DOM scrape, and `tab.get_cookies()` for authenticated fetches. No Selenium, Playwright, or WebDriver server is involved. Scraping works logged-out — everything `search`/`rename` needs (titles, year, directors, cast, studios, crew, poster/backdrop URLs) is public. Only rating statistics (average, distribution, watches, likes) appear to need login; `uv run tool movies login` stores a session in shadowdriver's managed Chromium profile for those.
+`movies.scraper` drives Chromium via the reusable `shadowdriver` Python extension: `ensure_browser()` on the managed profile, one tab per worker, `tab.navigate()` + `tab.evaluate()` for the DOM scrape, and `tab.get_cookies()` for authenticated fetches. Install browser support with `uv sync --extra browser`; ordinary `uv sync` leaves it out. No Selenium, Playwright, or WebDriver server is involved. Scraping works logged-out — everything `search`/`rename` needs (titles, year, directors, cast, studios, crew, poster/backdrop URLs) is public. Only rating statistics (average, distribution, watches, likes) appear to need login; `uv run tool movies login` stores a session in shadowdriver's managed Chromium profile for those.
 
 ## Commands
 

@@ -1,6 +1,6 @@
 # `tool ig`
 
-Headless Chromium scraper that downloads Instagram posts and reels, records metadata in SQLite, tracks scanned profile and saved-post membership, can sync following lists, and can build a static local archive site. Browser automation is provided by the reusable `shadowdriver` Python extension from `~/d/shadowdriver/py`; Instagram-specific crawling policy stays in this repo.
+Headless Chromium scraper that downloads Instagram posts and reels, records metadata in SQLite, tracks scanned profile and saved-post membership, can sync following lists, and can build a static local archive site. Browser automation is provided by the reusable `shadowdriver` Python extension; Instagram-specific crawling policy stays in this repo. Install browser support with `uv sync --extra browser`; ordinary `uv sync` leaves it out.
 
 ## Source layout
 

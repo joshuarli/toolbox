@@ -15,9 +15,9 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-import shadowdriver
 import uvloop
 
+from tool.browser_require import require_shadowdriver
 from tool.movies.paths import db_path
 
 DB_PATH = db_path
@@ -334,7 +334,7 @@ async def scrape_movie(tab, slug: str) -> dict[str, Any]:
     timed_out = True
     for attempt in range(3):
         if attempt > 0:
-            await shadowdriver.sleep(2**attempt * 1000)
+            await require_shadowdriver().sleep(2**attempt * 1000)
         try:
             await tab.navigate(f"https://letterboxd.com/film/{slug}/")
             await wait_for_selector(tab, "#film-page-wrapper", timeout=15)
@@ -424,19 +424,21 @@ def validate(info: dict[str, Any]) -> list[str]:
 
 
 async def login() -> None:
-    profile_dir = await shadowdriver.default_profile_dir()
+    sd = require_shadowdriver()
+    profile_dir = await sd.default_profile_dir()
     print(f"Profile: {profile_dir}", flush=True)
     print("Log in to Letterboxd, then close the window.", flush=True)
     try:
-        await shadowdriver.launch_browser_window(url="https://letterboxd.com/")
-        await shadowdriver.wait_browser_window_exit()
+        await sd.launch_browser_window(url="https://letterboxd.com/")
+        await sd.wait_browser_window_exit()
     finally:
-        await shadowdriver.kill()
+        await sd.kill()
 
 
 async def kill_browser() -> None:
-    profile_dir = await shadowdriver.default_profile_dir()
-    await shadowdriver.kill()
+    sd = require_shadowdriver()
+    profile_dir = await sd.default_profile_dir()
+    await sd.kill()
     print(f"browser stopped ({profile_dir})")
 
 
@@ -930,7 +932,7 @@ async def scrape_from_args(args) -> None:
             pass
 
     headless = not getattr(args, "live", False)
-    browser, tab0 = await shadowdriver.ensure_browser(
+    browser, tab0 = await require_shadowdriver().ensure_browser(
         headless=headless,
         persistent=True,
         stealth=True,

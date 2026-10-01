@@ -15,11 +15,9 @@ test:
 	# joshuarli-pytest-parallel (dev dependency) auto-shards across cpu_count workers
 	uv run pytest
 
-# Build the shadowdriver Rust extension incrementally, then let uv own the final package install.
-# Disable uv run's implicit sync so it does not build the local package before maturin.
+# Install the optional browser automation dependency.
 sync-py:
-	RUSTUP_TOOLCHAIN=$$(awk -F'"' '/channel/{print $$2}' ../shadowdriver/rust-toolchain.toml) uv run --no-sync --with maturin maturin develop --profile dev -m ../shadowdriver/py/Cargo.toml
-	uv sync
+	uv sync --extra browser
 
 build-site: instagram.db $(SITE_ASSETS)
 	uv run tool ig build

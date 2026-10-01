@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import shadowdriver
-
+from tool.browser_require import require_shadowdriver
 from tool.ig.browser import (
     _browser_log_tail,
     _profile_process_commands,
@@ -9,8 +8,9 @@ from tool.ig.browser import (
 
 
 async def _doctor() -> None:
-    browser_exe = await shadowdriver.default_chromium_binary()
-    profile_dir = await shadowdriver.default_profile_dir()
+    sd = require_shadowdriver()
+    browser_exe = await sd.default_chromium_binary()
+    profile_dir = await sd.default_profile_dir()
     port_file = profile_dir / "devtools-port"
     log_file = profile_dir / "chromium.log"
     print("browser: chromium")

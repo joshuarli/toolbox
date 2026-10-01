@@ -9,6 +9,7 @@ from typing import cast
 
 import uvloop
 
+from tool.browser_require import BrowserExtraMissingError
 from tool.ig.browser import (
     BrowserCrashedError,
     BrowserInUseError,
@@ -386,5 +387,8 @@ def run() -> None:
     except BrowserCrashedError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from exc
+    except BrowserExtraMissingError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
     except KeyboardInterrupt:
         pass

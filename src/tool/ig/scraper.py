@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import base64
 import json
@@ -11,9 +13,10 @@ import urllib.parse
 import urllib.request
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-import shadowdriver
+if TYPE_CHECKING:
+    import shadowdriver
 
 from tool.ig.browser import ProtocolError, human_click, human_scroll, navigate, think
 from tool.ig.db import add_profile_post, clear_media, upsert_media, upsert_post

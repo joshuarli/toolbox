@@ -5,6 +5,7 @@ import sys
 from collections.abc import Sequence
 
 from tool import sd
+from tool.browser_require import BrowserExtraMissingError
 from tool.ig import cli as ig_cli
 from tool.ig.browser import BrowserCrashedError, BrowserInUseError
 from tool.movies import cli as movies_cli
@@ -69,6 +70,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (BrowserInUseError, BrowserCrashedError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    except (preflight.PreflightError, sd.SdError, NotesError) as exc:
+    except (preflight.PreflightError, sd.SdError, NotesError, BrowserExtraMissingError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -33,6 +33,8 @@ root) and can be overridden with `MOVIES_DATA_DIR`.
 
 External tools remain external prerequisites for the relevant commands:
 `ffmpeg`, `ffprobe`, `cwebp`, and Chromium (driven via `shadowdriver`).
+Install the optional browser dependency with `uv sync --extra browser`; ordinary
+`uv sync` leaves it out.
 
 ## Layout
 
