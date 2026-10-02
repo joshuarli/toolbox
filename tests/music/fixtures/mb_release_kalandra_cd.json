@@ -1,0 +1,800 @@
+{
+ "artist-credit": [
+  {
+   "artist": {
+    "country": "NO",
+    "disambiguation": "Norwegian folk/pop band",
+    "genres": [
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "a91eed3a-fdd0-494e-ade0-95ea4117f6eb",
+      "name": "folk"
+     },
+     {
+      "count": 3,
+      "disambiguation": "",
+      "id": "445dc48f-5233-4b4f-987f-867ff9ade836",
+      "name": "folk rock"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "911c7bbb-172d-4df8-9478-dbff4296e791",
+      "name": "pop"
+     },
+     {
+      "count": 2,
+      "disambiguation": "",
+      "id": "0e3fc579-2d24-4f20-9dae-736e1ec78798",
+      "name": "rock"
+     }
+    ],
+    "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+    "name": "Kalandra",
+    "sort-name": "Kalandra",
+    "type": "Group",
+    "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+   },
+   "joinphrase": "",
+   "name": "Kalandra"
+  }
+ ],
+ "asin": null,
+ "barcode": "612608050884",
+ "country": "NO",
+ "cover-art-archive": {
+  "artwork": true,
+  "back": true,
+  "count": 7,
+  "darkened": false,
+  "front": true
+ },
+ "date": "2020-10-23",
+ "disambiguation": "",
+ "genres": [],
+ "id": "490a58ac-6f2d-482e-8915-b703e229794b",
+ "label-info": [
+  {
+   "catalog-number": "BNM017CD",
+   "label": {
+    "disambiguation": "",
+    "genres": [],
+    "id": "1b12ac9a-e372-4e41-97d5-fa047265b987",
+    "label-code": null,
+    "name": "By Norse Music",
+    "sort-name": "By Norse Music",
+    "type": "Production",
+    "type-id": "a2426aab-2dd4-339c-b47d-b4923a241678"
+   }
+  }
+ ],
+ "media": [
+  {
+   "format": "CD",
+   "format-id": "9712d52a-4509-3d4b-a1a2-67c88c643e31",
+   "id": "1aab36a8-85bb-3fbc-82a5-06114d25416c",
+   "position": 1,
+   "title": "",
+   "track-count": 11,
+   "track-offset": 0,
+   "tracks": [
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "country": "NO",
+        "disambiguation": "Norwegian folk/pop band",
+        "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+        "name": "Kalandra",
+        "sort-name": "Kalandra",
+        "type": "Group",
+        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+       },
+       "joinphrase": "",
+       "name": "Kalandra"
+      }
+     ],
+     "id": "48b7c7b2-cbd1-4618-9eba-aa8e64a7a7eb",
+     "length": 329898,
+     "number": "1",
+     "position": 1,
+     "recording": {
+      "artist-credit": [
+       {
+        "artist": {
+         "country": "NO",
+         "disambiguation": "Norwegian folk/pop band",
+         "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+         "name": "Kalandra",
+         "sort-name": "Kalandra",
+         "type": "Group",
+         "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+        },
+        "joinphrase": "",
+        "name": "Kalandra"
+       }
+      ],
+      "disambiguation": "",
+      "first-release-date": "2020-10-16",
+      "genres": [
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "d3ebe947-7c03-43f5-b333-09379881b0f6",
+        "name": "alternative pop"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "a91eed3a-fdd0-494e-ade0-95ea4117f6eb",
+        "name": "folk"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "f390be72-360b-41bb-a310-6a2e638779d2",
+        "name": "indie pop"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "911c7bbb-172d-4df8-9478-dbff4296e791",
+        "name": "pop"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "0e3fc579-2d24-4f20-9dae-736e1ec78798",
+        "name": "rock"
+       }
+      ],
+      "id": "1dc680e5-c2ae-4e45-9a53-00960ae1cfdf",
+      "isrcs": [
+       "NONAT2001010"
+      ],
+      "length": 329898,
+      "relations": [
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+         "name": "Florian Bernhard Döderlein Winter",
+         "sort-name": "Winter, Florian Bernhard Döderlein",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "engineer",
+        "type-id": "5dcc52af-7064-4051-8d62-7d80f4c3c907"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "id": "7d3fa6ee-f03f-4e1f-9421-a1310bcf30a0",
+         "name": "Jogeir Daae Maeland",
+         "sort-name": "Maeland, Jogeir Daae",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "performer",
+        "type-id": "628a9658-f54c-4142-b0c0-95f031b544da"
+       },
+       {
+        "artist": {
+         "country": "NO",
+         "disambiguation": "",
+         "id": "329ebe29-cb42-48f9-8bc1-c2fed29e2ee5",
+         "name": "Katrine Stenbekk",
+         "sort-name": "Stenbekk, Katrine",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "Katrine Ødegård Stenbekk",
+        "target-type": "artist",
+        "type": "performer",
+        "type-id": "628a9658-f54c-4142-b0c0-95f031b544da"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+         "name": "Florian Bernhard Döderlein Winter",
+         "sort-name": "Winter, Florian Bernhard Döderlein",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "performer",
+        "type-id": "628a9658-f54c-4142-b0c0-95f031b544da"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "id": "7d3fa6ee-f03f-4e1f-9421-a1310bcf30a0",
+         "name": "Jogeir Daae Maeland",
+         "sort-name": "Maeland, Jogeir Daae",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": "NO",
+         "disambiguation": "",
+         "id": "329ebe29-cb42-48f9-8bc1-c2fed29e2ee5",
+         "name": "Katrine Stenbekk",
+         "sort-name": "Stenbekk, Katrine",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "Katrine Ødegård Stenbekk",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+         "name": "Florian Bernhard Döderlein Winter",
+         "sort-name": "Winter, Florian Bernhard Döderlein",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "forward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "work",
+        "type": "performance",
+        "type-id": "a3005666-a872-32c3-ad06-98af558e99b0",
+        "work": {
+         "attributes": [],
+         "disambiguation": "",
+         "id": "45b14348-4245-4c2c-acf0-ae12fd7d7e20",
+         "iswcs": [],
+         "language": "eng",
+         "languages": [
+          "eng"
+         ],
+         "relations": [],
+         "title": "Borders",
+         "type": "Song",
+         "type-id": "f061270a-2fd6-32f1-a641-f0f8676d14e6"
+        }
+       }
+      ],
+      "title": "Borders",
+      "video": false
+     },
+     "title": "Borders"
+    },
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "country": "NO",
+        "disambiguation": "Norwegian folk/pop band",
+        "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+        "name": "Kalandra",
+        "sort-name": "Kalandra",
+        "type": "Group",
+        "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+       },
+       "joinphrase": "",
+       "name": "Kalandra"
+      }
+     ],
+     "id": "82185c30-f97f-4b1b-8c70-a0bd3d077649",
+     "length": 306475,
+     "number": "11",
+     "position": 11,
+     "recording": {
+      "artist-credit": [
+       {
+        "artist": {
+         "country": "NO",
+         "disambiguation": "Norwegian folk/pop band",
+         "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+         "name": "Kalandra",
+         "sort-name": "Kalandra",
+         "type": "Group",
+         "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+        },
+        "joinphrase": "",
+        "name": "Kalandra"
+       }
+      ],
+      "disambiguation": "",
+      "first-release-date": "2020-10-23",
+      "genres": [
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "d3ebe947-7c03-43f5-b333-09379881b0f6",
+        "name": "alternative pop"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "a91eed3a-fdd0-494e-ade0-95ea4117f6eb",
+        "name": "folk"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "f390be72-360b-41bb-a310-6a2e638779d2",
+        "name": "indie pop"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "911c7bbb-172d-4df8-9478-dbff4296e791",
+        "name": "pop"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "0e3fc579-2d24-4f20-9dae-736e1ec78798",
+        "name": "rock"
+       }
+      ],
+      "id": "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7",
+      "isrcs": [
+       "NONAT2001110"
+      ],
+      "length": 306475,
+      "relations": [
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+         "name": "Florian Bernhard Döderlein Winter",
+         "sort-name": "Winter, Florian Bernhard Döderlein",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "engineer",
+        "type-id": "5dcc52af-7064-4051-8d62-7d80f4c3c907"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "id": "7d3fa6ee-f03f-4e1f-9421-a1310bcf30a0",
+         "name": "Jogeir Daae Maeland",
+         "sort-name": "Maeland, Jogeir Daae",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "performer",
+        "type-id": "628a9658-f54c-4142-b0c0-95f031b544da"
+       },
+       {
+        "artist": {
+         "country": "NO",
+         "disambiguation": "",
+         "id": "329ebe29-cb42-48f9-8bc1-c2fed29e2ee5",
+         "name": "Katrine Stenbekk",
+         "sort-name": "Stenbekk, Katrine",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "Katrine Ødegård Stenbekk",
+        "target-type": "artist",
+        "type": "performer",
+        "type-id": "628a9658-f54c-4142-b0c0-95f031b544da"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+         "name": "Florian Bernhard Döderlein Winter",
+         "sort-name": "Winter, Florian Bernhard Döderlein",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "performer",
+        "type-id": "628a9658-f54c-4142-b0c0-95f031b544da"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "id": "7d3fa6ee-f03f-4e1f-9421-a1310bcf30a0",
+         "name": "Jogeir Daae Maeland",
+         "sort-name": "Maeland, Jogeir Daae",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": "NO",
+         "disambiguation": "",
+         "id": "329ebe29-cb42-48f9-8bc1-c2fed29e2ee5",
+         "name": "Katrine Stenbekk",
+         "sort-name": "Stenbekk, Katrine",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "Katrine Ødegård Stenbekk",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+         "name": "Florian Bernhard Döderlein Winter",
+         "sort-name": "Winter, Florian Bernhard Döderlein",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "forward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "work",
+        "type": "performance",
+        "type-id": "a3005666-a872-32c3-ad06-98af558e99b0",
+        "work": {
+         "attributes": [],
+         "disambiguation": "",
+         "id": "9382d3f9-eff6-41ac-88d7-bdf06dd827c1",
+         "iswcs": [
+          "T-932.862.081-1"
+         ],
+         "language": "eng",
+         "languages": [
+          "eng"
+         ],
+         "relations": [
+          {
+           "artist": {
+            "country": "GB",
+            "disambiguation": "",
+            "id": "7d3fa6ee-f03f-4e1f-9421-a1310bcf30a0",
+            "name": "Jogeir Daae Maeland",
+            "sort-name": "Maeland, Jogeir Daae",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "artist",
+           "type": "writer",
+           "type-id": "a255bca1-b157-4518-9108-7b147dc3fc68"
+          },
+          {
+           "artist": {
+            "country": "NO",
+            "disambiguation": "drummer, engineer",
+            "id": "8bbfab48-50ab-48ee-8ab4-a0863bf2ca0d",
+            "name": "Oskar Johnsen Rydh",
+            "sort-name": "Rydh, Oskar Johnsen",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "artist",
+           "type": "writer",
+           "type-id": "a255bca1-b157-4518-9108-7b147dc3fc68"
+          },
+          {
+           "artist": {
+            "country": "NO",
+            "disambiguation": "",
+            "id": "329ebe29-cb42-48f9-8bc1-c2fed29e2ee5",
+            "name": "Katrine Stenbekk",
+            "sort-name": "Stenbekk, Katrine",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "Katrine Ødegård Stenbekk",
+           "target-type": "artist",
+           "type": "writer",
+           "type-id": "a255bca1-b157-4518-9108-7b147dc3fc68"
+          },
+          {
+           "artist": {
+            "country": null,
+            "disambiguation": "",
+            "id": "ce0794b0-6a66-491b-83f1-02f05a4ca017",
+            "name": "Florian Bernhard Döderlein Winter",
+            "sort-name": "Winter, Florian Bernhard Döderlein",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "artist",
+           "type": "writer",
+           "type-id": "a255bca1-b157-4518-9108-7b147dc3fc68"
+          }
+         ],
+         "title": "It Gets Easier",
+         "type": "Song",
+         "type-id": "f061270a-2fd6-32f1-a641-f0f8676d14e6"
+        }
+       }
+      ],
+      "title": "It Gets Easier",
+      "video": false
+     },
+     "title": "It Gets Easier"
+    }
+   ]
+  }
+ ],
+ "packaging": "Digipak",
+ "packaging-id": "8f931351-d2e2-310f-afc6-37b89ddba246",
+ "quality": "normal",
+ "relations": [],
+ "release-events": [
+  {
+   "area": {
+    "disambiguation": "",
+    "id": "6743d351-6f37-3049-9724-5041161fff4d",
+    "iso-3166-1-codes": [
+     "NO"
+    ],
+    "name": "Norway",
+    "sort-name": "Norway",
+    "type": null,
+    "type-id": null
+   },
+   "date": "2020-10-23"
+  }
+ ],
+ "release-group": {
+  "artist-credit": [
+   {
+    "artist": {
+     "country": "NO",
+     "disambiguation": "Norwegian folk/pop band",
+     "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+     "name": "Kalandra",
+     "sort-name": "Kalandra",
+     "type": "Group",
+     "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b"
+    },
+    "joinphrase": "",
+    "name": "Kalandra"
+   }
+  ],
+  "disambiguation": "",
+  "first-release-date": "2020-10-23",
+  "genres": [
+   {
+    "count": 1,
+    "disambiguation": "",
+    "id": "ceeaa283-5d7b-4202-8d1d-e25d116b2a18",
+    "name": "alternative rock"
+   },
+   {
+    "count": 2,
+    "disambiguation": "",
+    "id": "445dc48f-5233-4b4f-987f-867ff9ade836",
+    "name": "folk rock"
+   },
+   {
+    "count": 2,
+    "disambiguation": "",
+    "id": "911c7bbb-172d-4df8-9478-dbff4296e791",
+    "name": "pop"
+   },
+   {
+    "count": 2,
+    "disambiguation": "",
+    "id": "0e3fc579-2d24-4f20-9dae-736e1ec78798",
+    "name": "rock"
+   }
+  ],
+  "id": "4cda8183-371b-4189-bcb1-265bd0ff4b5f",
+  "primary-type": "Album",
+  "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+  "secondary-type-ids": [],
+  "secondary-types": [],
+  "title": "The Line"
+ },
+ "status": "Official",
+ "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+ "text-representation": {
+  "language": "eng",
+  "script": "Latn"
+ },
+ "title": "The Line"
+}

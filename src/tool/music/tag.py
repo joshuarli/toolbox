@@ -9,12 +9,13 @@ import os
 import re
 import sys
 import unicodedata
-from typing import Any
+from collections import Counter
 
-from tool.music.api.acoustid import extract_metadata, fetch_acoustid_metadata, get_audio_fingerprint
-from tool.music.api.musicbrainz import fetch_recording
+from tool.music.api.acoustid import candidates, fetch_acoustid_metadata, get_audio_fingerprint
+from tool.music.api.musicbrainz import enrich
 from tool.music.api.musicbrainz import search as mb_search
-from tool.music.tags import TAG_FIELDS, read_tags, write_tags
+from tool.music.metadata import Candidate, Metadata, show
+from tool.music.tags import read_tags, write_tags
 from tool.music.ui import bold, colored, dim, select_interactive
 
 _YT_ID_RE = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
@@ -44,7 +45,7 @@ def _normalize_filename(filepath: str) -> str:
     return name.strip()
 
 
-def _fallback_search(filepath: str, current_tags: dict[str, str]) -> list[dict[str, Any]]:
+def _fallback_search(filepath: str, current: Metadata) -> list[Candidate]:
     """Fallback when AcoustID fingerprint lookup returns no matches.
 
     Strategy:
@@ -55,10 +56,10 @@ def _fallback_search(filepath: str, current_tags: dict[str, str]) -> list[dict[s
     # Only recording + artist — the album name from file tags rarely matches
     # MusicBrainz canonical release titles, so including it blocks valid hits.
     query_parts = []
-    if current_tags.get("title"):
-        query_parts.append(f"recording:({current_tags['title']})")
-    if current_tags.get("artist"):
-        query_parts.append(f"artist:({current_tags['artist']})")
+    if current.title:
+        query_parts.append(f"recording:({current.title})")
+    if current.artist:
+        query_parts.append(f"artist:({current.artist})")
 
     if query_parts:
         query = " AND ".join(query_parts)
@@ -80,37 +81,65 @@ def _fallback_search(filepath: str, current_tags: dict[str, str]) -> list[dict[s
     return []
 
 
-def format_match_line(idx: int, result: dict[str, Any]) -> str:
+def _rank(cands: list[Candidate], current: Metadata) -> list[Candidate]:
+    """Best first: score, then release title matching the file's album, then plain
+    (non-compilation/live/...) release groups, then earliest date."""
+    album = (current.album or "").casefold()
+    return sorted(
+        cands,
+        key=lambda c: (
+            -round(c.score, 2),
+            bool(album) and (c.meta.album or "").casefold() != album,
+            len(c.meta.releasetype) > 1,
+            c.meta.date or "9999",
+        ),
+    )
+
+
+def _edition(m: Metadata) -> str:
+    """What distinguishes this release from others carrying the same recording."""
+    if not m.album:
+        return ""
+    detail = [p for p in (m.date, m.releasecountry, m.media) if p]
+    if m.discnumber and (int(m.totaldiscs or 0) > 1 or m.discnumber != "1"):
+        detail.append(f"disc {m.discnumber}/{m.totaldiscs}" if m.totaldiscs else f"disc {m.discnumber}")
+    if m.tracknumber:
+        detail.append(f"#{m.tracknumber}")
+    return f"[{m.album}" + (f" · {' · '.join(detail)}" if detail else "") + "]"
+
+
+def format_match_line(idx: int, cand: Candidate, *, show_id: bool = False) -> str:
     """Format one match as a single summary line."""
-    score = result.get("score", 0) * 100
-    meta = extract_metadata(result)
-    title = meta.get("title", "?")
-    artist = meta.get("artist", "?")
-    album = meta.get("album", "")
-    year = meta.get("date", "")
+    m = cand.meta
+    line = f"  #{idx}  {cand.score * 100:3.0f}%  {m.title or '?'} — {m.artist or '?'}"
+    if edition := _edition(m):
+        line += f"  {edition}"
+    if show_id and m.musicbrainz_albumid:
+        line += dim(f" {m.musicbrainz_albumid[:8]}")
+    return line
 
-    album_str = f" [{album}]" if album else ""
-    year_str = f" ({year})" if year else ""
 
-    return f"  #{idx}  {score:3.0f}%  {title} — {artist}{album_str}{year_str}"
+def _match_lines(cands: list[Candidate]) -> list[str]:
+    """Summary lines for all candidates; the release id is appended where editions look identical."""
+    keys = [(c.meta.title, c.meta.artist, _edition(c.meta)) for c in cands]
+    counts = Counter(keys)
+    return [format_match_line(i, c, show_id=counts[k] > 1) for i, (c, k) in enumerate(zip(cands, keys, strict=True), 1)]
 
 
 def _print_tags(filepath: str) -> None:
     """Pretty-print all tags from *filepath*."""
-    tags = read_tags(filepath)
-    if not tags:
+    values = read_tags(filepath).to_values()
+    if not values:
         print("  (no tags)")
         return
 
-    key_w = max(len(k) for k in tags)
-    for key in TAG_FIELDS:
-        val = tags.get(key)
-        if val:
-            print(f"  {bold(key):<{key_w + 11}s} {val}")
+    key_w = max(len(k) for k in values)
+    for key, vals in values.items():
+        print(f"  {bold(key):<{key_w + 11}s} {show(key, vals)}")
 
 
-def format_diff(current: dict[str, str], new: dict[str, str]) -> list[str]:
-    """Return formatted diff lines for fields that differ between current and new tags.
+def format_diff(current: Metadata, new: Metadata) -> list[str]:
+    """Return formatted diff lines for the fields *new* would change.
 
     Each changed field produces two lines — the old value (red) on the first,
     then the new value (green) on the next at the same column.
@@ -118,50 +147,50 @@ def format_diff(current: dict[str, str], new: dict[str, str]) -> list[str]:
         key      old_val
                → new_val
     """
-    lines: list[str] = []
-    all_keys = sorted(set(current.keys()) | set(new.keys()))
-    if not all_keys:
-        return lines
+    cur, upd = current.to_values(), new.to_values()
+    changed = [k for k, v in upd.items() if cur.get(k) != v]
+    if not changed:
+        return []
 
-    key_w = max(len(k) for k in all_keys)
+    key_w = max(len(k) for k in changed)
     # indent for the arrow line: 4 spaces + key + 2 spaces = same column as old value
     indent = " " * (4 + key_w + 2)
 
-    for key in all_keys:
-        cur_val = current.get(key)
-        new_val = new.get(key)
-        if cur_val == new_val:
-            continue
-        cur_display = cur_val or "(none)"
-        new_display = new_val or "(none)"
-        arrow = "+" if cur_val is None else "→"
+    lines: list[str] = []
+    for key in changed:
+        cur_display = show(key, cur[key]) if key in cur else "(none)"
+        arrow = "→" if key in cur else "+"
         lines.append(f"    {key:<{key_w}s}  {colored(cur_display, 1)}")
-        lines.append(f"{indent}{arrow} {colored(new_display, 2)}")
+        lines.append(f"{indent}{arrow} {colored(show(key, upd[key]), 2)}")
 
     return lines
 
 
-def interactive_select(results: list[dict[str, Any]], filepath: str) -> int:
+_VISIBLE = 12  # candidate rows shown at once; the list scrolls with the cursor
+
+
+def interactive_select(cands: list[Candidate], filepath: str) -> int:
     """Arrow-key navigable match selector with live diff.
 
-    Returns the selected index into *results*.
+    Returns the selected index into *cands*.
     """
-    current_tags = read_tags(filepath)
+    current = read_tags(filepath)
+    match_lines = _match_lines(cands)
 
     def render(idx: int) -> list[str]:
+        start = min(max(0, idx - _VISIBLE // 2), max(0, len(cands) - _VISIBLE))
+        end = min(len(cands), start + _VISIBLE)
         lines: list[str] = [""]
-        for i, r in enumerate(results):
-            line = format_match_line(i + 1, r)
-            if i == idx:
-                lines.append(bold(f"▶{line}"))
-            else:
-                lines.append(f"  {line}")
+        if start:
+            lines.append(dim(f"    ↑ {start} more"))
+        lines.extend(bold(f"▶{match_lines[i]}") if i == idx else f"  {match_lines[i]}" for i in range(start, end))
+        if end < len(cands):
+            lines.append(dim(f"    ↓ {len(cands) - end} more"))
         lines.append("")
 
-        meta = extract_metadata(results[idx])
-        diff = format_diff(current_tags, meta)
+        diff = format_diff(current, cands[idx].meta)
         if diff:
-            lines.append("  Changes (AcoustID):")
+            lines.append("  Changes (before MusicBrainz enrichment):")
             lines.extend(diff)
         else:
             lines.append("  (no changes — tags already match)")
@@ -169,17 +198,17 @@ def interactive_select(results: list[dict[str, Any]], filepath: str) -> int:
         lines.append(dim("  ↑/↓ navigate  Enter write  s skip  q quit"))
         return lines
 
-    return select_interactive(render, len(results))
+    return select_interactive(render, len(cands))
 
 
-def _fallback_select(results: list[dict[str, Any]]) -> int:
+def _fallback_select(cands: list[Candidate]) -> int:
     """Non-TTY fallback: print numbered list and prompt for input."""
-    for i, r in enumerate(results, 1):
-        print(format_match_line(i, r))
+    for line in _match_lines(cands):
+        print(line)
 
     print()
     try:
-        choice = input(f"Select [1-{len(results)}, q=quit]: ").strip()
+        choice = input(f"Select [1-{len(cands)}, q=quit]: ").strip()
     except EOFError, KeyboardInterrupt:
         print("\nAborted.")
         sys.exit(0)
@@ -190,7 +219,7 @@ def _fallback_select(results: list[dict[str, Any]]) -> int:
 
     try:
         idx = int(choice) - 1
-        if 0 <= idx < len(results):
+        if 0 <= idx < len(cands):
             return idx
     except ValueError:
         pass
@@ -217,12 +246,10 @@ def run(args: argparse.Namespace) -> None:
         _print_tags(args.file)
         return
 
-    current_tags = read_tags(args.file)
-    if not args.force:
-        missing = [k for k in TAG_FIELDS if k not in current_tags]
-        if not missing:
-            print(f"All tags already complete, skipping {args.file}. Use --force to override.")
-            return
+    current = read_tags(args.file)
+    if not args.force and current.is_complete():
+        print(f"Already identified in MusicBrainz, skipping {args.file}. Use --force to override.")
+        return
 
     print(f"Analyzing {args.file}...")
     duration, fingerprint = get_audio_fingerprint(args.file)
@@ -230,32 +257,23 @@ def run(args: argparse.Namespace) -> None:
     if not (duration and fingerprint):
         return
 
-    results = fetch_acoustid_metadata(duration, fingerprint) or []
+    cands = candidates(fetch_acoustid_metadata(duration, fingerprint) or [])
 
-    # Filter out results with no extractable metadata
-    results = [r for r in results if extract_metadata(r)]
-
-    if not results:
-        results = _fallback_search(args.file, current_tags)
-        if not results:
+    if not cands:
+        cands = _fallback_search(args.file, current)
+        if not cands:
             print("No matches found for this audio fingerprint.")
             return
+    cands = _rank(cands, current)
 
     if not sys.stdout.isatty():
-        selected_idx = _fallback_select(results)
+        selected_idx = _fallback_select(cands)
     else:
-        selected_idx = interactive_select(results, args.file)
+        selected_idx = interactive_select(cands, args.file)
 
-    selected = results[selected_idx]
-    metadata = extract_metadata(selected)
-    recordings = selected.get("recordings", [])
-    if recordings:
-        mbid = recordings[0].get("id")
-        if mbid:
-            metadata.update(fetch_recording(mbid))
-
-    current_tags = read_tags(args.file)
-    diff = format_diff(current_tags, metadata)
+    metadata = enrich(cands[selected_idx].meta)
+    metadata.acoustid_fingerprint = fingerprint
+    diff = format_diff(current, metadata)
 
     print()
     if not diff:
@@ -269,10 +287,10 @@ def run(args: argparse.Namespace) -> None:
             return
 
     actual_path = write_tags(args.file, metadata)
-    if "title" in metadata:
+    if metadata.title:
         dirname = os.path.dirname(args.file)
         ext = os.path.splitext(args.file)[1]
-        safe_title = metadata["title"].replace("/", "-").replace("\x00", "")
+        safe_title = metadata.title.replace("/", "-").replace("\x00", "")
         new_path = os.path.join(dirname, safe_title + ext)
         if new_path != actual_path:
             if os.path.exists(new_path):

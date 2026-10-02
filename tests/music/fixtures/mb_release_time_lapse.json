@@ -1,0 +1,648 @@
+{
+ "artist-credit": [
+  {
+   "artist": {
+    "country": "IT",
+    "disambiguation": "Italian composer and pianist",
+    "genres": [
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "608b0471-7531-4854-a348-e698c69cb699",
+      "name": "ambient"
+     },
+     {
+      "count": 12,
+      "disambiguation": "",
+      "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+      "name": "classical"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "a190bb32-e0a7-4c56-b142-5cf9cfcfa713",
+      "name": "contemporary classical"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "4ae63770-68af-4fae-b0f1-5e53f372c743",
+      "name": "instrumental"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "8d9a00db-0b8b-41ff-9af7-d0f96793bdc5",
+      "name": "minimalism"
+     },
+     {
+      "count": 7,
+      "disambiguation": "",
+      "id": "e328c306-8e35-46d2-93c3-623412ec7c13",
+      "name": "modern classical"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "bf9955d6-c3eb-466d-95ca-30f3848fc9ea",
+      "name": "western classical"
+     }
+    ],
+    "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+    "name": "Ludovico Einaudi",
+    "sort-name": "Einaudi, Ludovico",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "joinphrase": "",
+   "name": "Ludovico Einaudi"
+  }
+ ],
+ "asin": null,
+ "barcode": "028948594726",
+ "country": null,
+ "cover-art-archive": {
+  "artwork": false,
+  "back": false,
+  "count": 0,
+  "darkened": false,
+  "front": false
+ },
+ "date": "2023-09-15",
+ "disambiguation": "",
+ "genres": [],
+ "id": "eafdf4ed-d167-4c37-88b4-3c98dbb97df0",
+ "label-info": [
+  {
+   "catalog-number": null,
+   "label": {
+    "disambiguation": "",
+    "genres": [
+     {
+      "count": 3,
+      "disambiguation": "",
+      "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+      "name": "classical"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "a715278f-1580-409f-8078-4ffbc800e08b",
+      "name": "jazz"
+     }
+    ],
+    "id": "f18f3b31-8263-4de3-966a-fda317492d3d",
+    "label-code": 171,
+    "name": "Decca Records",
+    "sort-name": "Decca Records",
+    "type": "Imprint",
+    "type-id": "b6285b2a-3514-3d43-80df-fcf528824ded"
+   }
+  }
+ ],
+ "media": [
+  {
+   "format": "CD",
+   "format-id": "9712d52a-4509-3d4b-a1a2-67c88c643e31",
+   "id": "f5a0d3e0-ef36-416a-92f2-693f9a873289",
+   "position": 1,
+   "title": "",
+   "track-count": 14,
+   "track-offset": 0,
+   "tracks": [
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "country": "IT",
+        "disambiguation": "Italian composer and pianist",
+        "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+        "name": "Ludovico Einaudi",
+        "sort-name": "Einaudi, Ludovico",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+       },
+       "joinphrase": "",
+       "name": "Ludovico Einaudi"
+      }
+     ],
+     "id": "59d305df-9299-49f5-9821-5f2890fcd571",
+     "length": 125400,
+     "number": "1",
+     "position": 1,
+     "recording": {
+      "artist-credit": [
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian composer and pianist",
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi",
+         "sort-name": "Einaudi, Ludovico",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": "",
+        "name": "Ludovico Einaudi"
+       }
+      ],
+      "disambiguation": "",
+      "first-release-date": "2013-01-21",
+      "genres": [
+       {
+        "count": 3,
+        "disambiguation": "",
+        "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+        "name": "classical"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "5e6d5394-6508-4ce2-87ee-90388b1a6b9c",
+        "name": "classical crossover"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "4ae63770-68af-4fae-b0f1-5e53f372c743",
+        "name": "instrumental"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "e328c306-8e35-46d2-93c3-623412ec7c13",
+        "name": "modern classical"
+       }
+      ],
+      "id": "69af617d-c2b5-46a9-9316-fd1b6d20c81d",
+      "isrcs": [
+       "ITB281200059"
+      ],
+      "length": 125400,
+      "relations": [
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian composer and pianist",
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi",
+         "sort-name": "Einaudi, Ludovico",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "arranger",
+        "type-id": "22661fb8-cdb7-4f67-8385-b2a8be6c9f0d"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "a6d92b62-fbf7-4d88-ab44-db2cf7064894",
+         "name": "Alice Costamagna",
+         "sort-name": "Costamagna, Alice",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "violin": "089f123c-0f7d-4105-a64e-49de81ca8fa4"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "violin"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian cellist",
+         "id": "8bb6537b-51e4-4844-95f1-daf193170cb6",
+         "name": "Marco Decimo",
+         "sort-name": "Decimo, Marco",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "cello": "0db03a60-1142-4b25-ab1b-72027d0dc357"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "cello"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian composer and pianist",
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi",
+         "sort-name": "Einaudi, Ludovico",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "electronic instruments": "a51219e5-fc36-4427-93a9-743e616c6f0c"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "electronic instruments"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Svetlana Fomina Maletto",
+         "id": "09a8810d-1803-4b4b-87c4-296ee1a601ea",
+         "name": "Svetlana Fomina",
+         "sort-name": "Fomina, Svetlana",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "viola": "377e007a-33fe-4825-9bef-136cf5cf581a"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "viola"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Violist",
+         "id": "7627230f-3f2f-4989-b30b-6b1c7d0f1ae9",
+         "name": "Antonio Leofreddi",
+         "sort-name": "Leofreddi, Antonio",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "viola": "377e007a-33fe-4825-9bef-136cf5cf581a"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "viola"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian engineer and producer",
+         "id": "96d5e455-ebc6-45fa-974e-d4aac2c84e22",
+         "name": "Michael Seberich",
+         "sort-name": "Seberich, Michael",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "mix",
+        "type-id": "3e3102e1-1896-4f50-b5b2-dd9824e46efe"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian composer and pianist",
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi",
+         "sort-name": "Einaudi, Ludovico",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian engineer and producer",
+         "id": "96d5e455-ebc6-45fa-974e-d4aac2c84e22",
+         "name": "Michael Seberich",
+         "sort-name": "Seberich, Michael",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "recording",
+        "type-id": "a01ee869-80a8-45ef-9447-c59e91aa7926"
+       },
+       {
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "forward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "work",
+        "type": "performance",
+        "type-id": "a3005666-a872-32c3-ad06-98af558e99b0",
+        "work": {
+         "attributes": [],
+         "disambiguation": "",
+         "id": "e9d70be0-19b2-4255-b8c9-72df579bbae8",
+         "iswcs": [],
+         "language": null,
+         "languages": [],
+         "relations": [
+          {
+           "artist": {
+            "country": "IT",
+            "disambiguation": "Italian composer and pianist",
+            "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+            "name": "Ludovico Einaudi",
+            "sort-name": "Einaudi, Ludovico",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "artist",
+           "type": "composer",
+           "type-id": "d59d99ea-23d4-4a80-b066-edca32ee158f"
+          }
+         ],
+         "title": "Corale",
+         "type": null,
+         "type-id": null
+        }
+       }
+      ],
+      "title": "Corale",
+      "video": false
+     },
+     "title": "Corale"
+    }
+   ]
+  },
+  {
+   "format": "CD",
+   "format-id": "9712d52a-4509-3d4b-a1a2-67c88c643e31",
+   "id": "911da687-da31-4389-9421-09a4c06c1683",
+   "position": 2,
+   "title": "",
+   "track-count": 13,
+   "track-offset": 0,
+   "tracks": [
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "country": "IT",
+        "disambiguation": "Italian composer and pianist",
+        "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+        "name": "Ludovico Einaudi",
+        "sort-name": "Einaudi, Ludovico",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+       },
+       "joinphrase": " & ",
+       "name": "Ludovico Einaudi"
+      },
+      {
+       "artist": {
+        "country": "FO",
+        "disambiguation": "",
+        "genres": [],
+        "id": "448ce1b7-4efc-4aca-b793-174745cc4e68",
+        "name": "Greta Svabo Bech",
+        "sort-name": "Bech, Greta Svabo",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+       },
+       "joinphrase": "",
+       "name": "Greta Svabo Bech"
+      }
+     ],
+     "id": "88b3d07e-7bdd-4bb6-bae0-6ec7016aa757",
+     "length": 242000,
+     "number": "1",
+     "position": 1,
+     "recording": {
+      "artist-credit": [
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian composer and pianist",
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi",
+         "sort-name": "Einaudi, Ludovico",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": " & ",
+        "name": "Ludovico Einaudi"
+       },
+       {
+        "artist": {
+         "country": "FO",
+         "disambiguation": "",
+         "id": "448ce1b7-4efc-4aca-b793-174745cc4e68",
+         "name": "Greta Svabo Bech",
+         "sort-name": "Bech, Greta Svabo",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": "",
+        "name": "Greta Svabo Bech"
+       }
+      ],
+      "disambiguation": "",
+      "first-release-date": "2013-01-21",
+      "genres": [
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+        "name": "classical"
+       }
+      ],
+      "id": "3165fc57-c69a-4316-8cab-339a846e3a70",
+      "isrcs": [
+       "ITB281200073"
+      ],
+      "length": 241000,
+      "relations": [
+       {
+        "artist": {
+         "country": "IT",
+         "disambiguation": "Italian composer and pianist",
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi",
+         "sort-name": "Einaudi, Ludovico",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "piano": "b3eac5f9-7859-4416-ac39-7154e2e8d348"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "piano"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       }
+      ],
+      "title": "Bever",
+      "video": false
+     },
+     "title": "Bever"
+    }
+   ]
+  }
+ ],
+ "packaging": "Cardboard/Paper Sleeve",
+ "packaging-id": "f7101ce3-0384-39ce-9fde-fbbd0044d35f",
+ "quality": "normal",
+ "relations": [],
+ "release-events": [
+  {
+   "area": null,
+   "date": "2023-09-15"
+  }
+ ],
+ "release-group": {
+  "artist-credit": [
+   {
+    "artist": {
+     "country": "IT",
+     "disambiguation": "Italian composer and pianist",
+     "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+     "name": "Ludovico Einaudi",
+     "sort-name": "Einaudi, Ludovico",
+     "type": "Person",
+     "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+    },
+    "joinphrase": "",
+    "name": "Ludovico Einaudi"
+   }
+  ],
+  "disambiguation": "",
+  "first-release-date": "2013-01-21",
+  "genres": [
+   {
+    "count": 2,
+    "disambiguation": "",
+    "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+    "name": "classical"
+   }
+  ],
+  "id": "9aab2893-561d-482c-a15e-bfda53960226",
+  "primary-type": "Album",
+  "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+  "secondary-type-ids": [],
+  "secondary-types": [],
+  "title": "In a Time Lapse"
+ },
+ "status": "Official",
+ "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+ "text-representation": {
+  "language": null,
+  "script": null
+ },
+ "title": "In a Time Lapse: Special Edition"
+}

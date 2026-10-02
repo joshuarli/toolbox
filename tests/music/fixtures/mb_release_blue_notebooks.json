@@ -1,0 +1,1210 @@
+{
+ "artist-credit": [
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "German pianist and score composer",
+    "genres": [
+     {
+      "count": 4,
+      "disambiguation": "",
+      "id": "608b0471-7531-4854-a348-e698c69cb699",
+      "name": "ambient"
+     },
+     {
+      "count": 5,
+      "disambiguation": "",
+      "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+      "name": "classical"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "8d9a00db-0b8b-41ff-9af7-d0f96793bdc5",
+      "name": "minimalism"
+     },
+     {
+      "count": 5,
+      "disambiguation": "",
+      "id": "e328c306-8e35-46d2-93c3-623412ec7c13",
+      "name": "modern classical"
+     }
+    ],
+    "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+    "name": "Max Richter",
+    "sort-name": "Richter, Max",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "joinphrase": "",
+   "name": "Max Richter"
+  }
+ ],
+ "asin": "B00PRC2BXK",
+ "barcode": "028947944430",
+ "country": "XE",
+ "cover-art-archive": {
+  "artwork": true,
+  "back": false,
+  "count": 1,
+  "darkened": false,
+  "front": true
+ },
+ "date": "2015-03-02",
+ "disambiguation": "",
+ "genres": [],
+ "id": "01d9453c-e652-4a3e-9dfd-53555692871a",
+ "label-info": [
+  {
+   "catalog-number": "479 4443",
+   "label": {
+    "disambiguation": "",
+    "genres": [
+     {
+      "count": 2,
+      "disambiguation": "",
+      "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+      "name": "classical"
+     },
+     {
+      "count": 1,
+      "disambiguation": "",
+      "id": "bf9955d6-c3eb-466d-95ca-30f3848fc9ea",
+      "name": "western classical"
+     }
+    ],
+    "id": "5a584032-dcef-41bb-9f8b-19540116fb1c",
+    "label-code": 173,
+    "name": "Deutsche Grammophon",
+    "sort-name": "Deutsche Grammophon",
+    "type": "Imprint",
+    "type-id": "b6285b2a-3514-3d43-80df-fcf528824ded"
+   }
+  }
+ ],
+ "media": [
+  {
+   "format": "CD",
+   "format-id": "9712d52a-4509-3d4b-a1a2-67c88c643e31",
+   "id": "550eb7d2-404d-3a5c-bc0c-8d5f54047055",
+   "position": 1,
+   "title": "",
+   "track-count": 12,
+   "track-offset": 0,
+   "tracks": [
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "country": "GB",
+        "disambiguation": "German pianist and score composer",
+        "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+        "name": "Max Richter",
+        "sort-name": "Richter, Max",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+       },
+       "joinphrase": "",
+       "name": "Max Richter"
+      }
+     ],
+     "id": "1bcc828c-cc80-426a-a64a-962361d7f1b2",
+     "length": 79826,
+     "number": "1",
+     "position": 1,
+     "recording": {
+      "artist-credit": [
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "genres": [],
+         "id": "902fd149-f7e1-47c5-b773-ebb8725524b9",
+         "name": "Tilda Swinton",
+         "sort-name": "Swinton, Tilda",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": ", ",
+        "name": "Tilda Swinton"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": "",
+        "name": "Max Richter"
+       }
+      ],
+      "disambiguation": "",
+      "first-release-date": "2004-02-26",
+      "genres": [
+       {
+        "count": 2,
+        "disambiguation": "",
+        "id": "608b0471-7531-4854-a348-e698c69cb699",
+        "name": "ambient"
+       },
+       {
+        "count": 3,
+        "disambiguation": "",
+        "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+        "name": "classical"
+       },
+       {
+        "count": 3,
+        "disambiguation": "",
+        "id": "a190bb32-e0a7-4c56-b142-5cf9cfcfa713",
+        "name": "contemporary classical"
+       },
+       {
+        "count": 2,
+        "disambiguation": "",
+        "id": "89255676-1f14-4dd8-bbad-fca839d6aff4",
+        "name": "electronic"
+       },
+       {
+        "count": 2,
+        "disambiguation": "",
+        "id": "e328c306-8e35-46d2-93c3-623412ec7c13",
+        "name": "modern classical"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "25a86f18-e17e-46af-9633-01133b2cf042",
+        "name": "neoclassicism"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "842008b8-1c67-4c8c-b450-7f5adf20fb7f",
+        "name": "post-classical"
+       }
+      ],
+      "id": "f54f9713-8874-4088-af3a-a2f404acde35",
+      "isrcs": [
+       "GBDCA0300278"
+      ],
+      "length": 79827,
+      "relations": [
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "piano": "b3eac5f9-7859-4416-ac39-7154e2e8d348"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "piano"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {
+         "electronic instruments": "electronics"
+        },
+        "attribute-ids": {
+         "electronic instruments": "a51219e5-fc36-4427-93a9-743e616c6f0c"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "electronic instruments"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "mix",
+        "type-id": "3e3102e1-1896-4f50-b5b2-dd9824e46efe"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "",
+         "id": "ad77a231-e456-40e6-a2de-564a70545204",
+         "name": "Steve Parr",
+         "sort-name": "Parr, Steve",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "recording",
+        "type-id": "a01ee869-80a8-45ef-9447-c59e91aa7926"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "id": "902fd149-f7e1-47c5-b773-ebb8725524b9",
+         "name": "Tilda Swinton",
+         "sort-name": "Swinton, Tilda",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "spoken vocals": "d3a36e62-a7c4-4eb9-839f-adfebe87ac12"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "spoken vocals"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "vocal",
+        "type-id": "0fdbe3c6-7700-4a31-ae54-b53f06ae1cfa"
+       },
+       {
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "forward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "work",
+        "type": "performance",
+        "type-id": "a3005666-a872-32c3-ad06-98af558e99b0",
+        "work": {
+         "attributes": [],
+         "disambiguation": "",
+         "id": "4b4e79f0-406e-4d47-a2a2-3b8ee5d8cf41",
+         "iswcs": [],
+         "language": null,
+         "languages": [],
+         "relations": [
+          {
+           "artist": {
+            "country": "GB",
+            "disambiguation": "German pianist and score composer",
+            "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+            "name": "Max Richter",
+            "sort-name": "Richter, Max",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "artist",
+           "type": "composer",
+           "type-id": "d59d99ea-23d4-4a80-b066-edca32ee158f"
+          }
+         ],
+         "title": "The Blue Notebooks",
+         "type": null,
+         "type-id": null
+        }
+       }
+      ],
+      "title": "The Blue Notebooks",
+      "video": false
+     },
+     "title": "The Blue Notebooks"
+    },
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "country": "GB",
+        "disambiguation": "German pianist and score composer",
+        "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+        "name": "Max Richter",
+        "sort-name": "Richter, Max",
+        "type": "Person",
+        "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+       },
+       "joinphrase": "",
+       "name": "Max Richter"
+      }
+     ],
+     "id": "3da62cad-0605-4f38-95a2-ab550511f5e7",
+     "length": 371746,
+     "number": "2",
+     "position": 2,
+     "recording": {
+      "artist-credit": [
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "violinist",
+         "genres": [],
+         "id": "9a8f6e02-f8cf-48c4-a323-84f1c520d92e",
+         "name": "Natalia Bonner",
+         "sort-name": "Bonner, Natalia",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": ", ",
+        "name": "Natalia Bonner"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "violinist",
+         "genres": [],
+         "id": "0e9c76c9-f0d5-4ffd-8274-c55ff9d5afa0",
+         "name": "Louisa Fuller",
+         "sort-name": "Fuller, Louisa",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": ", ",
+        "name": "Louisa Fuller"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "UK‐based composer, arranger and violist",
+         "genres": [
+          {
+           "count": 1,
+           "disambiguation": "",
+           "id": "ceeaa283-5d7b-4202-8d1d-e25d116b2a18",
+           "name": "alternative rock"
+          },
+          {
+           "count": 1,
+           "disambiguation": "",
+           "id": "b1c0c2ad-e5ae-4bb6-a1be-d66e195fd2d7",
+           "name": "avant-garde"
+          },
+          {
+           "count": 1,
+           "disambiguation": "",
+           "id": "bab69b07-8bb9-4415-b666-c37609cef80b",
+           "name": "club"
+          },
+          {
+           "count": 1,
+           "disambiguation": "",
+           "id": "89255676-1f14-4dd8-bbad-fca839d6aff4",
+           "name": "electronic"
+          },
+          {
+           "count": 1,
+           "disambiguation": "",
+           "id": "ccd19ebf-052c-4afe-8ad9-fbb0a73f94a7",
+           "name": "indie rock"
+          }
+         ],
+         "id": "07cf2e3a-bf6a-44b9-9079-842953a671c9",
+         "name": "John Metcalfe",
+         "sort-name": "Metcalfe, John",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": ", ",
+        "name": "John Metcalfe"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": ", ",
+        "name": "Max Richter"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "genres": [],
+         "id": "5f3347ae-b5df-4203-80db-61f694d86198",
+         "name": "Philip Sheppard",
+         "sort-name": "Sheppard, Philip",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": ", ",
+        "name": "Philip Sheppard"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "cellist",
+         "genres": [],
+         "id": "a5a5d278-ef71-4895-b910-d48806b5a5ce",
+         "name": "Chris Worsey",
+         "sort-name": "Worsey, Chris",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "joinphrase": "",
+        "name": "Chris Worsey"
+       }
+      ],
+      "disambiguation": "",
+      "first-release-date": "2004-02-26",
+      "genres": [
+       {
+        "count": 2,
+        "disambiguation": "",
+        "id": "608b0471-7531-4854-a348-e698c69cb699",
+        "name": "ambient"
+       },
+       {
+        "count": 3,
+        "disambiguation": "",
+        "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+        "name": "classical"
+       },
+       {
+        "count": 3,
+        "disambiguation": "",
+        "id": "a190bb32-e0a7-4c56-b142-5cf9cfcfa713",
+        "name": "contemporary classical"
+       },
+       {
+        "count": 2,
+        "disambiguation": "",
+        "id": "89255676-1f14-4dd8-bbad-fca839d6aff4",
+        "name": "electronic"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "4ae63770-68af-4fae-b0f1-5e53f372c743",
+        "name": "instrumental"
+       },
+       {
+        "count": 2,
+        "disambiguation": "",
+        "id": "e328c306-8e35-46d2-93c3-623412ec7c13",
+        "name": "modern classical"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "25a86f18-e17e-46af-9633-01133b2cf042",
+        "name": "neoclassicism"
+       },
+       {
+        "count": 1,
+        "disambiguation": "",
+        "id": "842008b8-1c67-4c8c-b450-7f5adf20fb7f",
+        "name": "post-classical"
+       }
+      ],
+      "id": "b75c56c6-cbfc-4d1a-83fd-b2e3f97194cf",
+      "isrcs": [
+       "GBDCA0300279"
+      ],
+      "length": 371746,
+      "relations": [
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "violinist",
+         "id": "9a8f6e02-f8cf-48c4-a323-84f1c520d92e",
+         "name": "Natalia Bonner",
+         "sort-name": "Bonner, Natalia",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "violin": "089f123c-0f7d-4105-a64e-49de81ca8fa4"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "violin"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "violinist",
+         "id": "0e9c76c9-f0d5-4ffd-8274-c55ff9d5afa0",
+         "name": "Louisa Fuller",
+         "sort-name": "Fuller, Louisa",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "violin": "089f123c-0f7d-4105-a64e-49de81ca8fa4"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "violin"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "UK‐based composer, arranger and violist",
+         "id": "07cf2e3a-bf6a-44b9-9079-842953a671c9",
+         "name": "John Metcalfe",
+         "sort-name": "Metcalfe, John",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "viola": "377e007a-33fe-4825-9bef-136cf5cf581a"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "viola"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "Moog": "c2c3a433-dc4b-4107-9d39-1f605ebedbaa"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "Moog"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "",
+         "id": "5f3347ae-b5df-4203-80db-61f694d86198",
+         "name": "Philip Sheppard",
+         "sort-name": "Sheppard, Philip",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "cello": "0db03a60-1142-4b25-ab1b-72027d0dc357"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "cello"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "cellist",
+         "id": "a5a5d278-ef71-4895-b910-d48806b5a5ce",
+         "name": "Chris Worsey",
+         "sort-name": "Worsey, Chris",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-credits": {},
+        "attribute-ids": {
+         "cello": "0db03a60-1142-4b25-ab1b-72027d0dc357"
+        },
+        "attribute-values": {},
+        "attributes": [
+         "cello"
+        ],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "instrument",
+        "type-id": "59054b12-01ac-43ee-a618-285fd397e461"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "mix",
+        "type-id": "3e3102e1-1896-4f50-b5b2-dd9824e46efe"
+       },
+       {
+        "artist": {
+         "country": "DE",
+         "disambiguation": "engineer",
+         "id": "94aa3d4f-5f83-4208-90a4-a83b081799f2",
+         "name": "Michael Schubert",
+         "sort-name": "Schubert, Michael",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "mix",
+        "type-id": "3e3102e1-1896-4f50-b5b2-dd9824e46efe"
+       },
+       {
+        "artist": {
+         "country": "GB",
+         "disambiguation": "German pianist and score composer",
+         "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+         "name": "Max Richter",
+         "sort-name": "Richter, Max",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": "DE",
+         "disambiguation": "engineer",
+         "id": "8a2185dc-f952-4e16-9be3-47c5c676d073",
+         "name": "Matthias Schneider",
+         "sort-name": "Schneider, Matthias",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "producer",
+        "type-id": "5c0ceac3-feb4-41f0-868d-dc06f6e27fc0"
+       },
+       {
+        "artist": {
+         "country": null,
+         "disambiguation": "German recording engineer",
+         "id": "d1a6efb1-6f31-4fac-abba-4ae6b0ba8577",
+         "name": "Falko Duczmal",
+         "sort-name": "Duczmal, Falko",
+         "type": "Person",
+         "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+        },
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "backward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "artist",
+        "type": "recording",
+        "type-id": "a01ee869-80a8-45ef-9447-c59e91aa7926"
+       },
+       {
+        "attribute-ids": {},
+        "attribute-values": {},
+        "attributes": [],
+        "begin": null,
+        "direction": "forward",
+        "end": null,
+        "ended": false,
+        "source-credit": "",
+        "target-credit": "",
+        "target-type": "work",
+        "type": "performance",
+        "type-id": "a3005666-a872-32c3-ad06-98af558e99b0",
+        "work": {
+         "attributes": [],
+         "disambiguation": "",
+         "id": "51c1a82f-61fc-4c77-9429-0f4d82d29a71",
+         "iswcs": [],
+         "language": null,
+         "languages": [],
+         "relations": [
+          {
+           "artist": {
+            "country": "GB",
+            "disambiguation": "German pianist and score composer",
+            "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+            "name": "Max Richter",
+            "sort-name": "Richter, Max",
+            "type": "Person",
+            "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+           },
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "backward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "artist",
+           "type": "composer",
+           "type-id": "d59d99ea-23d4-4a80-b066-edca32ee158f"
+          },
+          {
+           "attribute-ids": {},
+           "attribute-values": {},
+           "attributes": [],
+           "begin": null,
+           "direction": "forward",
+           "end": null,
+           "ended": false,
+           "source-credit": "",
+           "target-credit": "",
+           "target-type": "work",
+           "type": "arrangement",
+           "type-id": "51975ed8-bbfa-486b-9f28-5947f4370299",
+           "work": {
+            "attributes": [],
+            "disambiguation": "catch-all for arrangements",
+            "id": "3f8a3c94-436a-4e0f-a0bb-e869e01fc540",
+            "iswcs": [],
+            "language": null,
+            "languages": [],
+            "title": "On the Nature of Daylight",
+            "type": null,
+            "type-id": null
+           }
+          }
+         ],
+         "title": "On the Nature of Daylight",
+         "type": null,
+         "type-id": null
+        }
+       }
+      ],
+      "title": "On the Nature of Daylight",
+      "video": false
+     },
+     "title": "On the Nature of Daylight"
+    }
+   ]
+  }
+ ],
+ "packaging": "Jewel Case",
+ "packaging-id": "ec27701a-4a22-37f4-bfac-6616e0f9750a",
+ "quality": "normal",
+ "relations": [
+  {
+   "artist": {
+    "country": null,
+    "disambiguation": "",
+    "id": "52af7e99-7b07-435c-ba23-c8700212e64f",
+    "name": "Merle Kersten",
+    "sort-name": "Kersten, Merle",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "art direction",
+   "type-id": "f3b80a09-5ebf-4ad2-9c46-3e6bce971d1b"
+  },
+  {
+   "artist": {
+    "country": null,
+    "disambiguation": "booklet editor",
+    "id": "597d294e-0555-40c2-9291-6f01b110c726",
+    "name": "Manuela Amadei",
+    "sort-name": "Amadei, Manuela",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "booklet editor",
+   "type-id": "74518a6b-589d-460e-8dd7-a8383851040a"
+  },
+  {
+   "artist": {
+    "country": "DE",
+    "disambiguation": "design studio",
+    "id": "a834ffce-d8ad-4023-a6fb-d80607f311ad",
+    "name": "Klasse 3b",
+    "sort-name": "Klasse 3b",
+    "type": "Other",
+    "type-id": "ac897045-5043-3294-969b-187360e45d86"
+   },
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "design",
+   "type-id": "9c02ea37-7680-4fb5-8555-e330c7aa885b"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "British mastering engineer",
+    "id": "79079372-4de9-4acb-8872-587cc7cc67e8",
+    "name": "Mandy Parnell",
+    "sort-name": "Parnell, Mandy",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "mastering",
+   "type-id": "84453d28-c3e8-4864-9aae-25aa968bcf9e"
+  },
+  {
+   "artist": {
+    "country": "DE",
+    "disambiguation": "photographer",
+    "id": "cb4b81b6-25a1-4f73-b120-2fbe110016dd",
+    "name": "Wolfgang Borrs",
+    "sort-name": "Borrs, Wolfgang",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-ids": {
+    "task": "39867b3b-0f1e-40d5-b602-4f3936b7f486"
+   },
+   "attribute-values": {
+    "task": "artist photo (booklet inside front cover)"
+   },
+   "attributes": [
+    "task"
+   ],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "photography",
+   "type-id": "0b58dc9b-9c49-4b19-bb58-9c06d41c8fbf"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "",
+    "id": "8d037100-985f-4a57-a6a1-5a3c5326909d",
+    "name": "Yulia Mahr",
+    "sort-name": "Mahr, Yulia",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-ids": {
+    "task": "39867b3b-0f1e-40d5-b602-4f3936b7f486"
+   },
+   "attribute-values": {
+    "task": "cover photo; artist photo (p. 1)"
+   },
+   "attributes": [
+    "task"
+   ],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "photography",
+   "type-id": "0b58dc9b-9c49-4b19-bb58-9c06d41c8fbf"
+  },
+  {
+   "artist": {
+    "country": "GB",
+    "disambiguation": "recording engineer",
+    "id": "e6d59ab6-b93c-42a7-8df8-0fba71e95959",
+    "name": "Philip Bagenal",
+    "sort-name": "Bagenal, Philip",
+    "type": "Person",
+    "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+   },
+   "attribute-ids": {},
+   "attribute-values": {},
+   "attributes": [],
+   "begin": null,
+   "direction": "backward",
+   "end": null,
+   "ended": false,
+   "source-credit": "",
+   "target-credit": "",
+   "target-type": "artist",
+   "type": "recording",
+   "type-id": "023a6c6d-80af-4f88-ae69-f5f6213f9bf4"
+  }
+ ],
+ "release-events": [
+  {
+   "area": {
+    "disambiguation": "",
+    "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+    "iso-3166-1-codes": [
+     "XE"
+    ],
+    "name": "Europe",
+    "sort-name": "Europe",
+    "type": null,
+    "type-id": null
+   },
+   "date": "2015-03-02"
+  }
+ ],
+ "release-group": {
+  "artist-credit": [
+   {
+    "artist": {
+     "country": "GB",
+     "disambiguation": "German pianist and score composer",
+     "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+     "name": "Max Richter",
+     "sort-name": "Richter, Max",
+     "type": "Person",
+     "type-id": "b6e035f4-3ce9-331c-97df-83397230b0df"
+    },
+    "joinphrase": "",
+    "name": "Max Richter"
+   }
+  ],
+  "disambiguation": "",
+  "first-release-date": "2004-02-26",
+  "genres": [
+   {
+    "count": 1,
+    "disambiguation": "",
+    "id": "6ed4e4d1-9a97-4e2c-b8df-083754f154f4",
+    "name": "classical"
+   },
+   {
+    "count": 1,
+    "disambiguation": "",
+    "id": "e328c306-8e35-46d2-93c3-623412ec7c13",
+    "name": "modern classical"
+   }
+  ],
+  "id": "85995b65-06fd-382d-9197-499c5b53f10d",
+  "primary-type": "Album",
+  "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+  "secondary-type-ids": [],
+  "secondary-types": [],
+  "title": "The Blue Notebooks"
+ },
+ "status": "Official",
+ "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+ "text-representation": {
+  "language": "eng",
+  "script": "Latn"
+ },
+ "title": "The Blue Notebooks"
+}

@@ -5,84 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tool.music.api.acoustid import extract_metadata, fetch_acoustid_metadata, get_audio_fingerprint
-
-# Real AcoustID v2/lookup response for a classical track (fingerprint redacted).
-# Structure from https://acoustid.org/webservice
-ACOUSTID_RESPONSE = {
-    "status": "ok",
-    "results": [
-        {
-            "score": 0.953,
-            "id": "abc123-fingerprint-id",
-            "recordings": [
-                {
-                    "id": "c5b13e18-c1f2-4c3a-a5b6-7d8e9f0a1b2c",
-                    "title": "Kuusi, op. 75 no. 5",
-                    "duration": 164,
-                    "artists": [
-                        {"id": "art-id-1", "name": "Ralf Gothóni"},
-                    ],
-                    "releases": [
-                        {
-                            "id": "rel-id-1",
-                            "title": "Sibelius Festival",
-                            "date": {"year": 1999, "month": 6},
-                            "country": "FI",
-                            "media": [
-                                {
-                                    "position": 1,
-                                    "track_count": 19,
-                                    "tracks": [
-                                        {
-                                            "id": "c5b13e18-c1f2-4c3a-a5b6-7d8e9f0a1b2c",
-                                            "position": 5,
-                                            "title": "Kuusi, op. 75 no. 5",
-                                        },
-                                    ],
-                                }
-                            ],
-                        },
-                        {
-                            "id": "rel-id-2",
-                            "title": "Sibelius, J.: Piano Music",
-                            "date": {"year": 2014, "month": 9, "day": 24},
-                            "country": "GB",
-                        },
-                    ],
-                }
-            ],
-        },
-        {
-            "score": 0.781,
-            "id": "def456-fingerprint-id",
-            "recordings": [
-                {
-                    "id": "d6c24f29-d2f3-4d4b-b6c7-8e9f0a1b2c3d",
-                    "title": '5 Pieces, Op. 75, "The Trees": No. 5. Kuusi (The Spruce)',
-                    "duration": 166,
-                    "artists": [
-                        {"id": "art-id-1", "name": "Ralf Gothóni"},
-                    ],
-                    "releases": [
-                        {
-                            "id": "rel-id-2",
-                            "title": "Sibelius, J.: Piano Music",
-                            "date": {"year": 2014, "month": 9, "day": 24},
-                            "country": "GB",
-                        }
-                    ],
-                }
-            ],
-        },
-    ],
-}
-
-# Real AcoustID response with no results
-ACOUSTID_RESPONSE_EMPTY = {
-    "status": "ok",
-    "results": [],
-}
+from tool.music.api.acoustid import candidates, fetch_acoustid_metadata, get_audio_fingerprint
 
 # fpcalc JSON output
 FPCALC_OUTPUT = {"duration": 164.5, "fingerprint": "AQADtImS..."}
@@ -122,13 +45,16 @@ class TestGetAudioFingerprint:
 
 
 class TestFetchAcoustidMetadata:
-    def test_success(self, monkeypatch):
+    def test_success(self, monkeypatch, load_fixture):
         monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
-        with patch("tool.music.api.acoustid._session.get_json", return_value=ACOUSTID_RESPONSE):
+        with patch(
+            "tool.music.api.acoustid._session.get_json", return_value=load_fixture("acoustid_corale.json")
+        ) as get:
             results = fetch_acoustid_metadata(200.0, "fp123")
-            assert len(results) == 2
-            assert results[0]["score"] == 0.953
-            assert results[0]["recordings"][0]["title"] == "Kuusi, op. 75 no. 5"
+        assert len(results) == 2
+        assert results[0]["recordings"][0]["title"] == "Corale"
+        # asks for release groups and releases/tracks so candidates are release-aware
+        assert get.call_args.kwargs["params"]["meta"] == "recordings releasegroups releases tracks"
 
     def test_no_api_key(self, monkeypatch):
         monkeypatch.delenv("ACOUSTID_API_KEY", raising=False)
@@ -154,76 +80,79 @@ class TestFetchAcoustidMetadata:
 
     def test_empty_results(self, monkeypatch):
         monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
-        with patch("tool.music.api.acoustid._session.get_json", return_value=ACOUSTID_RESPONSE_EMPTY):
+        with patch("tool.music.api.acoustid._session.get_json", return_value={"status": "ok", "results": []}):
             results = fetch_acoustid_metadata(200.0, "fp123")
             assert results == []
 
 
-class TestExtractMetadata:
-    def test_full_record(self):
-        """Parses a complete AcoustID result with releases, media, and tracks."""
-        result = ACOUSTID_RESPONSE["results"][0]
-        meta = extract_metadata(result)
-        assert meta["title"] == "Kuusi, op. 75 no. 5"
-        assert meta["artist"] == "Ralf Gothóni"
-        assert meta["album"] == "Sibelius Festival"
-        assert meta["date"] == "1999"
-        assert meta["tracknumber"] == "5"
+def _by_release(cands):
+    return {c.meta.musicbrainz_albumid: c for c in cands}
 
-    def test_track_number_from_mb_fallback_format(self):
-        """extract_metadata works with results normalized by _recording_to_result,
-        where MB track.recording.id has been remapped to track.id."""
+
+class TestCandidates:
+    """Shapes are real AcoustID responses (meta=recordings releasegroups releases tracks)."""
+
+    def test_one_candidate_per_release_of_a_recording(self, load_fixture):
+        cands = candidates(load_fixture("acoustid_kalandra.json")["results"])
+        assert len(cands) == 5
+        assert {c.meta.musicbrainz_recordingid for c in cands} == {"1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7"}
+        assert {c.meta.musicbrainz_releasegroupid for c in cands} == {"4cda8183-371b-4189-bcb1-265bd0ff4b5f"}
+        assert {c.meta.acoustid_id for c in cands} == {"e8187d3a-71a8-49ef-8f95-2fa590426190"}
+
+    def test_edition_details_distinguish_releases(self, load_fixture):
+        by = _by_release(candidates(load_fixture("acoustid_kalandra.json")["results"]))
+        cd = by["490a58ac-6f2d-482e-8915-b703e229794b"].meta
+        vinyl = by["c0035a48-a3bd-4a66-9a5a-938ffaf67f23"].meta
+        assert (cd.media, cd.date, cd.releasecountry) == ("CD", "2020-10-23", "NO")
+        assert cd.musicbrainz_trackid == "82185c30-f97f-4b1b-8c70-a0bd3d077649"
+        assert (cd.discnumber, cd.totaldiscs, cd.tracknumber, cd.totaltracks) == ("1", "1", "11", "11")
+        assert vinyl.media == '12" Vinyl'
+        assert vinyl.musicbrainz_trackid == "2aabd1c8-3793-4848-ba05-acf7ddd4b9ce"
+        assert (vinyl.discnumber, vinyl.totaldiscs, vinyl.tracknumber, vinyl.totaltracks) == ("2", "2", "3", "3")
+        assert vinyl.releasetype == ["album"]
+
+    def test_same_match_under_several_results_keeps_best_score(self, load_fixture):
+        results = load_fixture("acoustid_corale.json")["results"]
+        assert [r["score"] for r in results] == [0.9947587, 0.9074697]
+        cands = candidates(results)
+        assert len(cands) == 6  # 6 releases, not 12
+        assert {c.score for c in cands} == {0.9947587}
+        assert {c.meta.acoustid_id for c in cands} == {"46a154e0-0450-4c2f-9319-b3b3e5a85d4a"}
+
+    def test_partial_dates(self, load_fixture):
+        cands = candidates(load_fixture("acoustid_corale.json")["results"])
+        year_only = [c.meta for c in cands if c.meta.releasecountry == "IT"]
+        assert [m.date for m in year_only] == ["2013"]
+
+    def test_missing_release_country(self, load_fixture):
+        by = _by_release(candidates(load_fixture("acoustid_kalandra.json")["results"]))
+        assert by["2e58a475-b292-4570-a021-04aa00d29f3e"].meta.releasecountry is None
+
+    def test_releases_without_release_groups(self):
         result = {
-            "score": 0.95,
+            "id": "ac-1",
+            "score": 0.9,
             "recordings": [
                 {
-                    "id": "rec-mbid-1",
-                    "title": "Test Song",
-                    "artists": [{"name": "Test Artist"}],
-                    "releases": [
-                        {
-                            "title": "Test Album",
-                            "date": {"year": 2024},
-                            "media": [
-                                {
-                                    "tracks": [
-                                        {"id": "other-rec", "position": 1},
-                                        {"id": "rec-mbid-1", "position": 5},
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
+                    "id": "rec-1",
+                    "title": "Song",
+                    "artists": [{"id": "a1", "name": "A", "joinphrase": " & "}, {"id": "a2", "name": "B"}],
+                    "releases": [{"id": "rel-1", "title": "Album", "date": {"year": 2001, "month": 5}}],
                 }
             ],
         }
-        meta = extract_metadata(result)
-        assert meta["title"] == "Test Song"
-        assert meta["artist"] == "Test Artist"
-        assert meta["album"] == "Test Album"
-        assert meta["date"] == "2024"
-        assert meta["tracknumber"] == "5"
+        (cand,) = candidates([result])
+        assert cand.meta.artist == "A & B"
+        assert cand.meta.musicbrainz_artistid == ["a1", "a2"]
+        assert (cand.meta.musicbrainz_albumid, cand.meta.musicbrainz_releasegroupid) == ("rel-1", None)
+        assert cand.meta.date == "2001-05"
+        assert cand.meta.musicbrainz_trackid is None
 
-    def test_record_without_tracks(self):
-        """Result with releases but no media/track info."""
-        result = ACOUSTID_RESPONSE["results"][1]
-        meta = extract_metadata(result)
-        assert meta["title"] == '5 Pieces, Op. 75, "The Trees": No. 5. Kuusi (The Spruce)'
-        assert meta["artist"] == "Ralf Gothóni"
-        assert meta["album"] == "Sibelius, J.: Piano Music"
-        assert meta["date"] == "2014"
-        assert "tracknumber" not in meta
+    def test_recording_without_releases(self):
+        (cand,) = candidates([{"id": "ac-1", "score": 0.5, "recordings": [{"id": "rec-1", "title": "Just Title"}]}])
+        assert cand.meta.title == "Just Title"
+        assert cand.meta.musicbrainz_albumid is None
 
-    def test_no_recordings(self):
-        assert extract_metadata({}) == {}
-        assert extract_metadata({"recordings": []}) == {}
-
-    def test_minimal_record(self):
-        result = {"recordings": [{"title": "Just Title"}]}
-        meta = extract_metadata(result)
-        assert meta == {"title": "Just Title"}
-
-    def test_artist_no_name(self):
-        result = {"recordings": [{"artists": [{"role": "composer"}]}]}
-        meta = extract_metadata(result)
-        assert meta["artist"] == ""
+    def test_no_results(self):
+        assert candidates([]) == []
+        assert candidates([{"id": "x", "score": 1.0}]) == []

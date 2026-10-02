@@ -1,228 +1,311 @@
-"""Tests for MusicBrainz API client — uses mocked real API responses."""
+"""Tests for the MusicBrainz client — recorded real responses (tests/music/fixtures), no network."""
 
 from unittest.mock import patch
 
-from tool.music.api.musicbrainz import _recording_to_result, fetch_recording, search
+import pytest
 
-# Real MusicBrainz recording lookup response for a Sibelius track.
-# Structure from https://musicbrainz.org/doc/MusicBrainz_API
-# Recording lookups with inc=media return only matching tracks, and omit the
-# track.recording sub-object (it's the looked-up recording).
-MB_RECORDING_RESPONSE = {
-    "id": "c5b13e18-c1f2-4c3a-a5b6-7d8e9f0a1b2c",
-    "title": "Kuusi, op. 75 no. 5",
-    "length": 164000,
-    "genres": [
-        {"id": "gen-1", "name": "Classical", "count": 100, "disambiguation": ""},
-        {"id": "gen-2", "name": "Piano", "count": 50, "disambiguation": ""},
-        {"id": "gen-3", "name": "Finnish", "count": 30, "disambiguation": ""},
-        {"id": "gen-4", "name": "Contemporary", "count": 10, "disambiguation": ""},
-    ],
-    "releases": [
-        {
-            "id": "rel-id-1",
-            "title": "Sibelius Festival",
-            "date": "1999-06",
-            "artist-credit": [{"name": "Ralf Gothóni", "joinphrase": ""}],
-            "media": [
-                {
-                    "position": 1,
-                    "track_count": 19,
-                    "tracks": [
-                        {"number": "2", "position": 2, "title": "Kuusi, op. 75 no. 5", "id": "track-mbid"},
-                    ],
-                }
-            ],
-        }
-    ],
-}
+from tool.music.api.musicbrainz import enrich, search
+from tool.music.metadata import Metadata
 
-# Real MusicBrainz search response for recording queries.
-MB_SEARCH_RESPONSE = {
-    "created": "2024-01-01T00:00:00.000Z",
-    "count": 2,
-    "offset": 0,
-    "recordings": [
-        {
-            "id": "mb-rec-1",
-            "title": "Found Song",
-            "score": 95,
-            "artist-credit": [
-                {"name": "Artist One", "joinphrase": " & "},
-                {"name": "Artist Two", "joinphrase": ""},
-            ],
-            "releases": [
-                {"id": "rel-a", "title": "Test Album", "date": "2024"},
-                {"id": "rel-b", "title": "Other Album", "date": "2023-05"},
-            ],
-        },
-        {
-            "id": "mb-rec-2",
-            "title": "Another Song",
-            "score": 80,
-            "artist-credit": [],
-            "releases": [],
-        },
-    ],
-}
+KAL_REC = "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7"
+KAL_GROUP = "4cda8183-371b-4189-bcb1-265bd0ff4b5f"
+KAL_ARTIST = "7c67fb96-7e24-4893-a020-fcc53a1f7814"
+KAL_CD = "490a58ac-6f2d-482e-8915-b703e229794b"
+KAL_VINYL = "c0035a48-a3bd-4a66-9a5a-938ffaf67f23"
+KAL_WITHDRAWN = "2e58a475-b292-4570-a021-04aa00d29f3e"
+BLUE_NOTEBOOKS = "01d9453c-e652-4a3e-9dfd-53555692871a"
+DAYLIGHT_REC = "b75c56c6-cbfc-4d1a-83fd-b2e3f97194cf"
+TIME_LAPSE = "eafdf4ed-d167-4c37-88b4-3c98dbb97df0"
+CORALE_REC = "69af617d-c2b5-46a9-9316-fd1b6d20c81d"
+BEVER_REC = "3165fc57-c69a-4316-8cab-339a846e3a70"  # disc 2, track 1 of the time lapse special edition
 
 
-class TestRecordingToResult:
-    def test_full_recording(self):
-        mb_rec = MB_SEARCH_RESPONSE["recordings"][0]
-        result = _recording_to_result(mb_rec)
-        assert result["score"] == 0.95
-        rec = result["recordings"][0]
-        assert rec["id"] == "mb-rec-1"
-        assert rec["title"] == "Found Song"
-        assert rec["artists"] == [{"name": "Artist One"}, {"name": "Artist Two"}]
-        assert rec["releases"] == [
-            {"title": "Test Album", "date": {"year": 2024}},
-            {"title": "Other Album", "date": {"year": 2023}},
+@pytest.fixture
+def mb(load_fixture):
+    """Patch the MusicBrainz session to serve one fixture; returns the mock to inspect calls."""
+
+    def serve(name: str):
+        return patch("tool.music.api.musicbrainz._session.get_json", return_value=load_fixture(name))
+
+    return serve
+
+
+def selected(recording: str, release: str | None = None, track: str | None = None) -> Metadata:
+    return Metadata(musicbrainz_recordingid=recording, musicbrainz_albumid=release, musicbrainz_trackid=track)
+
+
+class TestStraightforwardRelease:
+    def test_single_request_fills_everything(self, mb):
+        with mb("mb_release_kalandra_cd.json") as get:
+            m = enrich(selected(KAL_REC, KAL_CD))
+        assert get.call_count == 1
+        assert get.call_args.args[0].endswith(f"/release/{KAL_CD}")
+
+        assert (m.title, m.artist, m.album, m.albumartist) == ("It Gets Easier", "Kalandra", "The Line", "Kalandra")
+        assert (m.tracknumber, m.totaltracks, m.discnumber, m.totaldiscs) == ("11", "11", "1", "1")
+        assert (m.date, m.originaldate, m.releasecountry, m.releasestatus) == (
+            "2020-10-23",
+            "2020-10-23",
+            "NO",
+            "Official",
+        )
+        assert (m.releasetype, m.media, m.barcode) == (["album"], "CD", "612608050884")
+        assert m.musicbrainz_recordingid == KAL_REC
+        assert m.musicbrainz_trackid == "82185c30-f97f-4b1b-8c70-a0bd3d077649"
+        assert m.musicbrainz_albumid == KAL_CD
+        assert m.musicbrainz_releasegroupid == KAL_GROUP
+        assert m.musicbrainz_artistid == [KAL_ARTIST]
+        assert m.musicbrainz_albumartistid == [KAL_ARTIST]
+        assert m.artistsort == m.albumartistsort == "Kalandra"
+        assert m.genre == ["pop", "rock", "folk rock", "alternative pop", "alternative rock"]  # by weight, max five
+
+    def test_acoustid_identity_is_kept(self, mb):
+        sel = selected(KAL_REC, KAL_CD)
+        sel.acoustid_id = "e8187d3a-71a8-49ef-8f95-2fa590426190"
+        with mb("mb_release_kalandra_cd.json"):
+            assert enrich(sel).acoustid_id == "e8187d3a-71a8-49ef-8f95-2fa590426190"
+
+
+class TestSelectedReleaseControlsIdentity:
+    """One recording, several releases: the chosen release decides release/track/medium."""
+
+    def test_cd_versus_vinyl(self, mb):
+        with mb("mb_release_kalandra_cd.json"):
+            cd = enrich(selected(KAL_REC, KAL_CD))
+        with mb("mb_release_kalandra_vinyl.json"):
+            vinyl = enrich(selected(KAL_REC, KAL_VINYL))
+
+        assert cd.musicbrainz_recordingid == vinyl.musicbrainz_recordingid == KAL_REC
+        assert (cd.musicbrainz_albumid, vinyl.musicbrainz_albumid) == (KAL_CD, KAL_VINYL)
+        assert cd.musicbrainz_trackid != vinyl.musicbrainz_trackid
+        assert vinyl.musicbrainz_trackid == "2aabd1c8-3793-4848-ba05-acf7ddd4b9ce"
+        assert (vinyl.media, vinyl.discnumber, vinyl.totaldiscs) == ('12" Vinyl', "2", "2")
+        # printed position is C3, the position on the medium is 3 of 3
+        assert (vinyl.tracknumber, vinyl.totaltracks) == ("3", "3")
+        assert vinyl.catalognumber == ["BNM017LPB"]
+        assert cd.catalognumber == ["BNM017CD"]
+        assert vinyl.barcode != cd.barcode
+
+    def test_track_found_by_release_track_id_when_recording_id_is_stale(self, mb):
+        # e.g. an AcoustID recording MBID that has since been merged on MusicBrainz
+        stale = selected("00000000-0000-0000-0000-000000000000", KAL_VINYL, "2aabd1c8-3793-4848-ba05-acf7ddd4b9ce")
+        with mb("mb_release_kalandra_vinyl.json"):
+            m = enrich(stale)
+        assert m.musicbrainz_recordingid == KAL_REC  # canonical id comes from the release
+        assert m.discnumber == "2"
+
+    def test_recording_missing_from_release_keeps_release_identity(self, mb, capsys):
+        with mb("mb_release_kalandra_cd.json"):
+            m = enrich(selected("00000000-0000-0000-0000-000000000000", KAL_CD))
+        assert m.musicbrainz_albumid == KAL_CD
+        assert m.musicbrainz_releasegroupid == KAL_GROUP
+        assert m.musicbrainz_trackid is None
+        assert m.tracknumber is None
+        assert "not found on the selected release" in capsys.readouterr().err
+
+
+class TestMultipleArtists:
+    def test_track_credit_vs_album_credit(self, mb):
+        with mb("mb_release_time_lapse.json"):
+            m = enrich(selected(BEVER_REC, TIME_LAPSE))
+        assert m.artist == "Ludovico Einaudi & Greta Svabo Bech"
+        assert m.artists == ["Ludovico Einaudi", "Greta Svabo Bech"]
+        assert m.artistsort == "Einaudi, Ludovico & Bech, Greta Svabo"
+        assert m.albumartist == "Ludovico Einaudi"
+        assert m.albumartistsort == "Einaudi, Ludovico"
+        assert m.musicbrainz_artistid == [
+            "fa34b363-79df-434f-a5b8-be4e6898543f",
+            "448ce1b7-4efc-4aca-b793-174745cc4e68",
         ]
-
-    def test_minimal_recording(self):
-        mb_rec = {"id": "xyz", "title": "Minimal"}
-        result = _recording_to_result(mb_rec)
-        assert result["score"] == 1.0  # default score when not provided
-        rec = result["recordings"][0]
-        assert rec["title"] == "Minimal"
-        assert rec["artists"] == []
-        assert rec["releases"] == []
-
-    def test_release_without_date(self):
-        mb_rec = {
-            "id": "abc",
-            "title": "Song",
-            "releases": [{"title": "Album"}],
-        }
-        result = _recording_to_result(mb_rec)
-        assert result["recordings"][0]["releases"] == [{"title": "Album"}]
-
-    def test_release_with_date_only(self):
-        mb_rec = {
-            "id": "abc",
-            "title": "Song",
-            "releases": [{"date": "2024"}],
-        }
-        result = _recording_to_result(mb_rec)
-        assert result["recordings"][0]["releases"] == [{"date": {"year": 2024}}]
-
-    def test_normalizes_track_ids_to_recording_ids(self):
-        """MB tracks have track.id=track-MBID and track.recording.id=recording-MBID.
-        _recording_to_result should normalize so track.id = recording MBID,
-        matching AcoustID format that extract_metadata expects."""
-        mb_rec = {
-            "id": "rec-mbid-1",
-            "title": "Test Song",
-            "releases": [
-                {
-                    "title": "Test Album",
-                    "date": "2024",
-                    "media": [
-                        {
-                            "position": 1,
-                            "tracks": [
-                                {
-                                    "id": "track-mbid-111",
-                                    "number": "1",
-                                    "position": 1,
-                                    "recording": {"id": "other-rec"},
-                                },
-                                {
-                                    "id": "track-mbid-222",
-                                    "number": "5",
-                                    "position": 5,
-                                    "recording": {"id": "rec-mbid-1"},
-                                },
-                            ],
-                        }
-                    ],
-                }
-            ],
-        }
-        result = _recording_to_result(mb_rec)
-        media = result["recordings"][0]["releases"][0]["media"]
-        tracks = media[0]["tracks"]
-        # track 0: different recording — id replaced with "other-rec"
-        assert tracks[0]["id"] == "other-rec"
-        assert tracks[0]["position"] == 1
-        # track 1: matching recording — id replaced with "rec-mbid-1"
-        assert tracks[1]["id"] == "rec-mbid-1"
-        assert tracks[1]["position"] == 5
-
-    def test_track_without_recording_reference(self):
-        """MB search results may include tracks without a recording sub-object.
-        In that case, keep the original track.id as-is."""
-        mb_rec = {
-            "id": "rec-mbid-1",
-            "title": "Song",
-            "releases": [
-                {
-                    "media": [
-                        {
-                            "tracks": [
-                                {"id": "track-mbid-999", "position": 3},
-                            ],
-                        }
-                    ],
-                }
-            ],
-        }
-        result = _recording_to_result(mb_rec)
-        tracks = result["recordings"][0]["releases"][0]["media"][0]["tracks"]
-        assert tracks[0]["id"] == "track-mbid-999"  # unchanged
-
-    def test_media_without_tracks(self):
-        mb_rec = {
-            "id": "rec-mbid-1",
-            "title": "Song",
-            "releases": [
-                {
-                    "media": [
-                        {"position": 1, "track_count": 0},
-                    ],
-                }
-            ],
-        }
-        result = _recording_to_result(mb_rec)
-        media = result["recordings"][0]["releases"][0]["media"]
-        assert media[0]["tracks"] == []
+        assert m.musicbrainz_albumartistid == ["fa34b363-79df-434f-a5b8-be4e6898543f"]
 
 
-class TestFetchRecording:
-    def test_returns_genre_tracknumber_and_albumartist(self):
-        with patch("tool.music.api.musicbrainz._session.get_json", return_value=MB_RECORDING_RESPONSE):
-            meta = fetch_recording("c5b13e18-c1f2-4c3a-a5b6-7d8e9f0a1b2c")
-            assert meta["genre"] == "Classical, Piano, Finnish"
-            assert meta["tracknumber"] == "2"
-            assert meta["albumartist"] == "Ralf Gothóni"
+class TestMultiDisc:
+    def test_second_disc_track(self, mb):
+        with mb("mb_release_time_lapse.json"):
+            m = enrich(selected(BEVER_REC, TIME_LAPSE))
+        assert (m.discnumber, m.totaldiscs) == ("2", "2")
+        assert (m.tracknumber, m.totaltracks) == ("1", "13")  # disc 2 has 13 tracks, disc 1 has 14
 
-    def test_handles_http_error(self):
-        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception):
-            meta = fetch_recording("rec-id")
-            assert meta == {}
+    def test_first_disc_track_of_same_release(self, mb):
+        with mb("mb_release_time_lapse.json"):
+            m = enrich(selected(CORALE_REC, TIME_LAPSE))
+        assert (m.discnumber, m.tracknumber, m.totaltracks) == ("1", "1", "14")
 
-    def test_no_genres(self):
-        resp = {"id": "rec-id", "releases": []}
-        with patch("tool.music.api.musicbrainz._session.get_json", return_value=resp):
-            meta = fetch_recording("c5b13e18-c1f2-4c3a-a5b6-7d8e9f0a1b2c")
-            assert "genre" not in meta
+    def test_vinyl_sides_are_media(self, mb):
+        with mb("mb_release_kalandra_vinyl.json"):
+            m = enrich(selected(KAL_REC, KAL_VINYL))
+        assert (m.discnumber, m.totaldiscs) == ("2", "2")
+
+
+class TestLabelsCatalogNumbersIsrcs:
+    def test_label_catno_barcode_isrc(self, mb):
+        with mb("mb_release_blue_notebooks.json"):
+            m = enrich(selected(DAYLIGHT_REC, BLUE_NOTEBOOKS))
+        assert m.label == ["Deutsche Grammophon"]
+        assert m.catalognumber == ["479 4443"]
+        assert m.barcode == "028947944430"
+        assert m.isrc == ["GBDCA0300279"]
+        assert m.releasecountry == "XE"
+
+
+class TestRelationshipCredits:
+    def test_work_and_composer(self, mb):
+        with mb("mb_release_blue_notebooks.json"):
+            m = enrich(selected(DAYLIGHT_REC, BLUE_NOTEBOOKS))
+        assert m.musicbrainz_workid == ["51c1a82f-61fc-4c77-9429-0f4d82d29a71"]
+        assert m.composer == ["Max Richter"]
+        assert m.producer == ["Max Richter", "Matthias Schneider"]
+        assert m.performer == [
+            "Natalia Bonner (violin)",
+            "Louisa Fuller (violin)",
+            "John Metcalfe (viola)",
+            "Max Richter (Moog)",
+            "Philip Sheppard (cello)",
+            "Chris Worsey (cello)",
+        ]
+        assert m.remixer == m.conductor == []
+
+    def test_arranger_and_composer_from_recording_and_work(self, mb):
+        with mb("mb_release_time_lapse.json"):
+            m = enrich(selected(CORALE_REC, TIME_LAPSE))
+        assert m.composer == ["Ludovico Einaudi"]
+        assert m.arranger == ["Ludovico Einaudi"]
+        assert m.musicbrainz_workid == ["e9d70be0-19b2-4255-b8c9-72df579bbae8"]
+
+    def test_multiple_writers(self, mb):
+        with mb("mb_release_kalandra_cd.json"):
+            m = enrich(selected(KAL_REC, KAL_CD))
+        assert m.writer == [
+            "Jogeir Daae Maeland",
+            "Oskar Johnsen Rydh",
+            "Katrine Stenbekk",
+            "Florian Bernhard Döderlein Winter",
+        ]
+        assert m.musicbrainz_workid == ["9382d3f9-eff6-41ac-88d7-bdf06dd827c1"]
+
+    def test_only_conventional_credits_are_kept(self, mb):
+        # engineer / mix / recording-location relations exist but are not tag fields here
+        with mb("mb_release_kalandra_cd.json"):
+            m = enrich(selected(KAL_REC, KAL_CD))
+        assert "Steve Parr" not in " ".join(m.to_values().get("performer", []))
+
+
+class TestIncompleteMetadata:
+    def test_withdrawn_release_without_country_or_catno(self, mb):
+        with mb("mb_release_kalandra_withdrawn.json"):
+            m = enrich(selected(KAL_REC, KAL_WITHDRAWN))
+        assert m.releasecountry is None
+        assert m.catalognumber == []
+        assert m.label == ["By Norse Music"]
+        assert m.releasestatus == "Withdrawn"
+        assert m.musicbrainz_albumid == KAL_WITHDRAWN
+        assert m.is_complete()  # identity is all that counts; missing optional fields don't matter
+
+    def test_label_without_catalog_number_and_unknown_country(self, mb):
+        with mb("mb_release_time_lapse.json"):
+            m = enrich(selected(CORALE_REC, TIME_LAPSE))
+        assert m.label == ["Decca Records"]
+        assert m.catalognumber == []
+        assert m.releasecountry is None
+
+    def test_no_tags_to_write_for_absent_fields(self, mb):
+        with mb("mb_release_kalandra_withdrawn.json"):
+            values = enrich(selected(KAL_REC, KAL_WITHDRAWN)).to_values()
+        assert "releasecountry" not in values
+        assert "catalognumber" not in values
+        assert "remixer" not in values
+
+
+class TestRecordingOnly:
+    def test_recording_lookup_when_no_release_selected(self, mb):
+        with mb("mb_recording_kalandra.json") as get:
+            m = enrich(selected(KAL_REC))
+        assert get.call_count == 1
+        assert get.call_args.args[0].endswith(f"/recording/{KAL_REC}")
+        assert m.title == "It Gets Easier"
+        assert m.artist == "Kalandra"
+        assert m.isrc == ["NONAT2001110"]
+        assert m.musicbrainz_artistid == [KAL_ARTIST]
+        assert m.musicbrainz_workid == ["9382d3f9-eff6-41ac-88d7-bdf06dd827c1"]
+        assert m.musicbrainz_albumid is None
+        assert m.musicbrainz_trackid is None
+        assert m.writer
+        assert m.producer
+
+
+class TestFailure:
+    def test_lookup_failure_keeps_selection(self, capsys):
+        sel = selected(KAL_REC, KAL_CD)
+        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception("boom")):
+            assert enrich(sel) == sel
+        assert "boom" in capsys.readouterr().err
+
+    def test_nothing_to_look_up(self):
+        with patch("tool.music.api.musicbrainz._session.get_json") as get:
+            assert enrich(Metadata(title="T")) == Metadata(title="T")
+        get.assert_not_called()
 
 
 class TestSearch:
-    def test_returns_results(self):
-        with patch("tool.music.api.musicbrainz._session.get_json", return_value=MB_SEARCH_RESPONSE):
-            results = search('recording:"Test"')
-            assert len(results) == 2
-            assert results[0]["recordings"][0]["title"] == "Found Song"
+    def test_one_candidate_per_release(self, mb):
+        with mb("mb_search_kalandra.json"):
+            cands = search("query")
+        assert len(cands) == 7  # 5 releases of the studio recording + 2 of the live one
+        studio = [c for c in cands if c.meta.musicbrainz_recordingid == KAL_REC]
+        assert {c.meta.musicbrainz_albumid for c in studio} == {
+            KAL_CD,
+            KAL_VINYL,
+            KAL_WITHDRAWN,
+            "61eb596b-7a13-4894-9d20-5942218d2329",
+            "6095c733-476b-4b4f-8258-6efa16eaeded",
+        }
+        assert all(c.meta.musicbrainz_releasegroupid == KAL_GROUP for c in studio)
+
+    def test_candidate_carries_medium_and_track(self, mb):
+        with mb("mb_search_kalandra.json"):
+            vinyl = next(c.meta for c in search("q") if c.meta.musicbrainz_albumid == KAL_VINYL)
+        assert vinyl.media == '12" Vinyl'
+        assert vinyl.musicbrainz_trackid == "2aabd1c8-3793-4848-ba05-acf7ddd4b9ce"
+        assert (vinyl.discnumber, vinyl.tracknumber, vinyl.totaltracks) == ("2", "3", "3")
+        assert (vinyl.date, vinyl.releasecountry, vinyl.releasestatus) == ("2020-10-23", "NO", "Official")
+        assert vinyl.totaldiscs is None  # unknown from search; filled by enrichment
+        assert vinyl.releasetype == ["album"]
+
+    def test_scores_and_secondary_types(self, mb):
+        with mb("mb_search_kalandra.json"):
+            cands = search("q")
+        live = [c for c in cands if "Live" in (c.meta.title or "")]
+        assert {c.score for c in live} == {0.78}
+        assert live[0].meta.releasetype == ["album", "live"]
+
+    def test_credited_artists(self, mb):
+        with mb("mb_search_daylight.json"):
+            cands = search("q")
+        assert len(cands) == 2
+        assert cands[0].meta.artist.startswith("Natalia Bonner, Louisa Fuller")
+        assert len(cands[0].meta.musicbrainz_artistid) == 6
+        assert cands[0].meta.musicbrainz_releasegroupid != cands[1].meta.musicbrainz_releasegroupid
+
+    def test_recording_without_releases(self):
+        resp = {"recordings": [{"id": "rec-1", "title": "Orphan", "score": 80, "artist-credit": []}]}
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value=resp):
+            (cand,) = search("q")
+        assert cand.score == 0.8
+        assert cand.meta.musicbrainz_albumid is None
 
     def test_handles_network_error(self):
         with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception):
-            results = search('recording:"Test"')
-            assert results == []
+            assert search('recording:"Test"') == []
 
     def test_empty_response(self):
         with patch("tool.music.api.musicbrainz._session.get_json", return_value={"recordings": []}):
-            results = search('recording:"Nonexistent"')
-            assert results == []
+            assert search('recording:"Nonexistent"') == []
+
+    def test_search_then_enrich_resolves_same_release_representation(self, mb):
+        with mb("mb_search_kalandra.json"):
+            vinyl = next(c for c in search("q") if c.meta.musicbrainz_albumid == KAL_VINYL)
+        with mb("mb_release_kalandra_vinyl.json"):
+            m = enrich(vinyl.meta)
+        assert m.musicbrainz_trackid == vinyl.meta.musicbrainz_trackid
+        assert (m.discnumber, m.tracknumber) == (vinyl.meta.discnumber, vinyl.meta.tracknumber)

@@ -11,17 +11,11 @@ from tool.music.constants import (
     RED,
     TAG_NAMES,
 )
-from tool.music.tags import TAG_FIELDS
+from tool.music.metadata import Metadata
 
 
-def test_tag_fields():
-    assert "title" in TAG_FIELDS
-    assert "artist" in TAG_FIELDS
-    assert "album" in TAG_FIELDS
-    assert "date" in TAG_FIELDS
-    assert "tracknumber" in TAG_FIELDS
-    assert "albumartist" in TAG_FIELDS
-    assert "genre" in TAG_FIELDS
+def test_tag_names_are_metadata_fields():
+    assert all(hasattr(Metadata(), key) for _, key in TAG_NAMES)
 
 
 def test_tag_names():

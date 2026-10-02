@@ -8,13 +8,12 @@ Three CLI tools for managing a local audio library:
   print a colour-coded table of codec, bitrate, cover art, missing tags, and a
   lossy-transcode verdict.  Given a single file, prints a detailed per-file
   breakdown instead of the table.
-- **`tag`** — fingerprint a single file with `fpcalc`, look up its MusicBrainz
-  metadata via the AcoustID API (enriched with track number, genre, and album
-  artist from MusicBrainz), interactively select a match with arrow keys, and
-  write tags to the file with mutagen. Skips files that already have complete
-  metadata (use `-f` to override). Transcodes opus/vorbis audio to AAC/M4A
-  for tag compatibility and iOS playback. Also supports `--read` to inspect
-  existing tags without any network call.
+- **`tag`** — fingerprint a single file with `fpcalc`, look up matches via the
+  AcoustID API, interactively select an exact recording-on-a-release with arrow
+  keys, enrich it from MusicBrainz, and write tags with mutagen: descriptive
+  fields plus durable MusicBrainz/AcoustID identity (see "Tag metadata" below).
+  Skips files that already carry that identity (use `-f` to override). Also
+  supports `--read` to inspect existing tags without any network call.
 - **`transcode`** — transcode a single audio file to high-quality AAC in an
   M4A container via ffmpeg, preserving channel layout. Uses Apple AudioToolbox
   (`aac_at`) on macOS, ffmpeg's native `aac` elsewhere. Supports `-o` to
@@ -40,18 +39,19 @@ tests or the app itself.
 | **Writes tags?** | No (read-only) | Yes (mutagen) |
 | **Network?** | No (local only) | Yes (AcoustID + MusicBrainz) |
 | **Key dependency** | ffmpeg/ffprobe | fpcalc (chromaprint) |
-| **Transcodes?** | No | Yes (opus/vorbis → AAC via ffmpeg) |
+| **Transcodes?** | No | No |
 
 - `scan.py` owns the table-scan UI, ffprobe integration, and verdict display.
   It never imports mutagen.
 - `tag.py` owns fingerprinting, API lookups, interactive selection, and tag
   mutation. It delegates tag I/O and transcoding to `tags.py`.
-- `tags.py` is the single authority for mutagen tag read/write.
-  Shared by both tools — scan reads tags through it, tag reads and writes
-  through it.
+- `tags.py` is the single authority for mutagen tag read/write and for how
+  `Metadata` fields are represented in each container.  Shared by both tools —
+  scan reads tags through it, tag reads and writes through it.
+- `metadata.py` is the typed model (`Metadata`, `Candidate`) passed between the
+  API clients, `tags.py` and `tag.py`.
 - `transcode.py` handles ffmpeg audio transcoding (probe codec, opus/vorbis
-  → AAC/M4A).  Used by `tags.py` when a file needs format conversion before
-  tag writing.
+  → AAC/M4A) for the standalone `transcode` command.
 
 They share:
 - `constants.py` — mutagen-type quality tiers, ffprobe codec-name sets,
@@ -68,30 +68,32 @@ They share:
 src/tool/music/
 ├── __init__.py      # empty
 ├── constants.py     # mutagen type tiers, ffprobe codec sets, colours, tag names
-├── tags.py          # mutagen tag read/write (shared I/O)
+├── metadata.py      # Metadata / Candidate dataclasses (Picard tag names)
+├── tags.py          # mutagen tag read/write (shared I/O, Picard on-disk mappings)
 ├── transcode.py     # ffmpeg audio transcode (probe codec, opus/vorbis → AAC/M4A)
 ├── verdict.py       # multi-point spectral brickwall detector
 ├── ui.py            # ANSI 256-color terminal formatting (colored, bold, dim)
 ├── scan.py          # probe, format, collect, main() entry point
-├── tag.py           # CLI orchestrator: fpcalc → AcoustID → MB → mutagen write
+├── tag.py           # CLI orchestrator: fpcalc → AcoustID → select → MB enrich → mutagen write
 └── api/
     ├── __init__.py     # empty
-    ├── acoustid.py     # fpcalc + AcoustID API lookup (rate-limited 3/sec) + result parsing
-    ├── musicbrainz.py  # MusicBrainz search + recording lookup (rate-limited 1/sec)
+    ├── acoustid.py     # fpcalc + AcoustID API lookup (rate-limited 3/sec) → release-aware candidates
+    ├── musicbrainz.py  # MusicBrainz search → candidates; release/recording lookup → Metadata (1/sec)
     └── spotify.py      # unauthenticated Spotify playlist fetching
 ```
 
 | Module | Purpose |
 |---|---|
 | `constants.py` | Shared data: mutagen-type quality tiers (`LOSSY_HIGH_TYPES`, `LOSSLESS_TYPES`, `DSD_TYPES` — use with `isinstance`), ffprobe codec-name sets (`LOSSY_HIGH`, `LOSSLESS`, `DSD` — for codec-level string matching), 256-color ANSI codes (`MAGENTA`, `GOLD`, …), `TAG_NAMES`, `AUDIO_EXTENSIONS`. No logic. |
-| `tags.py` | Single authority for mutagen tag read/write. `read_tags()` / `write_tags()` — the only place that imports mutagen file types. `write_tags()` detects opus/vorbis types and delegates to `transcode.py` before writing, using a tempdir so the original is kept intact on failure. |
+| `metadata.py` | `Metadata` dataclass (Picard internal tag names; scalars are `str \| None`, multi-values `list[str]`), `to_values()` / `from_values()` (the `{field: [values]}` form `tags.py` works in; `from_values` also splits legacy `3/12`), `is_complete()`, `show()` (display, abbreviates the fingerprint). `Candidate(score, meta)` is one selectable match. |
+| `tags.py` | Single authority for mutagen tag read/write. `read_tags()` → `Metadata`, `write_tags(path, Metadata)` — the only place that imports mutagen file types. Vorbis (FLAC/Ogg/Opus), ID3 (raw frames, written as v2.4) and MP4 (atoms + `----:com.apple.iTunes:` freeform), following Picard's mappings. Writes only fields the `Metadata` sets. |
 | `transcode.py` | ffmpeg audio transcoding. `probe_codec()` wraps ffprobe to detect the audio codec. `transcode_to_aac()` transcodes opus/vorbis to AAC at 256k in an M4A container using Apple AudioToolbox (`aac_at`) on macOS or ffmpeg's native `aac` elsewhere, with ffmpeg's progress bar shown on stderr. |
 | `verdict.py` | Lossy-transcode detection via multi-point spectral slope profile. Module docstring is the canonical methodology reference. Exports `compute_verdict(codec, filepath, sample_rate, **thresholds)` → `(text, color, dim)`. One ffmpeg call per file (`asplit=N` in a `filter_complex` graph with FIR energy-above-frequency bands at 15/17/19/20.5/21.5 kHz, plus 25 kHz for hi-res files). Thresholds are module-level constants (`BRICKWALL_DROP_DB`, `LOW_ENERGY_DB`, `NO_HF_DB`, `HI_RES_NO_HF_DB`), overridable via kwargs and CLI flags. |
 | `ui.py` | Shared ANSI formatting: `colored(text, code, bold, dim)`, `bold(text)`, `dim(text)`, `cursor_up(n)`, `clear_line()`, `clear_below()`. No business logic. |
 | `scan.py` | The `scan` CLI. `probe()` wraps ffprobe. `collect_files()` walks dirs. `_process_one()` does the per-file work (probe → format → verdict). `main()` runs a `ThreadPoolExecutor` over files (default `cpu_count` workers, override with `-j N`). Column widths and ANSI formatting live here. Single-file mode (`_print_file_detail()`) prints a full breakdown: streams, all tags, verdict. Supports `--brickwall-threshold`, `--low-energy-db`, `--no-hf-db`, `--hi-res-no-hf-db`. |
-| `tag.py` | The `tag` CLI. Orchestrator — delegates fingerprinting + AcoustID lookup to `api.acoustid`, MB enrichment to `api.musicbrainz`. Interactive arrow-key selector with live diff (`interactive_select()`). Enter writes immediately (no confirmation prompt); `s` skips. Skips files with complete metadata unless `-f`/`--force`. `-y` skips the write confirmation in non-TTY mode. `--read` inspects local tags without any network call. |
-| `api/acoustid.py` | AcoustID API client. `get_audio_fingerprint()` runs fpcalc. `fetch_acoustid_metadata()` calls the AcoustID v2/lookup endpoint (rate-limited 3 req/sec). `extract_metadata()` parses the result into tag fields. Docs: https://acoustid.org/webservice |
-| `api/musicbrainz.py` | MusicBrainz API client. `search()` queries MB recordings, `fetch_recording()` looks up a single recording for genre/track number/album artist. Rate-limited 1 req/sec. Exports `MB_BASE` and `USER_AGENT` for use by `resolver.py`. Docs: https://musicbrainz.org/doc/MusicBrainz_API |
+| `tag.py` | The `tag` CLI. Orchestrator — delegates fingerprinting + AcoustID lookup to `api.acoustid`, enrichment to `api.musicbrainz`. Ranks candidates (`_rank`), arrow-key selector with a scrolling list and live diff (`interactive_select()`). Enter writes immediately (no confirmation prompt); `s` skips. Skips files whose tags `is_complete()` unless `-f`/`--force`. `-y` skips the write confirmation in non-TTY mode. `--read` inspects local tags without any network call. |
+| `api/acoustid.py` | AcoustID API client. `get_audio_fingerprint()` runs fpcalc. `fetch_acoustid_metadata()` calls v2/lookup with `meta=recordings releasegroups releases tracks` (rate-limited 3 req/sec). `candidates()` flattens results into one `Candidate` per recording × release × medium × track, keeping the best score when a match repeats. Docs: https://acoustid.org/webservice |
+| `api/musicbrainz.py` | MusicBrainz API client; all MB JSON parsing lives here. `search()` → candidates (one per recording × release). `enrich(meta)` turns a selected candidate into full `Metadata` with one request: `release/{id}` with recordings, labels, ISRCs, genres and recording/work-level relationships, or `recording/{id}` if no release. Rate-limited 1 req/sec. Exports `MB_BASE` and `USER_AGENT` for use by `resolver.py`. Docs: https://musicbrainz.org/doc/MusicBrainz_API |
 | `api/spotify.py` | Unauthenticated Spotify playlist fetching via Spotify's private web-player API. `SpotifyPublicPlaylist.get_playlist()` returns playlist metadata and tracks. Docs: https://developer.spotify.com/documentation/web-api |
 
 ## Commands
@@ -187,19 +189,77 @@ All in `verdict.py` as module-level constants, overridable via CLI flags on `sca
 
 ```
 tag.main()
-  └─ --read?  → _print_tags()  (local only, exit)
-  └─ read_tags()               # check if metadata already complete; skip unless -f
-  └─ get_audio_fingerprint()   # fpcalc → (duration, fingerprint)
-  └─ fetch_acoustid_metadata() # AcoustID API → results
-  └─ interactive_select()      # arrow keys, live diff, Enter=write, s=skip
-  └─ extract_metadata()        # AcoustID → {title, artist, album, date}
-  └─ _fetch_musicbrainz()      # MusicBrainz API → {tracknumber, genre, albumartist}
-  └─ format_diff()             # current vs new diff (no diff → exit)
-  └─ write_tags()              # tags.py → transcode if opus/vorbis, then mutagen write
-       └─ MutagenFile() is OggOpus/OggVorbis/None?
-            └─ transcode_to_aac()  # transcode.py → ffprobe codec → ffmpeg aac 256k → .m4a
-            └─ write tags to temp file, os.remove() original, shutil.move() into place
-       └─ isinstance FLAC/Ogg? → Vorbis comments
-       └─ isinstance MP3?      → EasyID3
-       └─ isinstance MP4?      → EasyMP4
+  └─ --read?  → _print_tags()        # local only, exit
+  └─ read_tags().is_complete()?      # skip unless -f
+  └─ get_audio_fingerprint()         # fpcalc → (duration, fingerprint)
+  └─ fetch_acoustid_metadata()       # 1 AcoustID request
+  └─ candidates()                    # none? → _fallback_search() → musicbrainz.search() (same Candidate shape)
+  └─ _rank() + interactive_select()  # arrow keys, scrolling list, live diff, Enter=write, s=skip
+  └─ musicbrainz.enrich()            # 1 MusicBrainz request for the chosen release (or recording)
+  └─ acoustid_fingerprint = fingerprint
+  └─ format_diff()                   # only fields that would be written (no diff → exit)
+  └─ write_tags()                    # tags.py: only the fields set; unrelated tags/artwork untouched
 ```
+
+### Tag metadata
+
+`Metadata` fields use Picard's internal names; the first group is descriptive
+(title, artist/artists/artistsort, album, albumartist(+sort), track/disc
+number + totals, date, originaldate, genre, releasecountry/status/type, media,
+label, catalognumber, barcode, isrc), then identity, then credits (composer,
+lyricist, writer, arranger, producer, conductor, remixer, performer).
+
+Identity, with the Picard on-disk names (the recording/release-track naming is
+historically confusing — do not conflate them):
+
+| Field | Meaning | Vorbis | ID3 | MP4 (`----:com.apple.iTunes:`) |
+|---|---|---|---|---|
+| `musicbrainz_recordingid` | recording | `MUSICBRAINZ_TRACKID` | `UFID:http://musicbrainz.org` | `MusicBrainz Track Id` |
+| `musicbrainz_trackid` | release track | `MUSICBRAINZ_RELEASETRACKID` | `TXXX:MusicBrainz Release Track Id` | `MusicBrainz Release Track Id` |
+| `musicbrainz_albumid` | release | `MUSICBRAINZ_ALBUMID` | `TXXX:MusicBrainz Album Id` | `MusicBrainz Album Id` |
+| `musicbrainz_releasegroupid` | release group | `MUSICBRAINZ_RELEASEGROUPID` | `TXXX:MusicBrainz Release Group Id` | `MusicBrainz Release Group Id` |
+| `musicbrainz_artistid` | track artist(s) | `MUSICBRAINZ_ARTISTID` | `TXXX:MusicBrainz Artist Id` | `MusicBrainz Artist Id` |
+| `musicbrainz_albumartistid` | release artist(s) | `MUSICBRAINZ_ALBUMARTISTID` | `TXXX:MusicBrainz Album Artist Id` | `MusicBrainz Album Artist Id` |
+| `musicbrainz_workid` | work(s) | `MUSICBRAINZ_WORKID` | `TXXX:MusicBrainz Work Id` | `MusicBrainz Work Id` |
+| `acoustid_id` / `acoustid_fingerprint` | AcoustID, Chromaprint | `ACOUSTID_ID` / `ACOUSTID_FINGERPRINT` | `TXXX:Acoustid Id` / `Acoustid Fingerprint` | `Acoustid Id` / `Acoustid Fingerprint` |
+
+Notes and nuances:
+
+- **Release selection.** A recording is on many releases (the same track on a
+  CD, a vinyl pressing and a 2023 reissue). Candidates are per
+  recording × release × medium × track, so the picked one fixes the release,
+  release group, release track, disc and position. The list shows album, date,
+  country, medium, disc and track; the release id is appended only when two
+  lines would otherwise look identical. `_rank` orders by score, then release
+  title matching the file's current album, then plain (non-live/compilation)
+  release groups, then earliest date — it only orders, it never drops or picks.
+- **Position, not printed number.** `tracknumber` is the position on the medium
+  (Picard's `tracknumber`), so vinyl "C3" is stored as 3 on disc 2. MP4 `trkn`/`disk`
+  hold integers only.
+- **Multi-value.** Genre, label, catalog number, ISRC, artist/album-artist/work
+  IDs, release type (`album`, then secondary types), credits and performers are
+  real multi-values: repeated Vorbis comments, null-separated ID3 v2.4 text
+  frames, multiple MP4 freeform values. Performers are `"Name (instrument)"`;
+  in ID3 they live in `TMCL` as `[instrument, name]`, `arranger`/`producer` in
+  `TIPL` (other `TIPL` roles are preserved).
+- **Genres** are recording + release + release-group genres, summed by vote
+  count, top five.
+- **Credits** come from recording-level artist relations (arranger, producer,
+  conductor, remixer, instrument/vocal/performer) and from the work's artist
+  relations (composer, lyricist, writer, arranger) via the `performance`
+  relation. Engineer/mix/etc. are intentionally not stored.
+- **Completeness** (`Metadata.is_complete()`): title, artist and recording id,
+  plus release id and release-group id whenever an album is present. A bare
+  recording with no release is complete without them. Optional fields never
+  affect it.
+- **Fallback** (no AcoustID match): MusicBrainz search by file tags, then by
+  normalised filename, yielding the same release-aware candidates. Such files get
+  the fingerprint but no `acoustid_id`.
+- **AcoustID** exposes no ISRCs; they come from MusicBrainz. AcoustID's `mediums[].tracks[].id`
+  is the *release track* MBID (not the recording MBID).
+- **Failure.** If the MusicBrainz lookup fails, the AcoustID-level selection is
+  written with a warning on stderr.
+- **Fixtures.** `tests/music/fixtures/` holds real recorded responses
+  (Kalandra — one recording on CD / vinyl / withdrawn digital releases; Einaudi — multi-disc,
+  differing track vs album credits, composer; Max Richter — instruments, producers, ISRC, catalog number).
+  Release fixtures are trimmed to a couple of tracks.

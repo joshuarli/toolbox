@@ -1,0 +1,328 @@
+{
+ "count": 12,
+ "created": "2026-10-02T20:50:00.088Z",
+ "offset": 0,
+ "recordings": [
+  {
+   "artist-credit": [
+    {
+     "artist": {
+      "aliases": [
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": null,
+        "name": "Natalie Bonner",
+        "primary": null,
+        "sort-name": "Bonner, Natalie",
+        "type": null
+       }
+      ],
+      "disambiguation": "violinist",
+      "id": "9a8f6e02-f8cf-48c4-a323-84f1c520d92e",
+      "name": "Natalia Bonner",
+      "sort-name": "Bonner, Natalia"
+     },
+     "joinphrase": ", ",
+     "name": "Natalia Bonner"
+    },
+    {
+     "artist": {
+      "disambiguation": "violinist",
+      "id": "0e9c76c9-f0d5-4ffd-8274-c55ff9d5afa0",
+      "name": "Louisa Fuller",
+      "sort-name": "Fuller, Louisa"
+     },
+     "joinphrase": ", ",
+     "name": "Louisa Fuller"
+    },
+    {
+     "artist": {
+      "disambiguation": "UK‐based composer, arranger and violist",
+      "id": "07cf2e3a-bf6a-44b9-9079-842953a671c9",
+      "name": "John Metcalfe",
+      "sort-name": "Metcalfe, John"
+     },
+     "joinphrase": ", ",
+     "name": "John Metcalfe"
+    },
+    {
+     "artist": {
+      "aliases": [
+       {
+        "begin-date": "1966-03-22",
+        "end-date": null,
+        "locale": null,
+        "name": "Max Richter",
+        "primary": null,
+        "sort-name": "Richter, Max",
+        "type": "Legal name",
+        "type-id": "d4dcd0c0-b341-3612-a332-c0ce797b25cf"
+       },
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": null,
+        "name": "Max Richteir",
+        "primary": null,
+        "sort-name": "Max Richteir",
+        "type": "Search hint",
+        "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+       },
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": null,
+        "name": "Max Ricter",
+        "primary": null,
+        "sort-name": "Max Ricter",
+        "type": "Search hint",
+        "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+       },
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": null,
+        "name": "Max Rikter",
+        "primary": null,
+        "sort-name": "Max Rikter",
+        "type": "Search hint",
+        "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+       },
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": null,
+        "name": "Richter",
+        "primary": null,
+        "sort-name": "Richter",
+        "type": "Search hint",
+        "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e"
+       }
+      ],
+      "disambiguation": "German pianist and score composer",
+      "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+      "name": "Max Richter",
+      "sort-name": "Richter, Max"
+     },
+     "joinphrase": ", ",
+     "name": "Max Richter"
+    },
+    {
+     "artist": {
+      "aliases": [
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": "en",
+        "name": "Philip David Sheppard",
+        "primary": null,
+        "sort-name": "Sheppard, Philip David",
+        "type": "Legal name",
+        "type-id": "d4dcd0c0-b341-3612-a332-c0ce797b25cf"
+       },
+       {
+        "begin-date": null,
+        "end-date": null,
+        "locale": null,
+        "name": "Phillip Sheppard",
+        "primary": null,
+        "sort-name": "Phillip Sheppard",
+        "type": null
+       }
+      ],
+      "id": "5f3347ae-b5df-4203-80db-61f694d86198",
+      "name": "Philip Sheppard",
+      "sort-name": "Sheppard, Philip"
+     },
+     "joinphrase": ", ",
+     "name": "Philip Sheppard"
+    },
+    {
+     "artist": {
+      "disambiguation": "cellist",
+      "id": "a5a5d278-ef71-4895-b910-d48806b5a5ce",
+      "name": "Chris Worsey",
+      "sort-name": "Worsey, Chris"
+     },
+     "name": "Chris Worsey"
+    }
+   ],
+   "artist-credit-id": "1a0ddcc5-33d0-37da-bfb6-b2d0c829b5e2",
+   "first-release-date": "2004-02-26",
+   "id": "b75c56c6-cbfc-4d1a-83fd-b2e3f97194cf",
+   "isrcs": [
+    "GBDCA0300279"
+   ],
+   "length": 371746,
+   "releases": [
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "disambiguation": "German pianist and score composer",
+        "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+        "name": "Max Richter",
+        "sort-name": "Richter, Max"
+       },
+       "name": "Max Richter"
+      }
+     ],
+     "artist-credit-id": "fde9ba10-0fea-3d31-83e4-6d1b880300a2",
+     "count": 1,
+     "country": "DE",
+     "date": "2025-12-03",
+     "id": "2de5217c-c4a3-4e0f-bcf7-fb1247c794eb",
+     "media": [
+      {
+       "format": "Digital Media",
+       "id": "e0559872-c41a-4989-b0ec-22132e4ea1ee",
+       "position": 1,
+       "track": [
+        {
+         "id": "7728b821-c55f-4338-b1b6-62cd1f95cee4",
+         "length": 371746,
+         "number": "37",
+         "title": "On the Nature of Daylight"
+        }
+       ],
+       "track-count": 37,
+       "track-offset": 36
+      }
+     ],
+     "release-events": [
+      {
+       "area": {
+        "id": "85752fda-13c4-31a3-bee5-0e5cb1f51dad",
+        "iso-3166-1-codes": [
+         "DE"
+        ],
+        "name": "Germany",
+        "sort-name": "Germany"
+       },
+       "date": "2025-12-03"
+      }
+     ],
+     "release-group": {
+      "id": "374e14cd-3049-4e85-8cd2-b233849f9017",
+      "secondary-type-ids": [
+       "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+       "Compilation"
+      ],
+      "title": "Scored By Max Richter"
+     },
+     "status": "Official",
+     "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+     "title": "Scored By Max Richter",
+     "track-count": 37
+    },
+    {
+     "artist-credit": [
+      {
+       "artist": {
+        "disambiguation": "German pianist and score composer",
+        "id": "509f20b2-5df3-4aec-9bbc-002131fb3f99",
+        "name": "Max Richter",
+        "sort-name": "Richter, Max"
+       },
+       "name": "Max Richter"
+      }
+     ],
+     "artist-credit-id": "fde9ba10-0fea-3d31-83e4-6d1b880300a2",
+     "count": 1,
+     "country": "XE",
+     "date": "2015-03-02",
+     "id": "01d9453c-e652-4a3e-9dfd-53555692871a",
+     "media": [
+      {
+       "format": "CD",
+       "id": "550eb7d2-404d-3a5c-bc0c-8d5f54047055",
+       "position": 1,
+       "track": [
+        {
+         "id": "3da62cad-0605-4f38-95a2-ab550511f5e7",
+         "length": 371746,
+         "number": "2",
+         "title": "On the Nature of Daylight"
+        }
+       ],
+       "track-count": 12,
+       "track-offset": 1
+      }
+     ],
+     "release-events": [
+      {
+       "area": {
+        "id": "89a675c2-3e37-3518-b83c-418bad59a85a",
+        "iso-3166-1-codes": [
+         "XE"
+        ],
+        "name": "Europe",
+        "sort-name": "Europe"
+       },
+       "date": "2015-03-02"
+      }
+     ],
+     "release-group": {
+      "id": "85995b65-06fd-382d-9197-499c5b53f10d",
+      "primary-type": "Album",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "title": "The Blue Notebooks",
+      "type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+     },
+     "status": "Official",
+     "status-id": "4e304316-386d-3409-af2e-78857eec5cfe",
+     "title": "The Blue Notebooks",
+     "track-count": 12
+    }
+   ],
+   "score": 100,
+   "tags": [
+    {
+     "count": 2,
+     "name": "electronic"
+    },
+    {
+     "count": 3,
+     "name": "classical"
+    },
+    {
+     "count": 1,
+     "name": "instrumental"
+    },
+    {
+     "count": 2,
+     "name": "ambient"
+    },
+    {
+     "count": 1,
+     "name": "contemporary instrumental"
+    },
+    {
+     "count": 3,
+     "name": "contemporary classical"
+    },
+    {
+     "count": 0,
+     "name": "avantgarde"
+    },
+    {
+     "count": 2,
+     "name": "modern classical"
+    },
+    {
+     "count": 1,
+     "name": "neoclassicism"
+    },
+    {
+     "count": 1,
+     "name": "post-classical"
+    }
+   ],
+   "title": "On the Nature of Daylight",
+   "video": null
+  }
+ ]
+}

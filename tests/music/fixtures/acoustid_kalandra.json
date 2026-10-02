@@ -1,0 +1,275 @@
+{
+ "results": [
+  {
+   "id": "e8187d3a-71a8-49ef-8f95-2fa590426190",
+   "recordings": [
+    {
+     "artists": [
+      {
+       "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+       "name": "Kalandra"
+      }
+     ],
+     "duration": 306.475,
+     "id": "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7",
+     "releasegroups": [
+      {
+       "artists": [
+        {
+         "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+         "name": "Kalandra"
+        }
+       ],
+       "id": "4cda8183-371b-4189-bcb1-265bd0ff4b5f",
+       "releases": [
+        {
+         "artists": [
+          {
+           "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+           "name": "Kalandra"
+          }
+         ],
+         "country": "NO",
+         "date": {
+          "day": 23,
+          "month": 10,
+          "year": 2020
+         },
+         "id": "490a58ac-6f2d-482e-8915-b703e229794b",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 11,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+               "name": "Kalandra"
+              }
+             ],
+             "id": "82185c30-f97f-4b1b-8c70-a0bd3d077649",
+             "position": 11,
+             "title": "It Gets Easier"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "NO",
+           "date": {
+            "day": 23,
+            "month": 10,
+            "year": 2020
+           }
+          }
+         ],
+         "title": "The Line",
+         "track_count": 11
+        },
+        {
+         "artists": [
+          {
+           "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+           "name": "Kalandra"
+          }
+         ],
+         "date": {
+          "day": 23,
+          "month": 10,
+          "year": 2020
+         },
+         "id": "2e58a475-b292-4570-a021-04aa00d29f3e",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 11,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+               "name": "Kalandra"
+              }
+             ],
+             "id": "31bd5899-22a0-47bd-b55f-2368ef6a87aa",
+             "position": 11,
+             "title": "It Gets Easier"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "date": {
+            "day": 23,
+            "month": 10,
+            "year": 2020
+           }
+          }
+         ],
+         "title": "The Line",
+         "track_count": 11
+        },
+        {
+         "artists": [
+          {
+           "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+           "name": "Kalandra"
+          }
+         ],
+         "country": "NO",
+         "date": {
+          "day": 23,
+          "month": 10,
+          "year": 2020
+         },
+         "id": "c0035a48-a3bd-4a66-9a5a-938ffaf67f23",
+         "medium_count": 2,
+         "mediums": [
+          {
+           "format": "12\" Vinyl",
+           "position": 2,
+           "track_count": 3,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+               "name": "Kalandra"
+              }
+             ],
+             "id": "2aabd1c8-3793-4848-ba05-acf7ddd4b9ce",
+             "position": 3,
+             "title": "It Gets Easier"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "NO",
+           "date": {
+            "day": 23,
+            "month": 10,
+            "year": 2020
+           }
+          }
+         ],
+         "title": "The Line",
+         "track_count": 11
+        },
+        {
+         "artists": [
+          {
+           "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+           "name": "Kalandra"
+          }
+         ],
+         "country": "XW",
+         "date": {
+          "day": 23,
+          "month": 10,
+          "year": 2020
+         },
+         "id": "61eb596b-7a13-4894-9d20-5942218d2329",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 11,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+               "name": "Kalandra"
+              }
+             ],
+             "id": "385deb14-b31e-4ec7-9a8a-d09412a5c861",
+             "position": 11,
+             "title": "It Gets Easier"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "XW",
+           "date": {
+            "day": 23,
+            "month": 10,
+            "year": 2020
+           }
+          }
+         ],
+         "title": "The Line",
+         "track_count": 11
+        },
+        {
+         "artists": [
+          {
+           "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+           "name": "Kalandra"
+          }
+         ],
+         "country": "XW",
+         "date": {
+          "day": 28,
+          "month": 6,
+          "year": 2023
+         },
+         "id": "6095c733-476b-4b4f-8258-6efa16eaeded",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 11,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "7c67fb96-7e24-4893-a020-fcc53a1f7814",
+               "name": "Kalandra"
+              }
+             ],
+             "id": "ff65f05a-29f7-4bd7-8c8e-fe694dbb733b",
+             "position": 11,
+             "title": "It Gets Easier"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "XW",
+           "date": {
+            "day": 28,
+            "month": 6,
+            "year": 2023
+           }
+          }
+         ],
+         "title": "The Line",
+         "track_count": 11
+        }
+       ],
+       "title": "The Line",
+       "type": "Album"
+      }
+     ],
+     "title": "It Gets Easier"
+    }
+   ],
+   "score": 0.9883307
+  }
+ ],
+ "status": "ok"
+}

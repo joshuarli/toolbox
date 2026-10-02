@@ -328,7 +328,7 @@ def _print_file_detail(
     print(f"  {bold('Verdict:')}  {colored(verdict_text, verdict_color, bold=not verdict_dim, dim=verdict_dim)}")
     print(sep)
 
-    tags = read_tags(str(fp))
+    tags = read_tags(str(fp)).present()
     if tags:
         label_w = max((len(k) for k in tags), default=0)
         print(f"  {bold('Tags:')}")
@@ -527,7 +527,7 @@ def run(args: argparse.Namespace) -> None:
         else:
             verdict_text, verdict_color, verdict_dim = brick_text, brick_color, brick_dim
 
-        tags = read_tags(str(fp))
+        tags = read_tags(str(fp)).present()
 
         return (
             f"  {fmt_codec(codec)}  {fmt_bitrate(bitrate, codec)}  "

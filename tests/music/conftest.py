@@ -1,6 +1,10 @@
+import json
 import subprocess
+from pathlib import Path
 
 import pytest
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _ffmpeg_available() -> bool:
@@ -73,3 +77,27 @@ def wav_file(tmp_path):
     p = tmp_path / "test.wav"
     _make_audio(str(p), "pcm_s16le")
     return str(p)
+
+
+@pytest.fixture
+def opus_file(tmp_path):
+    p = tmp_path / "test.opus"
+    _make_audio(str(p), "libopus", sample_rate=48000)
+    return str(p)
+
+
+@pytest.fixture
+def ogg_file(tmp_path):
+    p = tmp_path / "test.ogg"
+    _make_audio(str(p), "libvorbis")
+    return str(p)
+
+
+@pytest.fixture
+def load_fixture():
+    """Load a recorded AcoustID / MusicBrainz response from tests/music/fixtures/."""
+
+    def load(name: str):
+        return json.loads((FIXTURES / name).read_text())
+
+    return load

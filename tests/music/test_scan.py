@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tool.music.constants import BLUE, GOLD, GREEN, GREY, MAGENTA, RED
+from tool.music.metadata import Metadata
 from tool.music.scan import (
     _format_duration,
     _format_size,
@@ -269,7 +270,7 @@ class TestPrintFileDetail:
         with (
             patch("tool.music.scan.probe", return_value=probe_data),
             patch("tool.music.scan.compute_verdict", return_value=("No Brickwall Detected", 201, False)),
-            patch("tool.music.scan.read_tags", return_value={}),
+            patch("tool.music.scan.read_tags", return_value=Metadata()),
             patch("tool.music.scan.analyze_ebur128", return_value=loud_spec),
             patch("tool.music.scan.compute_mastering_verdict", return_value=None),
         ):
@@ -309,7 +310,7 @@ class TestPrintFileDetail:
         with (
             patch("tool.music.scan.probe", return_value=probe_data),
             patch("tool.music.scan.compute_verdict", return_value=("No Brickwall Detected", 201, False)),
-            patch("tool.music.scan.read_tags", return_value={"title": "Test", "artist": "Artist"}),
+            patch("tool.music.scan.read_tags", return_value=Metadata(title="Test", artist="Artist")),
         ):
             _print_file_detail(
                 f,

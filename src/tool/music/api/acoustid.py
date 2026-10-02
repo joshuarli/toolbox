@@ -9,9 +9,11 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from typing import Any
 
 from tool.music.http import RateLimiter, Session
+from tool.music.metadata import Candidate, Metadata
 
 # AcoustID recommends no more than 3 req/sec
 _session = Session(user_agent="music-tag/0.1", rate_limiter=RateLimiter(rate=3.0))
@@ -39,7 +41,7 @@ def get_audio_fingerprint(file_path):
 
 
 def fetch_acoustid_metadata(duration, fingerprint):
-    """Queries AcoustID API for MusicBrainz recordings and releases."""
+    """Queries AcoustID API for MusicBrainz recordings, release groups, releases and tracks."""
     try:
         api_key = os.environ["ACOUSTID_API_KEY"]
     except KeyError:
@@ -50,7 +52,7 @@ def fetch_acoustid_metadata(duration, fingerprint):
         "client": api_key,
         "duration": int(duration),
         "fingerprint": fingerprint,
-        "meta": "recordings releases tracks",
+        "meta": "recordings releasegroups releases tracks",
     }
 
     try:
@@ -67,49 +69,68 @@ def fetch_acoustid_metadata(duration, fingerprint):
     return res_data.get("results", [])
 
 
-def extract_metadata(result: dict[str, Any]) -> dict[str, str]:
-    """Pull title, artist, album, date, track number from one AcoustID result.
+def _date(d: Any) -> str | None:
+    """AcoustID dates are {"year": 2020, "month": 10, "day": 23}; keep as much as is present."""
+    if not isinstance(d, dict) or not d.get("year"):
+        return None
+    return "-".join([str(d["year"])] + [f"{d[k]:02d}" for k in ("month", "day") if d.get(k)])
 
-    Returns a dict with only the keys that could be extracted.
+
+def _credit(artists: list[dict[str, Any]]) -> str | None:
+    credit = "".join(str(a["name"]) + (a.get("joinphrase") or ", ") for a in artists if a.get("name"))
+    return credit.removesuffix(", ") or None
+
+
+def candidates(results: list[dict[str, Any]]) -> list[Candidate]:
+    """Flatten AcoustID results into one candidate per (recording, release, medium, track).
+
+    The same match can appear under several results; the highest-scoring one is kept.
     """
-    meta: dict[str, str] = {}
-    recordings = result.get("recordings")
-    if not recordings:
-        return meta
+    best: dict[tuple[str | None, ...], Candidate] = {}
+    for result in results:
+        score = result.get("score", 0.0)
+        for rec in result.get("recordings", []):
+            base = Metadata(
+                title=rec.get("title"),
+                artist=_credit(rec.get("artists", [])),
+                musicbrainz_recordingid=rec.get("id"),
+                musicbrainz_artistid=[a["id"] for a in rec.get("artists", []) if a.get("id")],
+                acoustid_id=result.get("id"),
+            )
+            # Releases nest under their release group when releasegroups are requested.
+            releases = [(rg, rel) for rg in rec.get("releasegroups", []) for rel in rg.get("releases", [])]
+            releases += [(None, rel) for rel in rec.get("releases", [])]
+            for rg, rel in releases or [(None, None)]:
+                for meta in _release_candidates(base, rg, rel):
+                    key = (meta.musicbrainz_recordingid, meta.musicbrainz_albumid, meta.musicbrainz_trackid)
+                    if key not in best or best[key].score < score:
+                        best[key] = Candidate(score, meta)
+    return list(best.values())
 
-    rec = recordings[0]
-    rec_id = rec.get("id")
 
-    if "title" in rec:
-        meta["title"] = rec["title"]
-
-    artists = rec.get("artists")
-    if artists:
-        meta["artist"] = ", ".join(a["name"] for a in artists if a.get("name"))
-
-    releases = rec.get("releases")
-    if releases:
-        rel = releases[0]
-        if "title" in rel:
-            meta["album"] = rel["title"]
-        date = rel.get("date", {})
-        year = date.get("year") if isinstance(date, dict) else None
-        if year:
-            meta["date"] = str(year)
-
-        # Track number — search media within releases for a track matching this recording
-        if rec_id:
-            for rel in releases:
-                for medium in rel.get("media", []):
-                    for track in medium.get("tracks", []):
-                        if track.get("id") == rec_id:
-                            tn = track.get("position")
-                            if tn:
-                                meta["tracknumber"] = str(tn)
-                            break
-                    if "tracknumber" in meta:
-                        break
-                if "tracknumber" in meta:
-                    break
-
-    return meta
+def _release_candidates(base: Metadata, rg: dict[str, Any] | None, rel: dict[str, Any] | None) -> list[Metadata]:
+    if rel is None:
+        return [base]
+    meta = replace(
+        base,
+        album=rel.get("title"),
+        date=_date(rel.get("date")),
+        releasecountry=rel.get("country"),
+        totaldiscs=str(rel["medium_count"]) if rel.get("medium_count") else None,
+        musicbrainz_albumid=rel.get("id"),
+        musicbrainz_releasegroupid=rg.get("id") if rg else None,
+        releasetype=[rg["type"].lower()] if rg and rg.get("type") else [],
+    )
+    out = [
+        replace(
+            meta,
+            media=medium.get("format"),
+            discnumber=str(medium["position"]) if medium.get("position") else None,
+            totaltracks=str(medium["track_count"]) if medium.get("track_count") else None,
+            tracknumber=str(track["position"]) if track.get("position") else None,
+            musicbrainz_trackid=track.get("id"),
+        )
+        for medium in rel.get("mediums", [])
+        for track in medium.get("tracks", [])
+    ]
+    return out or [meta]

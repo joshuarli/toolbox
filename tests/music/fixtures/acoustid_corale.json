@@ -1,0 +1,633 @@
+{
+ "results": [
+  {
+   "id": "46a154e0-0450-4c2f-9319-b3b3e5a85d4a",
+   "recordings": [
+    {
+     "artists": [
+      {
+       "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+       "name": "Ludovico Einaudi"
+      }
+     ],
+     "duration": 125.4,
+     "id": "69af617d-c2b5-46a9-9316-fd1b6d20c81d",
+     "releasegroups": [
+      {
+       "artists": [
+        {
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi"
+        }
+       ],
+       "id": "9aab2893-561d-482c-a15e-bfda53960226",
+       "releases": [
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "XW",
+         "date": {
+          "day": 2,
+          "month": 12,
+          "year": 2013
+         },
+         "id": "b456c10a-35a1-440a-952c-8c91a6344361",
+         "medium_count": 2,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "099f03b9-5b7c-4c9b-9f4d-501367b6ae55",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "XW",
+           "date": {
+            "day": 2,
+            "month": 12,
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 21
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "XW",
+         "date": {
+          "day": 15,
+          "month": 9,
+          "year": 2023
+         },
+         "id": "49ca940c-0ab5-404f-9b15-bef7eaf64705",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 27,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "89645b5a-e359-4512-bbbf-c27b1dd0e0a0",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "XW",
+           "date": {
+            "day": 15,
+            "month": 9,
+            "year": 2023
+           }
+          }
+         ],
+         "title": "In a Time Lapse: Special Edition",
+         "track_count": 27
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "IT",
+         "date": {
+          "year": 2013
+         },
+         "id": "2219ca16-9210-422f-9b66-d2841e06a43c",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "3665de9b-d7e4-4ca4-8b6d-2f4a533b44bf",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "IT",
+           "date": {
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 14
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "GB",
+         "date": {
+          "day": 21,
+          "month": 1,
+          "year": 2013
+         },
+         "id": "53bf42c9-8715-4c2d-8892-a8e1e516569f",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "9d17bcba-e0a9-306c-9194-ee37efc15eed",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "GB",
+           "date": {
+            "day": 21,
+            "month": 1,
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 14
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "GB",
+         "date": {
+          "day": 21,
+          "month": 1,
+          "year": 2013
+         },
+         "id": "cff5982e-8365-4782-a061-4a2668c7bb26",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 19,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "c1e45bc2-3469-3df7-a705-8bc3ace17ac0",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "GB",
+           "date": {
+            "day": 21,
+            "month": 1,
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 19
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "date": {
+          "day": 15,
+          "month": 9,
+          "year": 2023
+         },
+         "id": "eafdf4ed-d167-4c37-88b4-3c98dbb97df0",
+         "medium_count": 2,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "59d305df-9299-49f5-9821-5f2890fcd571",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "date": {
+            "day": 15,
+            "month": 9,
+            "year": 2023
+           }
+          }
+         ],
+         "title": "In a Time Lapse: Special Edition",
+         "track_count": 27
+        }
+       ],
+       "title": "In a Time Lapse",
+       "type": "Album"
+      }
+     ],
+     "title": "Corale"
+    }
+   ],
+   "score": 0.9947587
+  },
+  {
+   "id": "a95e7689-1ec4-491b-8cc5-ad9f404bfa57",
+   "recordings": [
+    {
+     "artists": [
+      {
+       "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+       "name": "Ludovico Einaudi"
+      }
+     ],
+     "duration": 125.4,
+     "id": "69af617d-c2b5-46a9-9316-fd1b6d20c81d",
+     "releasegroups": [
+      {
+       "artists": [
+        {
+         "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+         "name": "Ludovico Einaudi"
+        }
+       ],
+       "id": "9aab2893-561d-482c-a15e-bfda53960226",
+       "releases": [
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "XW",
+         "date": {
+          "day": 2,
+          "month": 12,
+          "year": 2013
+         },
+         "id": "b456c10a-35a1-440a-952c-8c91a6344361",
+         "medium_count": 2,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "099f03b9-5b7c-4c9b-9f4d-501367b6ae55",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "XW",
+           "date": {
+            "day": 2,
+            "month": 12,
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 21
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "XW",
+         "date": {
+          "day": 15,
+          "month": 9,
+          "year": 2023
+         },
+         "id": "49ca940c-0ab5-404f-9b15-bef7eaf64705",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 27,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "89645b5a-e359-4512-bbbf-c27b1dd0e0a0",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "XW",
+           "date": {
+            "day": 15,
+            "month": 9,
+            "year": 2023
+           }
+          }
+         ],
+         "title": "In a Time Lapse: Special Edition",
+         "track_count": 27
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "IT",
+         "date": {
+          "year": 2013
+         },
+         "id": "2219ca16-9210-422f-9b66-d2841e06a43c",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "3665de9b-d7e4-4ca4-8b6d-2f4a533b44bf",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "IT",
+           "date": {
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 14
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "GB",
+         "date": {
+          "day": 21,
+          "month": 1,
+          "year": 2013
+         },
+         "id": "53bf42c9-8715-4c2d-8892-a8e1e516569f",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "9d17bcba-e0a9-306c-9194-ee37efc15eed",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "GB",
+           "date": {
+            "day": 21,
+            "month": 1,
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 14
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "country": "GB",
+         "date": {
+          "day": 21,
+          "month": 1,
+          "year": 2013
+         },
+         "id": "cff5982e-8365-4782-a061-4a2668c7bb26",
+         "medium_count": 1,
+         "mediums": [
+          {
+           "format": "Digital Media",
+           "position": 1,
+           "track_count": 19,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "c1e45bc2-3469-3df7-a705-8bc3ace17ac0",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "country": "GB",
+           "date": {
+            "day": 21,
+            "month": 1,
+            "year": 2013
+           }
+          }
+         ],
+         "title": "In a Time Lapse",
+         "track_count": 19
+        },
+        {
+         "artists": [
+          {
+           "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+           "name": "Ludovico Einaudi"
+          }
+         ],
+         "date": {
+          "day": 15,
+          "month": 9,
+          "year": 2023
+         },
+         "id": "eafdf4ed-d167-4c37-88b4-3c98dbb97df0",
+         "medium_count": 2,
+         "mediums": [
+          {
+           "format": "CD",
+           "position": 1,
+           "track_count": 14,
+           "tracks": [
+            {
+             "artists": [
+              {
+               "id": "fa34b363-79df-434f-a5b8-be4e6898543f",
+               "name": "Ludovico Einaudi"
+              }
+             ],
+             "id": "59d305df-9299-49f5-9821-5f2890fcd571",
+             "position": 1,
+             "title": "Corale"
+            }
+           ]
+          }
+         ],
+         "releaseevents": [
+          {
+           "date": {
+            "day": 15,
+            "month": 9,
+            "year": 2023
+           }
+          }
+         ],
+         "title": "In a Time Lapse: Special Edition",
+         "track_count": 27
+        }
+       ],
+       "title": "In a Time Lapse",
+       "type": "Album"
+      }
+     ],
+     "title": "Corale"
+    }
+   ],
+   "score": 0.9074697
+  }
+ ],
+ "status": "ok"
+}
