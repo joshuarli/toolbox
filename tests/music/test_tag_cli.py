@@ -12,6 +12,7 @@ from tool.music.tag import (
     _normalize_filename,
     _print_tags,
     _rank,
+    autotag,
     format_diff,
     format_match_line,
     interactive_select,
@@ -426,3 +427,109 @@ class TestRunFlow:
         assert meta.musicbrainz_trackid == "2aabd1c8-3793-4848-ba05-acf7ddd4b9ce"
         assert meta.acoustid_id is None  # no AcoustID match, so none is claimed
         assert meta.acoustid_fingerprint == FINGERPRINT
+
+
+class TestAutotag:
+    @staticmethod
+    def run_autotag(path, load_fixture, acoustid="acoustid_kalandra.json", edit=None):
+        results = load_fixture(acoustid)
+        if edit:
+            edit(results)
+        mb_get, mb_calls = _mb_router(load_fixture)
+        with (
+            patch("tool.music.tag.get_audio_fingerprint", return_value=(306.4, FINGERPRINT)),
+            patch("tool.music.api.acoustid._session.get_json", return_value=results),
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=mb_get),
+            patch.dict("os.environ", {"ACOUSTID_API_KEY": "k"}),
+        ):
+            return autotag(path), mb_calls
+
+    @staticmethod
+    def only_release(results):
+        """Make the match a single release (the CD), as for a rarely released recording."""
+        rg = results["results"][0]["recordings"][0]["releasegroups"][0]
+        rg["releases"] = [r for r in rg["releases"] if r["id"] == KAL_CD]
+
+    def test_ambiguous_release_writes_recording_identity_only(self, legacy_flac, load_fixture):
+        meta, calls = self.run_autotag(legacy_flac, load_fixture)
+
+        assert calls == [f"https://musicbrainz.org/ws/2/recording/{KAL_REC}"]  # one request, no release picked
+        assert meta is not None
+        tags = read_tags(legacy_flac)
+        assert tags.musicbrainz_recordingid == KAL_REC
+        assert tags.musicbrainz_artistid == ["7c67fb96-7e24-4893-a020-fcc53a1f7814"]
+        assert tags.acoustid_id == "e8187d3a-71a8-49ef-8f95-2fa590426190"
+        assert tags.acoustid_fingerprint == FINGERPRINT
+        assert tags.musicbrainz_albumid is None
+        assert tags.musicbrainz_releasegroupid is None
+        assert tags.album == "The Line"  # the file's own album is left alone
+        assert not tags.is_complete()  # `tag` still has the release to ask about
+
+    def test_sole_release_with_matching_album_writes_release_identity(self, legacy_flac, load_fixture):
+        meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=self.only_release)
+
+        assert calls == [f"https://musicbrainz.org/ws/2/release/{KAL_CD}"]
+        assert meta is not None
+        tags = read_tags(legacy_flac)
+        assert tags.musicbrainz_albumid == KAL_CD
+        assert tags.musicbrainz_trackid == "82185c30-f97f-4b1b-8c70-a0bd3d077649"
+        assert tags.is_complete()
+
+    def test_sole_release_with_different_album_is_not_overwritten(self, legacy_flac, load_fixture):
+        audio = FLAC(legacy_flac)
+        audio["ALBUM"] = "Some Single"
+        audio.save()
+
+        self.run_autotag(legacy_flac, load_fixture, edit=self.only_release)
+        tags = read_tags(legacy_flac)
+        assert tags.album == "Some Single"
+        assert tags.musicbrainz_albumid is None
+        assert tags.musicbrainz_recordingid == KAL_REC
+
+    def test_file_without_album_gets_the_sole_release(self, flac_file, load_fixture):
+        self.run_autotag(flac_file, load_fixture, edit=self.only_release)
+        assert read_tags(flac_file).musicbrainz_albumid == KAL_CD
+
+    def test_unrelated_tags_and_artwork_survive(self, legacy_flac, load_fixture):
+        self.run_autotag(legacy_flac, load_fixture)
+        audio = FLAC(legacy_flac)
+        assert audio["COMMENT"] == ["from youtube"]
+        assert [p.data for p in audio.pictures] == [b"\x89PNG-fake"]
+
+    def test_low_score_is_left_alone(self, legacy_flac, load_fixture):
+        def weaken(results):
+            results["results"][0]["score"] = 0.6
+
+        meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=weaken)
+        assert meta is None
+        assert calls == []
+        assert read_tags(legacy_flac).musicbrainz_recordingid is None
+
+    def test_two_strong_recordings_are_ambiguous(self, legacy_flac, load_fixture):
+        def add_second_recording(results):
+            other = {"id": "00000000-0000-0000-0000-000000000000", "title": "Other"}
+            results["results"].append({"id": "x", "score": 0.95, "recordings": [other]})
+
+        meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=add_second_recording)
+        assert meta is None
+        assert calls == []
+
+    def test_no_matches(self, legacy_flac, load_fixture):
+        meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=lambda r: r["results"].clear())
+        assert meta is None
+        assert calls == []
+
+    def test_unwritable_format_is_skipped_before_any_work(self, wav_file):
+        with patch("tool.music.tag.get_audio_fingerprint") as fp:
+            assert autotag(wav_file) is None
+        fp.assert_not_called()
+
+    def test_failed_musicbrainz_lookup_writes_nothing(self, legacy_flac, load_fixture):
+        with (
+            patch("tool.music.tag.get_audio_fingerprint", return_value=(306.4, FINGERPRINT)),
+            patch("tool.music.api.acoustid._session.get_json", return_value=load_fixture("acoustid_kalandra.json")),
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception("down")),
+            patch.dict("os.environ", {"ACOUSTID_API_KEY": "k"}),
+        ):
+            assert autotag(legacy_flac) is None
+        assert read_tags(legacy_flac).musicbrainz_recordingid is None

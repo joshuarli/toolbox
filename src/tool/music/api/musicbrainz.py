@@ -11,7 +11,7 @@ from dataclasses import replace
 from typing import Any
 
 from tool.music.http import RateLimiter, Session
-from tool.music.metadata import Candidate, Metadata
+from tool.music.metadata import Artist, Candidate, Metadata
 
 MB_BASE = "https://musicbrainz.org/ws/2"
 USER_AGENT = "music-tag/0.1"
@@ -28,6 +28,8 @@ _RELEASE_INC = (
 _RECORDING_INC = "artist-credits isrcs genres artist-rels work-rels work-level-rels"
 
 _MAX_GENRES = 5
+_ARTIST_MIN_SCORE = 95
+_ARTIST_MIN_LEAD = 5
 # MusicBrainz relationship type -> Metadata field, for artist relations on recordings and works.
 _CREDIT_FIELDS = {
     "composer": "composer",
@@ -103,6 +105,28 @@ def _search_release(base: Metadata, rel: dict[str, Any]) -> list[Metadata]:
                 )
             )
     return out or [meta]
+
+
+def find_artist(name: str) -> Artist | None:
+    """Resolve an artist name to a MusicBrainz artist, or None unless the top hit is clearly the one.
+
+    "Clearly" = search score of at least 95 and a lead of at least 5 over the runner-up, so an
+    ambiguous name ("Air") is left for the caller to report rather than guessed.
+    """
+    quoted = name.replace("\\", "\\\\").replace('"', '\\"')
+    try:
+        data = _session.get_json(
+            f"{MB_BASE}/artist/", params={"query": f'artist:"{quoted}"', "fmt": "json", "limit": "5"}
+        )
+    except Exception:
+        return None
+    hits = data.get("artists", [])
+    if not hits or hits[0].get("score", 0) < _ARTIST_MIN_SCORE:
+        return None
+    if len(hits) > 1 and hits[0]["score"] - hits[1].get("score", 0) < _ARTIST_MIN_LEAD:
+        return None
+    top = hits[0]
+    return Artist(top["id"], top["name"], top.get("disambiguation", ""))
 
 
 # ---------------------------------------------------------------------------

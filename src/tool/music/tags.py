@@ -244,6 +244,14 @@ def _read_mp4(tags) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
+def is_writable(filepath: str) -> bool:
+    """Whether *filepath* is in a container `write_tags` can write."""
+    try:
+        return isinstance(MutagenFile(filepath), _WRITABLE_TYPES)
+    except Exception:
+        return False
+
+
 def write_tags(filepath: str, metadata: Metadata) -> str:
     """Write the fields *metadata* sets to *filepath* using mutagen.
 

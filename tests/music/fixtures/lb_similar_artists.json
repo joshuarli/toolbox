@@ -1,0 +1,182 @@
+[
+ {
+  "artist_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "comment": "",
+  "gender": "Male",
+  "name": "Emancipator",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 361,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "b87bd286-3b5f-448e-9364-11d68823c1db",
+  "comment": "US | electronic",
+  "gender": "Male",
+  "name": "Shallou",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 173,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "c5a97b1d-a833-4ce7-b989-677f264f73cc",
+  "comment": "AU | pop",
+  "gender": null,
+  "name": "Yoste",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 153,
+  "type": null
+ },
+ {
+  "artist_mbid": "f8471a38-0575-4dcf-b657-401377ad293c",
+  "comment": "Canadian-American singer and songwriter",
+  "gender": "Male",
+  "name": "Justin Nozuka",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 140,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "ef68170c-6362-44fb-ac8a-4b8e9aaf2b84",
+  "comment": "",
+  "gender": "Male",
+  "name": "Ed Carlsen",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 132,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "776c28fb-a43b-4d1e-8c64-639ba043c4bd",
+  "comment": "",
+  "gender": null,
+  "name": "Glowworm",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 119,
+  "type": "Group"
+ },
+ {
+  "artist_mbid": "ed0e466e-c62b-4811-b142-e378885b3db0",
+  "comment": "post-rock",
+  "gender": "Male",
+  "name": "Lowercase Noises",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 117,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "9c88965e-b1e1-4091-94f3-9ab119976034",
+  "comment": "",
+  "gender": "Male",
+  "name": "Instupendo",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 113,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "80035dac-72ad-4b11-8046-f774070427a5",
+  "comment": "American score composer",
+  "gender": "Male",
+  "name": "David Wingo",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 100,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "d60315b1-e2f8-4c61-8930-c269b03b57bf",
+  "comment": "Danish electronic producer Jonas Munk Jensen",
+  "gender": null,
+  "name": "Manual",
+  "reference_mbid": "0850da7c-c769-48c1-a626-cfc2b73d4863",
+  "score": 89,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "9a709693-b4f8-4da9-8cc1-038c911a61be",
+  "comment": "UK electronic artist Simon Green",
+  "gender": "Male",
+  "name": "Bonobo",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 3976,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "cbef45a9-7acb-4325-94c9-70081ac8d1b8",
+  "comment": "US electronic producer/songwriter Scott Hansen from SF",
+  "gender": "Male",
+  "name": "Tycho",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 3208,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "78c94cba-761f-4212-8508-a24bda2e57dc",
+  "comment": "electronic artist",
+  "gender": "Male",
+  "name": "Little People",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 2526,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "69158f97-4c07-4c4e-baf8-4e4ab1ed666e",
+  "comment": "Scottish electronic duo",
+  "gender": null,
+  "name": "Boards of Canada",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 2391,
+  "type": "Group"
+ },
+ {
+  "artist_mbid": "a505bb48-ad65-4af4-ae47-29149715bff9",
+  "comment": "",
+  "gender": null,
+  "name": "Thievery Corporation",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 2031,
+  "type": "Group"
+ },
+ {
+  "artist_mbid": "0b0c25f4-f31c-46a5-a4fb-ccbf53d663bd",
+  "comment": "",
+  "gender": "Male",
+  "name": "Jon Hopkins",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 1934,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "b8c5cc4f-239f-4e02-b46f-b040b77c2030",
+  "comment": "",
+  "gender": null,
+  "name": "Nightmares on Wax",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 1876,
+  "type": "Group"
+ },
+ {
+  "artist_mbid": "3bd76ebe-c7dc-47bd-a8af-9e46d2a4f782",
+  "comment": "US hip-hop producer on Ninja Tune",
+  "gender": "Male",
+  "name": "Blockhead",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 1859,
+  "type": "Person"
+ },
+ {
+  "artist_mbid": "cb67438a-7f50-4f2b-a6f1-2bb2729fd538",
+  "comment": "French band",
+  "gender": null,
+  "name": "Air",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 1775,
+  "type": "Group"
+ },
+ {
+  "artist_mbid": "1a120ec5-35b3-4f3e-aa49-7201550d9feb",
+  "comment": "American Hip Hop/Electronic producer and DJ",
+  "gender": "Male",
+  "name": "RJD2",
+  "reference_mbid": "aa1d4315-5246-42b2-b62b-f997d046d8b2",
+  "score": 1771,
+  "type": "Person"
+ }
+]

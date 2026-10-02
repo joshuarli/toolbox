@@ -15,7 +15,7 @@ from tool.music.api.acoustid import candidates, fetch_acoustid_metadata, get_aud
 from tool.music.api.musicbrainz import enrich
 from tool.music.api.musicbrainz import search as mb_search
 from tool.music.metadata import Candidate, Metadata, show
-from tool.music.tags import read_tags, write_tags
+from tool.music.tags import is_writable, read_tags, write_tags
 from tool.music.ui import bold, colored, dim, select_interactive
 
 _YT_ID_RE = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
@@ -226,6 +226,45 @@ def _fallback_select(cands: list[Candidate]) -> int:
 
     print(f"Invalid selection: {choice}")
     sys.exit(1)
+
+
+AUTOTAG_MIN_SCORE = 0.9
+
+
+def autotag(filepath: str) -> Metadata | None:
+    """Tag *filepath* without prompting, but only where the fingerprint match is unambiguous.
+
+    Every AcoustID match scoring at least `AUTOTAG_MIN_SCORE` must be the same recording.  If
+    that recording is on exactly one release, and the file has no album or one of the same
+    title, the full release identity is written; otherwise only recording-level identity is,
+    leaving the album and the release choice to an interactive `tag` run.
+    Returns what was written, or None if the file was left alone.  Does not rename the file.
+    """
+    if not is_writable(filepath):
+        return None
+    duration, fingerprint = get_audio_fingerprint(filepath)
+    if not (duration and fingerprint):
+        return None
+    strong = [
+        c for c in candidates(fetch_acoustid_metadata(duration, fingerprint) or []) if c.score >= AUTOTAG_MIN_SCORE
+    ]
+    if len({c.meta.musicbrainz_recordingid for c in strong}) != 1:
+        return None
+
+    best = max(strong, key=lambda c: c.score).meta
+    album = read_tags(filepath).album
+    sole_release = len({c.meta.musicbrainz_albumid for c in strong}) == 1 and best.musicbrainz_albumid
+    if sole_release and (not album or album.casefold() == (best.album or "").casefold()):
+        selection = best
+    else:
+        selection = Metadata(musicbrainz_recordingid=best.musicbrainz_recordingid, acoustid_id=best.acoustid_id)
+
+    metadata = enrich(selection)
+    if not metadata.musicbrainz_artistid:  # MusicBrainz lookup failed; nothing durable to write
+        return None
+    metadata.acoustid_fingerprint = fingerprint
+    write_tags(filepath, metadata)
+    return metadata
 
 
 def configure_parser(p: argparse.ArgumentParser) -> None:

@@ -2,7 +2,7 @@
 
 ## What this is
 
-Three CLI tools for managing a local audio library:
+Four CLI tools for managing a local audio library:
 
 - **`scan`** — walk a directory tree, probe every audio file with ffprobe, and
   print a colour-coded table of codec, bitrate, cover art, missing tags, and a
@@ -14,12 +14,17 @@ Three CLI tools for managing a local audio library:
   fields plus durable MusicBrainz/AcoustID identity (see "Tag metadata" below).
   Skips files that already carry that identity (use `-f` to override). Also
   supports `--read` to inspect existing tags without any network call.
+- **`suggest`** — given a playlist directory, suggest artists to add: seed from
+  the playlist's artists, ask ListenBrainz who is similar, drop anyone already in
+  the library, print a ranked list. Untagged playlist files are auto-tagged when
+  their fingerprint match is unambiguous (`--no-tag` to disable); that is the only
+  thing it writes.
 - **`transcode`** — transcode a single audio file to high-quality AAC in an
   M4A container via ffmpeg, preserving channel layout. Uses Apple AudioToolbox
   (`aac_at`) on macOS, ffmpeg's native `aac` elsewhere. Supports `-o` to
   specify the output path.
 
-All three run through `uv run tool music scan ...` / `uv run tool music tag ...` / `uv run tool music transcode ...`.
+All run through `uv run tool music <scan|tag|suggest|transcode> ...`.
 
 ## Working style
 
@@ -74,10 +79,12 @@ src/tool/music/
 ├── verdict.py       # multi-point spectral brickwall detector
 ├── ui.py            # ANSI 256-color terminal formatting (colored, bold, dim)
 ├── scan.py          # probe, format, collect, main() entry point
+├── suggest.py       # playlist → seed artists → ListenBrainz similar artists → ranked suggestions
 ├── tag.py           # CLI orchestrator: fpcalc → AcoustID → select → MB enrich → mutagen write
 └── api/
     ├── __init__.py     # empty
     ├── acoustid.py     # fpcalc + AcoustID API lookup (rate-limited 3/sec) → release-aware candidates
+    ├── listenbrainz.py # ListenBrainz Labs similar artists (rate-limited 1/sec)
     ├── musicbrainz.py  # MusicBrainz search → candidates; release/recording lookup → Metadata (1/sec)
     └── spotify.py      # unauthenticated Spotify playlist fetching
 ```
@@ -93,7 +100,9 @@ src/tool/music/
 | `scan.py` | The `scan` CLI. `probe()` wraps ffprobe. `collect_files()` walks dirs. `_process_one()` does the per-file work (probe → format → verdict). `main()` runs a `ThreadPoolExecutor` over files (default `cpu_count` workers, override with `-j N`). Column widths and ANSI formatting live here. Single-file mode (`_print_file_detail()`) prints a full breakdown: streams, all tags, verdict. Supports `--brickwall-threshold`, `--low-energy-db`, `--no-hf-db`, `--hi-res-no-hf-db`. |
 | `tag.py` | The `tag` CLI. Orchestrator — delegates fingerprinting + AcoustID lookup to `api.acoustid`, enrichment to `api.musicbrainz`. Ranks candidates (`_rank`), arrow-key selector with a scrolling list and live diff (`interactive_select()`). Enter writes immediately (no confirmation prompt); `s` skips. Skips files whose tags `is_complete()` unless `-f`/`--force`. `-y` skips the write confirmation in non-TTY mode. `--read` inspects local tags without any network call. |
 | `api/acoustid.py` | AcoustID API client. `get_audio_fingerprint()` runs fpcalc. `fetch_acoustid_metadata()` calls v2/lookup with `meta=recordings releasegroups releases tracks` (rate-limited 3 req/sec). `candidates()` flattens results into one `Candidate` per recording × release × medium × track, keeping the best score when a match repeats. Docs: https://acoustid.org/webservice |
-| `api/musicbrainz.py` | MusicBrainz API client; all MB JSON parsing lives here. `search()` → candidates (one per recording × release). `enrich(meta)` turns a selected candidate into full `Metadata` with one request: `release/{id}` with recordings, labels, ISRCs, genres and recording/work-level relationships, or `recording/{id}` if no release. Rate-limited 1 req/sec. Exports `MB_BASE` and `USER_AGENT` for use by `resolver.py`. Docs: https://musicbrainz.org/doc/MusicBrainz_API |
+| `api/musicbrainz.py` | MusicBrainz API client; all MB JSON parsing lives here. `search()` → candidates (one per recording × release). `enrich(meta)` turns a selected candidate into full `Metadata` with one request: `release/{id}` with recordings, labels, ISRCs, genres and recording/work-level relationships, or `recording/{id}` if no release. Rate-limited 1 req/sec. `find_artist(name)` resolves an artist name (score ≥ 95 and ≥ 5 ahead of the runner-up, else None). Exports `MB_BASE` and `USER_AGENT` for use by `resolver.py`. Docs: https://musicbrainz.org/doc/MusicBrainz_API |
+| `suggest.py` | The `suggest` CLI. Seeds = artists of the playlist's tracks (artist MBIDs from tags, weighted by track count). Files with no artist MBID are first auto-tagged via `tag.autotag` (needs `ACOUSTID_API_KEY` and fpcalc; otherwise skipped with a one-line note), then any still-unidentified names are resolved via `find_artist`, which refuses ambiguous names and says so. One `similar_artists` request for all seeds; each seed's scores are normalised to its best match (scales differ by orders of magnitude), then summed weighted by seed track count, so artists similar to several seeds rank higher. Excludes seeds and anything already in `--library` (default `~/Sync/M`, matched by artist/album-artist MBID or casefolded name). |
+| `api/listenbrainz.py` | ListenBrainz Labs `similar-artists`: one request, `artist_mbids` repeated per seed, no token. `SIMILAR_ARTISTS_ALGORITHM` names the trained model and may need updating if ListenBrainz retires it. Rows are not sorted by score. |
 | `api/spotify.py` | Unauthenticated Spotify playlist fetching via Spotify's private web-player API. `SpotifyPublicPlaylist.get_playlist()` returns playlist metadata and tracks. Docs: https://developer.spotify.com/documentation/web-api |
 
 ## Commands
@@ -106,6 +115,7 @@ uv run tool music scan --brickwall-threshold 30 .       # tune sensitivity
 uv run tool music tag ~/Music/song.flac                # fingerprint + lookup + write (Enter=write, s=skip)
 uv run tool music tag --read ~/Music/song.flac         # inspect existing tags (no network)
 uv run tool music tag -f ~/Music/song.flac             # re-tag even if metadata is already complete
+uv run tool music suggest ~/Sync/M/Playlists/rising-focus  # suggest artists to add
 uv run tool music transcode ~/Music/song.opus          # transcode opus to AAC/M4A
 uv run tool music transcode -o out.m4a song.webm       # specify output path
 make fmtlint                                            # lint + format + type-check
@@ -263,3 +273,29 @@ Notes and nuances:
   (Kalandra — one recording on CD / vinyl / withdrawn digital releases; Einaudi — multi-disc,
   differing track vs album credits, composer; Max Richter — instruments, producers, ISRC, catalog number).
   Release fixtures are trimmed to a couple of tracks.
+
+### Suggest notes
+
+- **Auto-tagging** (`tag.autotag`, no prompt, no rename) only acts on an unambiguous
+  match: every AcoustID match scoring ≥ 0.9 must be the same recording. The full
+  release identity is written only if that recording is on exactly one release
+  *and* the file has no album or one with the same title; otherwise only
+  recording-level identity is written (recording/artist IDs, AcoustID, fingerprint,
+  ISRCs, genres, credits) and the file's own album/date are left for an interactive
+  `tag` run to resolve. A weak or ambiguous match, an unwritable format, or a
+  failed MusicBrainz lookup leaves the file untouched. Like `tag`, it replaces the
+  fields it writes (title, artist, genre, ...) with MusicBrainz's.
+
+- Seed quality depends on tags: files tagged with `tag` carry artist MBIDs;
+  untagged ones are resolved by name (one MusicBrainz search each, 1 req/sec).
+  Tag the playlist first for reliable seeds.
+- The library exclusion reads every audio file under `--library` with mutagen
+  (~1,200 files takes several seconds). In a mostly untagged library it matches
+  by artist name only.
+- ListenBrainz's popularity endpoints (e.g. top recordings per artist) now require
+  an auth token, so suggestions are artists, not specific tracks. A token
+  (`vault LISTENBRAINZ_TOKEN`) would be needed to add per-artist top tracks.
+- Tests use recorded similar-artists rows and MusicBrainz artist searches
+  (`tests/music/fixtures/lb_similar_artists.json`, `mb_artist_search_*.json`). The
+  shared-artist accumulation and seed weighting are tested with synthetic rows,
+  since the recorded seeds share no similar artists.

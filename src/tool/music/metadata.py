@@ -102,6 +102,15 @@ class Candidate:
     meta: Metadata
 
 
+@dataclass(frozen=True)
+class Artist:
+    """A MusicBrainz artist, as used by recommendations."""
+
+    mbid: str
+    name: str
+    comment: str = ""  # MusicBrainz disambiguation, e.g. "French band"
+
+
 _FINGERPRINT_SHOWN = 16
 
 

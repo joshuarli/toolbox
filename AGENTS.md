@@ -12,7 +12,7 @@ Current tools:
 
 - `sd` — destructively benchmark/verify a removable disk with fio. See `docs/sd.md`.
 - `movies` — encode/audit video files and manage a Letterboxd-backed movie library. See `docs/movies.md`.
-- `music` — scan/tag/transcode a local audio library. See `docs/music.md`.
+- `music` — scan/tag/transcode a local audio library, and suggest artists for a playlist. See `docs/music.md`.
 - `ig` — log in to, scan, and archive Instagram profiles and posts. See `docs/ig.md`.
 - `notes` — clean unreferenced `z-images/` files and localize remote images. See `docs/notes.md`.
 
@@ -41,3 +41,9 @@ ListenBrainz graph work without fuzzy-matching. Details in `docs/music.md`; the 
   never optional fields like label or ISRC. `--force` re-fetches.
 - Tests are offline; `tests/music/fixtures/` holds recorded AcoustID/MusicBrainz responses. `tag` needs
   `ACOUSTID_API_KEY` (`vault ACOUSTID_API_KEY -- uv run tool music tag ...`); MusicBrainz needs no key.
+
+`music suggest <playlist-dir>` prints suggestions; its only writes are auto-tags (`tag.autotag`, skipped with
+`--no-tag`) on playlist files lacking artist identity, and only for unambiguous fingerprint matches (never
+guesses a release). Seeds: playlist artists (MBIDs from tags, else resolved by name,
+refusing ambiguity) → ListenBrainz similar artists (one request, scores normalised per seed) → minus
+what `--library` already has. See `docs/music.md`.

@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tool.music.api.musicbrainz import enrich, search
-from tool.music.metadata import Metadata
+from tool.music.api.musicbrainz import enrich, find_artist, search
+from tool.music.metadata import Artist, Metadata
 
 KAL_REC = "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7"
 KAL_GROUP = "4cda8183-371b-4189-bcb1-265bd0ff4b5f"
@@ -309,3 +309,34 @@ class TestSearch:
             m = enrich(vinyl.meta)
         assert m.musicbrainz_trackid == vinyl.meta.musicbrainz_trackid
         assert (m.discnumber, m.tracknumber) == (vinyl.meta.discnumber, vinyl.meta.tracknumber)
+
+
+class TestFindArtist:
+    def test_clear_top_hit_resolves(self, mb):
+        with mb("mb_artist_search_corre.json") as get:
+            artist = find_artist("Corre")
+        assert artist == Artist(
+            "0850da7c-c769-48c1-a626-cfc2b73d4863", "Corre", "Henry Green's instrumental side project"
+        )
+        assert get.call_args.kwargs["params"]["query"] == 'artist:"Corre"'
+
+    def test_ambiguous_name_is_not_guessed(self, mb):
+        # "Air" scores 100 but "Air Supply" scores 97
+        with mb("mb_artist_search_air.json"):
+            assert find_artist("Air") is None
+
+    def test_weak_match_is_rejected(self):
+        resp = {"artists": [{"id": "x", "name": "Something", "score": 80}]}
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value=resp):
+            assert find_artist("Something Else") is None
+
+    def test_no_hits_and_network_error(self):
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value={"artists": []}):
+            assert find_artist("Nobody") is None
+        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception):
+            assert find_artist("Nobody") is None
+
+    def test_quotes_are_escaped(self):
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value={"artists": []}) as get:
+            find_artist('The "Quoted" One')
+        assert get.call_args.kwargs["params"]["query"] == 'artist:"The \\"Quoted\\" One"'
