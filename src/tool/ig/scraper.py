@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 from tool.ig.browser import ProtocolError, human_click, human_scroll, navigate, think
 from tool.ig.db import add_profile_post, clear_media, upsert_media, upsert_post
 from tool.ig.http_retry import http_request
-from tool.ig.media import MEDIA_DIR, dest_path, media_url_ext, profile_key
+from tool.ig.media import MEDIA_DIR, dest_path, media_url_ext, profile_key, resolve_media_destination
 from tool.ig.types import ModalBtnPos, Pace, PostType, SavedScope, ScrapedPost, ScrapeInfo
 
 logger = logging.getLogger(__name__)
@@ -130,9 +130,17 @@ class SegmentCapture:
         return b"".join(body for _, body in sorted(segs.items()))
 
 
-async def mux_av(video_bytes: bytes, audio_bytes: bytes, dest: Path) -> None:
+async def mux_av(
+    video_bytes: bytes,
+    audio_bytes: bytes,
+    dest: Path,
+    *,
+    media_dir: str | Path = MEDIA_DIR,
+) -> None:
     """Mux separate DASH video and audio tracks into one MP4 via ffmpeg."""
     import subprocess
+
+    dest = resolve_media_destination(media_dir, dest)
 
     def _do() -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -749,7 +757,8 @@ def download_bytes(url: str) -> bytes:
     return http_request(req)
 
 
-def _write_bytes_atomic(dest: Path, body: bytes) -> None:
+def _write_bytes_atomic(dest: Path, body: bytes, *, media_dir: str | Path = MEDIA_DIR) -> None:
+    dest = resolve_media_destination(media_dir, dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp_path: Path | None = None
     try:
@@ -763,11 +772,13 @@ def _write_bytes_atomic(dest: Path, body: bytes) -> None:
         raise
 
 
-def _download(url: str, dest: Path) -> None:
-    _write_bytes_atomic(dest, download_bytes(url))
+def _download(url: str, dest: Path, *, media_dir: str | Path = MEDIA_DIR) -> None:
+    dest = resolve_media_destination(media_dir, dest)
+    _write_bytes_atomic(dest, download_bytes(url), media_dir=media_dir)
 
 
-def _pending_path(dest: Path) -> Path:
+def _pending_path(dest: Path, *, media_dir: str | Path = MEDIA_DIR) -> Path:
+    dest = resolve_media_destination(media_dir, dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(prefix=f".{dest.name}.", suffix=".pending", dir=dest.parent, delete=False) as tmp:
         pending = Path(tmp.name)
@@ -863,9 +874,8 @@ async def save_post(
 
     total = len(media_urls)
     fresh_files = fresh_files or set()
-    _progress(reporter, f"download phase started ({total} file{'s' if total != 1 else ''})")
-
-    async def _dl_one(idx: int, url: str) -> tuple[int, str, Path | None, Path, Exception | None]:
+    destinations: list[Path] = []
+    for idx, url in enumerate(media_urls):
         item_ext = media_url_ext(post_type, url) if post_type == "carousel" else ext
         if profile_username:
             pkey = profile_key(profile_username, profile_saved)
@@ -873,7 +883,11 @@ async def save_post(
             pkey = username
         else:
             pkey = None
-        dest = dest_path(shortid, idx, total, item_ext, media_dir=media_dir, profile=pkey)
+        destination = dest_path(shortid, idx, total, item_ext, media_dir=media_dir, profile=pkey)
+        destinations.append(resolve_media_destination(media_dir, destination))
+    _progress(reporter, f"download phase started ({total} file{'s' if total != 1 else ''})")
+
+    async def _dl_one(idx: int, url: str, dest: Path) -> tuple[int, str, Path | None, Path, Exception | None]:
         label = f"[{idx + 1}/{total}]"
         if skip_existing_files and dest.exists():
             if dest in fresh_files:
@@ -883,22 +897,22 @@ async def save_post(
                 reporter.info(f"  {label} {dest} (cached)")
                 _progress(reporter, f"download skipped cached file {idx + 1}/{total}")
             return idx, url, None, dest, None
-        pending = _pending_path(dest)
+        pending = _pending_path(dest, media_dir=media_dir)
         try:
             if captured_bodies and url in captured_bodies:
-                _write_bytes_atomic(pending, captured_bodies[url])
+                _write_bytes_atomic(pending, captured_bodies[url], media_dir=media_dir)
             elif browser_fetch is not None:
                 try:
                     reporter.info(f"  {label} browser fetch...")
                     body = await browser_fetch(url)
-                    _write_bytes_atomic(pending, body)
+                    _write_bytes_atomic(pending, body, media_dir=media_dir)
                 except Exception as exc:
                     reporter.debug(f"  {label} browser fetch failed ({type(exc).__name__}): {exc}")
                     reporter.info(f"  {label} browser fetch unavailable, downloading...")
-                    await asyncio.to_thread(_download, url, pending)
+                    await asyncio.to_thread(_download, url, pending, media_dir=media_dir)
             else:
                 reporter.info(f"  {label} downloading...")
-                await asyncio.to_thread(_download, url, pending)
+                await asyncio.to_thread(_download, url, pending, media_dir=media_dir)
         except Exception as exc:
             pending.unlink(missing_ok=True)
             return idx, url, None, dest, exc
@@ -910,7 +924,7 @@ async def save_post(
         _progress(reporter, f"download finished file {idx + 1}/{total}")
         return idx, url, pending, dest, None
 
-    coros = [_dl_one(idx, url) for idx, url in enumerate(media_urls)]
+    coros = [_dl_one(idx, url, destinations[idx]) for idx, url in enumerate(media_urls)]
     raw_results = await asyncio.gather(*coros, return_exceptions=True)
 
     results: list[tuple[int, str, Path | None, Path, Exception | None]] = []
@@ -965,6 +979,8 @@ async def save_post(
     _progress(reporter, "file promotion started")
     for idx, _url, pending, dest, _error in results:
         if pending is not None:
+            pending = resolve_media_destination(media_dir, pending)
+            dest = resolve_media_destination(media_dir, dest)
             pending.replace(dest)
             reporter.info(f"  [{idx + 1}/{total}] {dest}")
     _progress(reporter, "file promotion finished")

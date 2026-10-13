@@ -4,16 +4,19 @@ DARKHTTPD = web/bin/darkhttpd
 DARKHTTPD_SRC = web/vendor/darkhttpd/darkhttpd.c
 SITE_ASSETS = web/assets/site.css web/assets/site.js web/assets/carousel.svg web/assets/play.svg
 
-.PHONY: fmtlint test sync-py build-site site
+.PHONY: fmt fmtlint test sync-py build-site site
+
+fmt:
+	uv run --locked ruff check --fix --unsafe-fixes src tests
+	uv run --locked ruff format src tests
 
 fmtlint:
-	uvx ruff@latest check --fix --unsafe-fixes
-	uvx ruff@latest format
-	uvx ty@latest check
+	uv run --locked ruff check src tests
+	uv run --locked ty check
 
 test:
 	# joshuarli-pytest-parallel (dev dependency) auto-shards across cpu_count workers
-	uv run pytest
+	uv run --locked pytest
 
 # Install the optional browser automation dependency.
 sync-py:

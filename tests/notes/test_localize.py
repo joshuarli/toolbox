@@ -3,8 +3,10 @@ import functools
 import hashlib
 import http.server
 import shutil
+import stat
 import threading
 from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
@@ -163,10 +165,183 @@ def test_collect_markdown_files(tmp_path: Path) -> None:
     keep = vault / "a.md"
     keep.write_text("x")
     (vault / "sub" / "b.md").write_text("y")
+    (vault / "sub" / "alias.md").symlink_to(vault / "sub" / "b.md")
     (vault / ".trash" / "t.md").write_text("z")
     (vault / ".obsidian" / "o.md").write_text("z")
     assert localize.collect_markdown_files(vault) == [keep, vault / "sub" / "b.md"]
     assert localize.collect_markdown_files(vault, [vault / "sub"]) == [vault / "sub" / "b.md"]
+
+
+def test_rewrite_notes_follows_internal_symlink_target(tmp_path: Path) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    note = vault / "n.md"
+    note.write_text("![](https://x.test/1.png)\n", encoding="utf-8")
+    alias = vault / "alias.md"
+    alias.symlink_to(note)
+    files = localize.collect_markdown_files(vault)
+    occurrences, _ = localize._scan_notes(files)
+
+    assert files == [note]
+    assert localize._rewrite_notes(vault, occurrences, {"https://x.test/1.png": "![[a.webp]]"}) == (1, 1)
+    assert alias.is_symlink()
+    assert note.read_text(encoding="utf-8") == "![[a.webp]]\n"
+
+
+def test_collect_markdown_files_rejects_symlink_outside_vault(tmp_path: Path) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("![](https://x.test/1.png)\n", encoding="utf-8")
+    (vault / "linked.md").symlink_to(outside)
+
+    with pytest.raises(NotesError, match="outside the notes vault"):
+        localize.collect_markdown_files(vault)
+
+
+def test_read_text_is_strict_utf8_and_reports_path(tmp_path: Path) -> None:
+    note = tmp_path / "bad.md"
+    note.write_bytes(b"invalid: \xff")
+
+    with pytest.raises(NotesError) as exc_info:
+        localize._read_text(note)
+
+    assert str(note) in str(exc_info.value)
+    assert "UTF-8" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, UnicodeDecodeError)
+
+
+def test_read_text_surfaces_filesystem_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    note = tmp_path / "unreadable.md"
+    note.write_text("content", encoding="utf-8")
+
+    def fail_note_open(self: Path, *args: object, **kwargs: object) -> NoReturn:
+        raise PermissionError("read denied")
+
+    monkeypatch.setattr(Path, "open", fail_note_open)
+
+    with pytest.raises(NotesError) as exc_info:
+        localize._read_text(note)
+
+    assert str(note) in str(exc_info.value)
+    assert "read denied" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, PermissionError)
+
+
+def test_run_does_not_silently_skip_invalid_utf8_note(tmp_path: Path) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    note = vault / "bad.md"
+    note.write_bytes(b"![](https://x.test/1.png)\n\xff")
+
+    with pytest.raises(NotesError, match=r"bad\.md.*UTF-8"):
+        localize.run(_localize_args(vault))
+
+
+def test_rewrite_notes_preserves_mode_and_newlines(tmp_path: Path) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    note = vault / "n.md"
+    note.write_bytes(b"before ![](https://x.test/1.png)\r\nafter\r\n")
+    note.chmod(0o640)
+    original = localize._read_text(note)
+    occurrences = {note: localize.find_remote_images(original)}
+
+    assert localize._rewrite_notes(vault, occurrences, {"https://x.test/1.png": "![[a.webp]]"}) == (1, 1)
+    assert note.read_bytes() == b"before ![[a.webp]]\r\nafter\r\n"
+    assert stat.S_IMODE(note.stat().st_mode) == 0o640
+    assert list(vault.glob(".n.md.*.tmp")) == []
+
+
+def test_rewrite_notes_keeps_original_and_cleans_temp_on_replace_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    note = vault / "n.md"
+    original = "before ![](https://x.test/1.png)\n"
+    note.write_text(original, encoding="utf-8")
+    occurrences = {note: localize.find_remote_images(original)}
+
+    def fail_replace(source: str | Path, destination: str | Path) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(localize.os, "replace", fail_replace)
+
+    with pytest.raises(NotesError, match=r"n\.md.*replace failed") as exc_info:
+        localize._rewrite_notes(vault, occurrences, {"https://x.test/1.png": "![[a.webp]]"})
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert note.read_text(encoding="utf-8") == original
+    assert list(vault.glob(".n.md.*.tmp")) == []
+
+
+def test_rewrite_notes_keeps_original_and_cleans_temp_on_partial_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    note = vault / "n.md"
+    original = b"before ![](https://x.test/1.png)\n"
+    note.write_bytes(original)
+    occurrences = {note: localize.find_remote_images(original.decode("utf-8"))}
+    original_fdopen = localize.os.fdopen
+
+    class PartialWriter:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+
+        def __enter__(self) -> Any:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            self.stream.close()
+
+        def write(self, text: str) -> NoReturn:
+            self.stream.write(text[:5])
+            raise OSError("write failed after prefix")
+
+        def flush(self) -> None:
+            self.stream.flush()
+
+        def fileno(self) -> int:
+            return self.stream.fileno()
+
+    def partial_fdopen(fd: int, *args: Any, **kwargs: Any) -> PartialWriter:
+        return PartialWriter(original_fdopen(fd, *args, **kwargs))
+
+    monkeypatch.setattr(localize.os, "fdopen", partial_fdopen)
+
+    with pytest.raises(NotesError, match=r"n\.md.*write failed after prefix") as exc_info:
+        localize._rewrite_notes(vault, occurrences, {"https://x.test/1.png": "![[a.webp]]"})
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert note.read_bytes() == original
+    assert list(vault.glob(".n.md.*.tmp")) == []
+
+
+def test_rewrite_notes_cleans_temp_if_fdopen_closes_then_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = tmp_path / "Notes"
+    vault.mkdir()
+    note = vault / "n.md"
+    original = b"before ![](https://x.test/1.png)\n"
+    note.write_bytes(original)
+    occurrences = {note: localize.find_remote_images(original.decode("utf-8"))}
+
+    def fail_fdopen(fd: int, *args: Any, **kwargs: Any) -> NoReturn:
+        localize.os.close(fd)
+        raise OSError("fdopen failed after closing descriptor")
+
+    monkeypatch.setattr(localize.os, "fdopen", fail_fdopen)
+
+    with pytest.raises(NotesError, match=r"n\.md.*fdopen failed after closing descriptor") as exc_info:
+        localize._rewrite_notes(vault, occurrences, {"https://x.test/1.png": "![[a.webp]]"})
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert note.read_bytes() == original
+    assert list(vault.glob(".n.md.*.tmp")) == []
 
 
 def test_webp_helpers() -> None:

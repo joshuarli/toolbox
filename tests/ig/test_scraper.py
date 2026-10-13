@@ -133,6 +133,20 @@ class TestDest:
     def test_custom_media_dir(self, tmp_path):
         assert dest_path("ABC", 0, 1, ".jpg", media_dir=tmp_path / "media") == tmp_path / "media" / "bc" / "ABC.jpg"
 
+    def test_rejects_profile_path_traversal(self, tmp_path):
+        with pytest.raises(ValueError, match="outside the media directory"):
+            dest_path("ABC", 0, 1, ".jpg", media_dir=tmp_path / "media", profile="../../outside")
+
+    def test_rejects_profile_symlink_escape(self, tmp_path):
+        media_dir = tmp_path / "media"
+        outside = tmp_path / "outside"
+        (media_dir / "by-profile").mkdir(parents=True)
+        outside.mkdir()
+        (media_dir / "by-profile" / "alice").symlink_to(outside, target_is_directory=True)
+
+        with pytest.raises(ValueError, match="outside the media directory"):
+            dest_path("ABC", 0, 1, ".jpg", media_dir=media_dir, profile="alice")
+
     def test_mixed_carousel_path_uses_url_extension(self):
         path = media_path("ABC", "carousel", 0, 2, url="https://cdn/video.mp4")
 
@@ -202,6 +216,138 @@ class TestInitDb:
         migrated.commit()
         assert migrated.execute("SELECT COUNT(*) FROM profile_post WHERE username = 'alice'").fetchone()[0] == 2
         migrated.close()
+
+    def test_recovers_memberships_from_interrupted_rename(self, tmp_path):
+        db_path = tmp_path / "interrupted.db"
+        db = sqlite3.connect(db_path)
+        db.executescript(
+            """
+            CREATE TABLE post (
+                shortid    TEXT PRIMARY KEY,
+                username   TEXT,
+                caption    TEXT,
+                post_type  TEXT,
+                scraped_at INTEGER
+            ) WITHOUT ROWID;
+            CREATE TABLE profile_post_old (
+                username TEXT NOT NULL,
+                shortid  TEXT NOT NULL REFERENCES post(shortid),
+                seen_at  INTEGER NOT NULL,
+                seq      INTEGER NOT NULL,
+                PRIMARY KEY(username, shortid)
+            ) WITHOUT ROWID;
+            INSERT INTO post VALUES ('OLD1', NULL, NULL, NULL, NULL);
+            INSERT INTO profile_post_old VALUES ('alice', 'OLD1', 10, 3);
+            """
+        )
+        db.commit()
+        db.close()
+
+        migrated = init_db(str(db_path))
+        try:
+            rows = migrated.execute(
+                "SELECT username, saved, shortid, seen_at, seq FROM profile_post"
+            ).fetchall()
+            assert rows == [("alice", 0, "OLD1", 10, 3)]
+            assert migrated.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_post_old'"
+            ).fetchone() is None
+        finally:
+            migrated.close()
+
+    def test_recovers_old_and_saved_memberships_from_interrupted_copy(self, tmp_path):
+        db_path = tmp_path / "interrupted-copy.db"
+        db = sqlite3.connect(db_path)
+        db.executescript(
+            """
+            CREATE TABLE post (
+                shortid    TEXT PRIMARY KEY,
+                username   TEXT,
+                caption    TEXT,
+                post_type  TEXT,
+                scraped_at INTEGER
+            ) WITHOUT ROWID;
+            CREATE TABLE profile_post_old (
+                username TEXT NOT NULL,
+                shortid  TEXT NOT NULL REFERENCES post(shortid),
+                seen_at  INTEGER NOT NULL,
+                seq      INTEGER NOT NULL,
+                PRIMARY KEY(username, shortid)
+            ) WITHOUT ROWID;
+            CREATE TABLE profile_post (
+                username TEXT NOT NULL,
+                saved    INTEGER NOT NULL DEFAULT 0,
+                shortid  TEXT NOT NULL REFERENCES post(shortid),
+                seen_at  INTEGER NOT NULL,
+                seq      INTEGER NOT NULL,
+                PRIMARY KEY(username, saved, shortid)
+            ) WITHOUT ROWID;
+            INSERT INTO post VALUES ('OLD1', NULL, NULL, NULL, NULL);
+            INSERT INTO post VALUES ('SAVED1', NULL, NULL, NULL, NULL);
+            INSERT INTO profile_post_old VALUES ('alice', 'OLD1', 10, 3);
+            INSERT INTO profile_post VALUES ('alice', 1, 'SAVED1', 11, 0);
+            """
+        )
+        db.commit()
+        db.close()
+
+        migrated = init_db(str(db_path))
+        try:
+            rows = migrated.execute(
+                "SELECT username, saved, shortid, seen_at, seq FROM profile_post ORDER BY saved, shortid"
+            ).fetchall()
+            assert rows == [("alice", 0, "OLD1", 10, 3), ("alice", 1, "SAVED1", 11, 0)]
+            assert migrated.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_post_old'"
+            ).fetchone() is None
+        finally:
+            migrated.close()
+
+    def test_profile_post_migration_failure_leaves_original_schema_and_rows(self, tmp_path):
+        db_path = tmp_path / "failed-migration.db"
+        db = sqlite3.connect(db_path)
+        db.executescript(
+            """
+            CREATE TABLE post (
+                shortid    TEXT PRIMARY KEY,
+                username   TEXT,
+                caption    TEXT,
+                post_type  TEXT,
+                scraped_at INTEGER
+            ) WITHOUT ROWID;
+            CREATE TABLE profile_post (
+                username TEXT NOT NULL,
+                shortid  TEXT NOT NULL REFERENCES post(shortid),
+                seen_at  INTEGER,
+                seq      INTEGER NOT NULL,
+                PRIMARY KEY(username, shortid)
+            ) WITHOUT ROWID;
+            INSERT INTO post VALUES ('BAD1', NULL, NULL, NULL, NULL);
+            INSERT INTO profile_post VALUES ('alice', 'BAD1', NULL, 0);
+            """
+        )
+        db.commit()
+        db.close()
+
+        with pytest.raises(sqlite3.IntegrityError):
+            init_db(str(db_path))
+
+        check = sqlite3.connect(db_path)
+        try:
+            cols = {row[1] for row in check.execute("PRAGMA table_info(profile_post)")}
+            row = check.execute("SELECT username, shortid, seen_at, seq FROM profile_post").fetchone()
+            old_table = check.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_post_old'"
+            ).fetchone()
+            staging_table = check.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_post_new'"
+            ).fetchone()
+            assert "saved" not in cols
+            assert row == ("alice", "BAD1", None, 0)
+            assert old_table is None
+            assert staging_table is None
+        finally:
+            check.close()
 
     def test_idempotent(self):
         # Calling a second time on the same file should not raise.
@@ -529,7 +675,7 @@ class TestSavePost:
     def _make_db(self) -> sqlite3.Connection:
         return init_db(":memory:")
 
-    def _fake_download(self, url: str, dest: Path) -> None:
+    def _fake_download(self, url: str, dest: Path, **_kwargs) -> None:
         dest.parent.mkdir(parents=True, exist_ok=True)
         # Write valid magic bytes so _validate_downloaded_file passes.
         # The dest here is the pending temp path, not the final path, so
@@ -578,7 +724,17 @@ class TestSavePost:
         dest.write_bytes(b"fake")
 
         with patch("tool.ig.scraper.dest_path", return_value=dest), patch("tool.ig.scraper._download") as mock_dl:
-            await save_post(db, "ABC", "u", None, "image", ["http://cdn/img.jpg"], ".jpg", skip_existing_files=True)
+            await save_post(
+                db,
+                "ABC",
+                "u",
+                None,
+                "image",
+                ["http://cdn/img.jpg"],
+                ".jpg",
+                skip_existing_files=True,
+                media_dir=tmp_path / "images",
+            )
         mock_dl.assert_not_called()
 
     async def test_reports_muxed_file_as_created_not_cached(self, tmp_path):
@@ -600,6 +756,7 @@ class TestSavePost:
                 skip_existing_files=True,
                 fresh_files={dest},
                 reporter=reporter,
+                media_dir=tmp_path / "images",
             )
 
         mock_dl.assert_not_called()
@@ -614,7 +771,17 @@ class TestSavePost:
             patch("tool.ig.scraper.dest_path", return_value=dest),
             patch("tool.ig.scraper._download", side_effect=self._fake_download) as mock_dl,
         ):
-            await save_post(db, "NEW", "u", None, "image", ["http://cdn/img.jpg"], ".jpg", skip_existing_files=True)
+            await save_post(
+                db,
+                "NEW",
+                "u",
+                None,
+                "image",
+                ["http://cdn/img.jpg"],
+                ".jpg",
+                skip_existing_files=True,
+                media_dir=tmp_path / "images",
+            )
         assert mock_dl.call_args.args[0] == "http://cdn/img.jpg"
         assert dest.read_bytes().endswith(b"http://cdn/img.jpg")
 
@@ -629,6 +796,32 @@ class TestSavePost:
         assert (media_dir / "by-profile" / "u" / "ABC.jpg").exists()
         cols = {r[1] for r in db.execute("PRAGMA table_info(media)")}
         assert "path" not in cols
+
+    async def test_rejects_symlink_escape_before_writing(self, tmp_path):
+        db = self._make_db()
+        media_dir = tmp_path / "media"
+        outside = tmp_path / "outside"
+        (media_dir / "by-profile").mkdir(parents=True)
+        outside.mkdir()
+        (media_dir / "by-profile" / "alice").symlink_to(outside, target_is_directory=True)
+        url = "https://cdn/image.jpg"
+
+        with pytest.raises(ValueError, match="outside the media directory"):
+            await save_post(
+                db,
+                "SAFE1",
+                "owner",
+                None,
+                "image",
+                [url],
+                ".jpg",
+                captured_bodies={url: b"\xff\xd8\xffimage"},
+                media_dir=media_dir,
+                profile_username="alice",
+            )
+
+        assert list(outside.iterdir()) == []
+        assert db.execute("SELECT 1 FROM post WHERE shortid = 'SAFE1'").fetchone() is None
 
     async def test_mixed_carousel_uses_per_item_extensions(self, tmp_path):
         db = self._make_db()
@@ -646,7 +839,7 @@ class TestSavePost:
         db = self._make_db()
         media_dir = tmp_path / "media"
 
-        def fake_download(url: str, dest: Path) -> None:
+        def fake_download(url: str, dest: Path, **_kwargs) -> None:
             if url.endswith("fail.jpg"):
                 raise RuntimeError("download failed")
             self._fake_download(url, dest)
@@ -671,18 +864,44 @@ class TestSavePost:
         assert db.execute("SELECT COUNT(*) FROM post WHERE shortid = 'PARTIAL'").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM media WHERE shortid = 'PARTIAL'").fetchone()[0] == 0
 
-    async def test_removes_stale_media_rows_when_media_count_shrinks(self):
+    async def test_removes_stale_media_rows_when_media_count_shrinks(self, tmp_path):
         db = self._make_db()
         with patch("tool.ig.scraper._download", side_effect=self._fake_download):
-            await save_post(db, "ABC", "u", None, "carousel", ["http://cdn/1.jpg", "http://cdn/2.jpg"], ".jpg")
-            await save_post(db, "ABC", "u", None, "video", ["http://cdn/1.mp4"], ".mp4")
+            await save_post(
+                db,
+                "ABC",
+                "u",
+                None,
+                "carousel",
+                ["http://cdn/1.jpg", "http://cdn/2.jpg"],
+                ".jpg",
+                media_dir=tmp_path,
+            )
+            await save_post(
+                db,
+                "ABC",
+                "u",
+                None,
+                "video",
+                ["http://cdn/1.mp4"],
+                ".mp4",
+                media_dir=tmp_path,
+            )
         rows = db.execute("SELECT idx, url FROM media WHERE shortid='ABC' ORDER BY idx").fetchall()
         assert rows == [(0, "http://cdn/1.mp4")]
 
     async def test_video_requires_single_final_url(self):
         db = self._make_db()
         with pytest.raises(ValueError, match="expected exactly 1"):
-            await save_post(db, "ABC", "u", None, "video", ["http://cdn/1.mp4", "http://cdn/2.mp4"], ".mp4")
+            await save_post(
+                db,
+                "ABC",
+                "u",
+                None,
+                "video",
+                ["http://cdn/1.mp4", "http://cdn/2.mp4"],
+                ".mp4",
+            )
 
     async def test_rejects_low_quality_instagram_image_url(self):
         db = self._make_db()
@@ -690,17 +909,17 @@ class TestSavePost:
         with pytest.raises(ValueError, match="low-quality"):
             await save_post(db, "ABC", "u", None, "image", [low], ".jpg")
 
-    async def test_accepts_unconstrained_jpegr_instagram_image_url(self):
+    async def test_accepts_unconstrained_jpegr_instagram_image_url(self, tmp_path):
         db = self._make_db()
         url = "https://scontent.cdninstagram.com/v/t51.82787-15/x.jpg?stp=dst-jpegr_e35_tt6"
         with patch("tool.ig.scraper._download", side_effect=self._fake_download):
-            await save_post(db, "ABC", "u", None, "image", [url], ".jpg")
+            await save_post(db, "ABC", "u", None, "image", [url], ".jpg", media_dir=tmp_path)
 
-    async def test_accepts_unconstrained_cp_prefixed_instagram_image_url(self):
+    async def test_accepts_unconstrained_cp_prefixed_instagram_image_url(self, tmp_path):
         db = self._make_db()
         url = "https://scontent.cdninstagram.com/v/t51.82787-15/x.jpg?stp=cp6_dst-jpg_e35_tt6"
         with patch("tool.ig.scraper._download", side_effect=self._fake_download):
-            await save_post(db, "ABC", "u", None, "image", [url], ".jpg")
+            await save_post(db, "ABC", "u", None, "image", [url], ".jpg", media_dir=tmp_path)
 
     async def test_rejects_low_quality_cp_prefixed_instagram_image_url(self):
         db = self._make_db()
@@ -708,11 +927,11 @@ class TestSavePost:
         with pytest.raises(ValueError, match="low-quality"):
             await save_post(db, "ABC", "u", None, "image", [low], ".jpg")
 
-    async def test_accepts_large_crop_dimension_instagram_image_url(self):
+    async def test_accepts_large_crop_dimension_instagram_image_url(self, tmp_path):
         db = self._make_db()
         url = "https://scontent.cdninstagram.com/v/t39.30808-6/x.jpg?stp=c0.0.1278.1598a_dst-jpg_e35_tt6"
         with patch("tool.ig.scraper._download", side_effect=self._fake_download):
-            await save_post(db, "ABC", "u", None, "image", [url], ".jpg")
+            await save_post(db, "ABC", "u", None, "image", [url], ".jpg", media_dir=tmp_path)
 
     async def test_no_media_urls_raises(self):
         db = self._make_db()
@@ -726,7 +945,17 @@ class TestSavePost:
         captured_bodies = {url: b"\xff\xd8\xff" + b"captured image data"}
 
         with patch("tool.ig.scraper.dest_path", return_value=dest), patch("tool.ig.scraper._download") as mock_dl:
-            await save_post(db, "CAP", "u", None, "image", [url], ".jpg", captured_bodies=captured_bodies)
+            await save_post(
+                db,
+                "CAP",
+                "u",
+                None,
+                "image",
+                [url],
+                ".jpg",
+                captured_bodies=captured_bodies,
+                media_dir=tmp_path / "images",
+            )
 
         mock_dl.assert_not_called()
         assert dest.exists()
@@ -751,6 +980,7 @@ class TestSavePost:
                 [url],
                 ".jpg",
                 browser_fetch=browser_fetch,
+                media_dir=tmp_path / "images",
             )
 
         mock_dl.assert_not_called()
@@ -777,6 +1007,7 @@ class TestSavePost:
                 [url],
                 ".jpg",
                 browser_fetch=browser_fetch,
+                media_dir=tmp_path / "images",
             )
 
         assert mock_dl.call_args.args[0] == url
@@ -921,7 +1152,7 @@ class TestDownload:
         response_mock.__exit__ = MagicMock(return_value=False)
 
         with patch("urllib.request.urlopen", return_value=response_mock):
-            _download("http://cdn/img.jpg", dest)
+            _download("http://cdn/img.jpg", dest, media_dir=tmp_path)
 
         assert dest.exists()
         assert dest.read_bytes() == body
@@ -936,7 +1167,7 @@ class TestDownload:
         response_mock.__exit__ = MagicMock(return_value=False)
 
         with patch("urllib.request.urlopen", return_value=response_mock):
-            _download("http://cdn/img.jpg", dest)
+            _download("http://cdn/img.jpg", dest, media_dir=tmp_path)
 
         assert dest.parent.exists()
 
@@ -954,7 +1185,7 @@ class TestDownload:
             return response_mock
 
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-            _download("http://cdn/img.jpg", dest)
+            _download("http://cdn/img.jpg", dest, media_dir=tmp_path)
 
         assert captured_req[0].get_header("Referer") == "https://www.instagram.com/"
 
@@ -975,7 +1206,7 @@ class TestDownload:
         monkeypatch.setattr("tool.ig.scraper.time.sleep", lambda _delay: None)
 
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-            _download("http://cdn/img.jpg", dest)
+            _download("http://cdn/img.jpg", dest, media_dir=tmp_path)
 
         assert dest.read_bytes() == b"new"
         assert len(calls) == 2
@@ -993,7 +1224,7 @@ class TestDownload:
             patch("urllib.request.urlopen", return_value=response_mock),
             pytest.raises(OSError, match="connection reset"),
         ):
-            _download("http://cdn/img.jpg", dest)
+            _download("http://cdn/img.jpg", dest, media_dir=tmp_path)
 
         assert dest.read_bytes() == b"old"
         assert list(tmp_path.glob(".*.tmp")) == []
@@ -1011,7 +1242,7 @@ async def test_mux_av_uses_mp4_temp_output(tmp_path, monkeypatch):
     monkeypatch.setattr("subprocess.run", fake_run)
 
     dest = tmp_path / "out.mp4"
-    await mux_av(b"video", b"audio", dest)
+    await mux_av(b"video", b"audio", dest, media_dir=tmp_path)
 
     assert dest.read_bytes() == b"muxed"
     assert len(output_paths) == 1

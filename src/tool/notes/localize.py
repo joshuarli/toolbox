@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import errno
 import hashlib
 import os
 import re
+import stat
 import subprocess
 import tempfile
 import time
@@ -482,7 +484,8 @@ def collect_markdown_files(vault: Path, roots: list[Path] | None = None) -> list
                 candidates.update(p for p in root.rglob("*.md") if p.is_file())
     else:
         candidates = {p for p in vault.rglob("*.md") if p.is_file()}
-    kept = []
+    vault = vault.resolve()
+    kept: set[Path] = set()
     for path in candidates:
         try:
             rel = path.relative_to(vault)
@@ -490,17 +493,93 @@ def collect_markdown_files(vault: Path, roots: list[Path] | None = None) -> list
             continue
         if ".trash" in rel.parts or ".obsidian" in rel.parts:
             continue
-        kept.append(path)
+        resolved = _resolve_note_path(vault, path)
+        resolved_rel = resolved.relative_to(vault)
+        if ".trash" in resolved_rel.parts or ".obsidian" in resolved_rel.parts:
+            continue
+        kept.add(resolved)
     return sorted(kept)
 
 
-def _read_text(path: Path) -> str | None:
+def _read_text(path: Path) -> str:
+    """Read a note as strict UTF-8 while keeping its original newline bytes."""
     try:
-        return path.read_text(encoding="utf-8")
-    # NB: `except A, B` catches the tuple (A, B) on Python 3; ruff format
-    # strips the parenthesized form, so this is written the way it is.
-    except UnicodeDecodeError, OSError:
-        return None
+        with path.open("r", encoding="utf-8", newline="") as note_file:
+            return note_file.read()
+    except UnicodeDecodeError as exc:
+        raise NotesError(f"could not read {path} as UTF-8: {exc}") from exc
+    except OSError as exc:
+        raise NotesError(f"could not read {path}: {exc}") from exc
+
+
+def _resolve_note_path(vault: Path, path: Path) -> Path:
+    """Resolve a note and require its final file to stay inside *vault*."""
+    vault = vault.resolve()
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise NotesError(f"could not resolve note path {path}: {exc}") from exc
+    try:
+        resolved.relative_to(vault)
+    except ValueError:
+        raise NotesError(f"path is outside the notes vault: {path}")
+    try:
+        mode = resolved.lstat().st_mode
+    except OSError as exc:
+        raise NotesError(f"could not inspect note {path}: {exc}") from exc
+    if not stat.S_ISREG(mode):
+        raise NotesError(f"not a regular note file: {path}")
+    return resolved
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Atomically replace a regular note, preserving its permission bits."""
+    original = path.lstat()
+    if not stat.S_ISREG(original.st_mode):
+        raise OSError(f"not a regular file: {path}")
+
+    temp_path: Path | None = None
+    file_descriptor: int | None = None
+    try:
+        file_descriptor, temp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+        )
+        temp_path = Path(temp_name)
+        temp_file = os.fdopen(file_descriptor, "w", encoding="utf-8", newline="")
+        file_descriptor = None
+        with temp_file:
+            temp_file.write(text)
+            temp_file.flush()
+            os.fchmod(temp_file.fileno(), stat.S_IMODE(original.st_mode))
+            os.fsync(temp_file.fileno())
+
+        current = path.lstat()
+        if (
+            not stat.S_ISREG(current.st_mode)
+            or current.st_dev != original.st_dev
+            or current.st_ino != original.st_ino
+        ):
+            raise OSError(f"note changed while being rewritten: {path}")
+        os.replace(temp_path, path)
+        temp_path = None
+    except BaseException as exc:
+        cleanup_errors: list[str] = []
+        if file_descriptor is not None:
+            try:
+                os.close(file_descriptor)
+            except OSError as cleanup_exc:
+                if cleanup_exc.errno != errno.EBADF:
+                    cleanup_errors.append(f"could not close staged note: {cleanup_exc}")
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError as cleanup_exc:
+                cleanup_errors.append(f"could not remove staged note {temp_path}: {cleanup_exc}")
+        if cleanup_errors:
+            raise OSError(f"{exc}; {'; '.join(cleanup_errors)}") from exc
+        raise
 
 
 def fetch_and_store(
@@ -581,8 +660,6 @@ def _scan_notes(files: list[Path]) -> tuple[dict[Path, list[RemoteImage]], list[
     pages: set[str] = set()
     for path in files:
         text = _read_text(path)
-        if text is None:
-            continue
         found, skipped = _scan_text(text)
         if found:
             occurrences[path] = found
@@ -641,14 +718,13 @@ def _rewrite_notes(
     n_notes = 0
     n_images = 0
     for path in occurrences:
+        path = _resolve_note_path(vault, path)
         text = _read_text(path)
-        if text is None:
-            continue
         updated, replaced = apply_localizations(text, url_to_embed)
         if replaced == 0:
             continue
         try:
-            path.write_text(updated, encoding="utf-8")
+            _atomic_write_text(path, updated)
         except OSError as exc:
             raise NotesError(f"could not rewrite {path.relative_to(vault)}: {exc}") from exc
         print(f"rewrote {path.relative_to(vault)} ({replaced} images)")

@@ -2,6 +2,10 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+from urllib3 import Timeout
+from urllib3.exceptions import ReadTimeoutError
+
 from tool.music.http import RateLimiter, Session
 
 
@@ -47,6 +51,14 @@ class TestSessionInit:
         rl = RateLimiter()
         s = Session(rate_limiter=rl)
         assert s.rate_limiter is rl
+
+    def test_pool_uses_bounded_connect_and_read_timeouts(self):
+        with patch("tool.music.http.PoolManager") as pool_manager:
+            Session()
+        timeout = pool_manager.call_args.kwargs["timeout"]
+        assert isinstance(timeout, Timeout)
+        assert timeout.connect_timeout == 5.0
+        assert timeout.read_timeout == 30.0
 
 
 class TestSessionGet:
@@ -101,6 +113,15 @@ class TestSessionGet:
 
         s.get("http://example.com")
         rl.acquire.assert_called_once()
+
+    def test_preserves_read_timeout(self):
+        error = ReadTimeoutError(None, "http://example.com", "slow response")
+        s = Session()
+        s.pool = MagicMock()
+        s.pool.request.side_effect = error
+        with pytest.raises(ReadTimeoutError) as exc:
+            s.get("http://example.com")
+        assert exc.value is error
 
 
 class TestSessionGetJson:

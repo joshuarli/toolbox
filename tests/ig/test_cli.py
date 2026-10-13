@@ -16,7 +16,7 @@ from tool.ig.cli import (
 )
 from tool.ig.cli.following import _dump_following
 from tool.ig.cli.get_post import _get_post, shortid_arg
-from tool.ig.cli.import_db import ImportDbConflictError, import_db
+from tool.ig.cli.import_db import ImportDbConflictError, ImportDbError, import_db
 from tool.ig.cli.info import _info
 from tool.ig.cli.remove import _remove
 from tool.ig.cli.scan import _scan
@@ -352,6 +352,31 @@ def test_import_db_copies_profiles_failures_and_following(tmp_path):
         ]
         assert target.execute("PRAGMA quick_check").fetchone()[0] == "ok"
         assert target.execute("PRAGMA foreign_key_check").fetchall() == []
+    finally:
+        target.close()
+
+
+def test_import_db_rejects_invalid_profile_username_before_copying(tmp_path):
+    target_path = tmp_path / "target.db"
+    source_path = tmp_path / "source.db"
+
+    source = init_db(str(source_path))
+    source.executescript(
+        """
+        INSERT INTO post VALUES ('A1', 'owner', 'cap', 'image', 10);
+        INSERT INTO profile_post VALUES ('../../outside', 0, 'A1', 20, 0);
+        """
+    )
+    source.commit()
+    source.close()
+
+    with pytest.raises(ImportDbError, match="invalid Instagram username"):
+        import_db(source_path, target_path=target_path)
+
+    target = init_db(str(target_path))
+    try:
+        assert target.execute("SELECT COUNT(*) FROM post").fetchone()[0] == 0
+        assert target.execute("SELECT COUNT(*) FROM profile_post").fetchone()[0] == 0
     finally:
         target.close()
 

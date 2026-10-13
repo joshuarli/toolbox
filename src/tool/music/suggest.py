@@ -13,7 +13,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from tool.music.api.listenbrainz import Similar, similar_artists
-from tool.music.api.musicbrainz import find_artist
+from tool.music.api.musicbrainz import MusicBrainzRequestError, find_artist
 from tool.music.constants import AUDIO_EXTENSIONS
 from tool.music.metadata import Artist, Metadata
 from tool.music.tag import autotag
@@ -171,7 +171,12 @@ def run(args: argparse.Namespace) -> None:
 
     print(f"Seeding from {len(files)} file(s) in {root}...")
     seeds = _collect_seeds(files, tag=not args.no_tag)
-    _resolve_by_name(seeds)
+    try:
+        _resolve_by_name(seeds)
+    except MusicBrainzRequestError as exc:
+        cause = f": {exc.__cause__}" if exc.__cause__ else ""
+        print(f"error: {exc}{cause}", file=sys.stderr)
+        sys.exit(1)
     if not seeds.weight:
         print("error: no artists to seed from (tag the files first: `tool music tag`)", file=sys.stderr)
         sys.exit(1)

@@ -60,17 +60,22 @@ def probe_codec(filepath: str) -> str | None:
     return str(codec) if codec else None
 
 
-def transcode_to_aac(filepath: str, dst: str | None = None) -> str | None:
+def transcode_to_aac(filepath: str, dst: str | None = None, *, overwrite: bool = False) -> str | None:
     """Transcode *filepath* to AAC at 320k in an M4A container.
 
     Preserves channel layout and copies metadata from the source.
     If *dst* is given, writes there; otherwise derives the path from
-    *filepath* by replacing the extension with .m4a.
+    *filepath* by replacing the extension with .m4a. Existing output is refused
+    unless *overwrite* is true.
     Returns the path to the new file, or None on failure.
     """
     if dst is None:
         base = os.path.splitext(filepath)[0]
         dst = base + AAC_EXT
+
+    # ffmpeg can return success after logging that -n refused an existing output.
+    if not overwrite and os.path.lexists(dst):
+        return None
 
     try:
         subprocess.run(
@@ -78,7 +83,7 @@ def transcode_to_aac(filepath: str, dst: str | None = None) -> str | None:
                 "ffmpeg",
                 "-nostdin",
                 "-hide_banner",
-                "-y",
+                "-y" if overwrite else "-n",
                 "-i",
                 filepath,
                 "-c:a",
@@ -103,6 +108,7 @@ def configure_parser(p: argparse.ArgumentParser) -> None:
     p.description = "Transcode audio files to high-quality AAC in an M4A container."
     p.add_argument("paths", nargs="*", default=["."], help="audio files or directories to transcode")
     p.add_argument("-o", "--output", help="output path (only valid for a single input file)")
+    p.add_argument("--overwrite", action="store_true", help="replace existing output files")
 
 
 def run(args: argparse.Namespace) -> None:
@@ -132,7 +138,7 @@ def run(args: argparse.Namespace) -> None:
         ch_label = ch_map.get(channels, f"{channels}ch") if channels else "?"
 
         dst = args.output or None
-        result = transcode_to_aac(src, dst=dst)
+        result = transcode_to_aac(src, dst=dst, overwrite=args.overwrite)
         if result is None:
             print(f"error: transcode failed: {src}", file=sys.stderr)
             failed += 1

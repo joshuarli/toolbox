@@ -5,10 +5,13 @@ Rate-limited to 1 req/sec as required by the MusicBrainz API terms.
 API docs: https://musicbrainz.org/doc/MusicBrainz_API
 """
 
+import json
 import sys
 from collections import Counter
 from dataclasses import replace
 from typing import Any
+
+from urllib3.exceptions import HTTPError
 
 from tool.music.http import RateLimiter, Session
 from tool.music.metadata import Artist, Candidate, Metadata
@@ -43,20 +46,30 @@ _CREDIT_FIELDS = {
 _PERFORMER_TYPES = {"instrument", "vocal", "performer"}
 
 
+class MusicBrainzRequestError(RuntimeError):
+    """A MusicBrainz request failed; the underlying failure is retained as the cause."""
+
+
+def _request_json(url: str, *, params: dict[str, str | int], operation: str) -> dict[str, Any]:
+    """Fetch a response, translating transport and response-decoding failures only."""
+    try:
+        return _session.get_json(url, params=params)
+    except (HTTPError, OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise MusicBrainzRequestError(f"MusicBrainz {operation} failed") from exc
+
+
 # ---------------------------------------------------------------------------
 # Search → candidates
 # ---------------------------------------------------------------------------
 
 
 def search(query: str) -> list[Candidate]:
-    """Search MusicBrainz recordings; one candidate per (recording, release)."""
-    try:
-        data = _session.get_json(
-            f"{MB_BASE}/recording/",
-            params={"query": query, "fmt": "json", "limit": "10"},
-        )
-    except Exception:
-        return []
+    """Search recordings; an empty list means no hits, while request failures raise MusicBrainzRequestError."""
+    data = _request_json(
+        f"{MB_BASE}/recording/",
+        params={"query": query, "fmt": "json", "limit": "10"},
+        operation="recording search",
+    )
 
     out: list[Candidate] = []
     for rec in data.get("recordings", []):
@@ -111,15 +124,15 @@ def find_artist(name: str) -> Artist | None:
     """Resolve an artist name to a MusicBrainz artist, or None unless the top hit is clearly the one.
 
     "Clearly" = search score of at least 95 and a lead of at least 5 over the runner-up, so an
-    ambiguous name ("Air") is left for the caller to report rather than guessed.
+    ambiguous name ("Air") is left for the caller to report rather than guessed. Request failures raise
+    MusicBrainzRequestError; None means no clear match.
     """
     quoted = name.replace("\\", "\\\\").replace('"', '\\"')
-    try:
-        data = _session.get_json(
-            f"{MB_BASE}/artist/", params={"query": f'artist:"{quoted}"', "fmt": "json", "limit": "5"}
-        )
-    except Exception:
-        return None
+    data = _request_json(
+        f"{MB_BASE}/artist/",
+        params={"query": f'artist:"{quoted}"', "fmt": "json", "limit": "5"},
+        operation="artist search",
+    )
     hits = data.get("artists", [])
     if not hits or hits[0].get("score", 0) < _ARTIST_MIN_SCORE:
         return None
@@ -144,18 +157,24 @@ def enrich(meta: Metadata) -> Metadata:
         if meta.musicbrainz_albumid:
             return _enrich_release(meta, _release_lookup(meta.musicbrainz_albumid))
         if meta.musicbrainz_recordingid:
-            rec = _session.get_json(
+            rec = _request_json(
                 f"{MB_BASE}/recording/{meta.musicbrainz_recordingid}",
                 params={"inc": _RECORDING_INC, "fmt": "json"},
+                operation="recording lookup",
             )
             return _apply_recording(meta, rec, [])
-    except Exception as e:
-        print(f"warning: MusicBrainz lookup failed ({e}); keeping AcoustID data only", file=sys.stderr)
+    except MusicBrainzRequestError as e:
+        cause = f" ({e.__cause__})" if e.__cause__ else ""
+        print(f"warning: {e}{cause}; keeping AcoustID data only", file=sys.stderr)
     return meta
 
 
 def _release_lookup(release_id: str) -> dict[str, Any]:
-    return _session.get_json(f"{MB_BASE}/release/{release_id}", params={"inc": _RELEASE_INC, "fmt": "json"})
+    return _request_json(
+        f"{MB_BASE}/release/{release_id}",
+        params={"inc": _RELEASE_INC, "fmt": "json"},
+        operation="release lookup",
+    )
 
 
 def _enrich_release(meta: Metadata, rel: dict[str, Any]) -> Metadata:

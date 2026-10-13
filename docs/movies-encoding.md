@@ -16,8 +16,8 @@ The encoder converts compatible text subtitles to MP4 `mov_text`. Selected VobSu
 
 ## Other conversions
 
-- `movies mkvtomp4` is a dry-run by default. With `--apply`, it copies streams supported by MP4, converts compatible text subtitles, and extracts unsupported audio and subtitle streams into sidecar files. It refuses files with no video or an unsupported video codec.
-- `movies loudnorm` measures loudness, targets −16 LUFS and −1.5 dBTP, then re-encodes the first audio stream while copying the other streams. If the measured gain is negligible or the `-loudnorm` output already exists, it skips writing.
+- `movies mkvtomp4` is a dry-run by default. With `--apply`, it copies streams supported by MP4, converts compatible text subtitles, and extracts unsupported audio and subtitle streams into sidecar files. Outputs are staged and published after extraction succeeds; existing output paths are preserved. It refuses files with no video or an unsupported video codec.
+- `movies loudnorm` measures loudness, targets −16 LUFS and −1.5 dBTP, then re-encodes the first audio stream while copying the other streams. If measurement fails or returns invalid values, the command exits with an error. If the measured gain is negligible or the `-loudnorm` output already exists, it skips writing.
 - `movies merge-srt DIR` merges matching sidecar `.srt` files into MP4/MKV containers.
 
 `movies encode`, `movies mkvtomp4`, and `movies loudnorm` help show the command-specific flags.

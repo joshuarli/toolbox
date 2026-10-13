@@ -1,5 +1,8 @@
+import sqlite3
+
 import pytest
 
+from tool.movies import search as movie_search
 from tool.movies.search import extract_title_year, parse_filename
 
 
@@ -60,3 +63,90 @@ def test_no_year_parse_filename():
     assert title == "Some Movie Without A Year"
     assert year is None
     assert ext == "mkv"
+
+
+def test_ensure_fts_refreshes_changed_fields_when_movie_count_is_constant(monkeypatch, tmp_path):
+    db = tmp_path / "movies.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        """
+        CREATE TABLE movie (
+            slug TEXT PRIMARY KEY,
+            title TEXT,
+            alt_title TEXT,
+            year TEXT,
+            directors BLOB,
+            rating REAL,
+            rating_count INTEGER,
+            enriched_at INTEGER
+        )
+        """
+    )
+    con.execute(
+        "INSERT INTO movie VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("quiet-volcano", "Ancient Winter", None, "2001", None, 7.0, 12, 1),
+    )
+    con.execute(
+        "CREATE VIRTUAL TABLE movie_fts USING fts5(slug UNINDEXED, title, alt_title, directors_text, tokenize='trigram')"
+    )
+    con.execute(
+        "INSERT INTO movie_fts VALUES (?, ?, ?, ?)",
+        ("quiet-volcano", "Stale indexed title", "", ""),
+    )
+    con.commit()
+    con.close()
+    monkeypatch.setattr(movie_search, "db_path", lambda: db)
+
+    movie_search.ensure_fts()
+    con = sqlite3.connect(db)
+    indexed_title = con.execute("SELECT title FROM movie_fts WHERE slug = ?", ("quiet-volcano",)).fetchone()[0]
+    con.close()
+    assert indexed_title == "Ancient Winter"
+
+    con = sqlite3.connect(db)
+    con.execute("UPDATE movie SET title = ? WHERE slug = ?", ("Quiet Volcano", "quiet-volcano"))
+    con.commit()
+    con.close()
+
+    movie_search.ensure_fts()
+
+    con = sqlite3.connect(db)
+    indexed_title = con.execute("SELECT title FROM movie_fts WHERE slug = ?", ("quiet-volcano",)).fetchone()[0]
+    con.close()
+    assert indexed_title == "Quiet Volcano"
+    assert [row["slug"] for row in movie_search.search("Quiet Volcano")] == ["quiet-volcano"]
+
+
+def test_search_rolls_back_and_closes_connection_after_query_failure(monkeypatch, tmp_path):
+    db = tmp_path / "movies.db"
+    connections = []
+    state = {"rolled_back": False, "closed": False}
+    connect = sqlite3.connect
+
+    class TrackedConnection(sqlite3.Connection):
+        def rollback(self):
+            state["rolled_back"] = True
+            super().rollback()
+
+        def close(self):
+            state["closed"] = True
+            super().close()
+
+    def tracked_connect(path):
+        con = connect(path, factory=TrackedConnection)
+        connections.append(con)
+        return con
+
+    def fail_after_transaction(con):
+        con.execute("BEGIN IMMEDIATE")
+        raise RuntimeError("search setup failed")
+
+    monkeypatch.setattr(movie_search, "db_path", lambda: db)
+    monkeypatch.setattr(movie_search.sqlite3, "connect", tracked_connect)
+    monkeypatch.setattr(movie_search, "_ensure_fts", fail_after_transaction)
+
+    with pytest.raises(RuntimeError, match="search setup failed"):
+        movie_search.search("Quiet Volcano")
+
+    assert state == {"rolled_back": True, "closed": True}
+    assert len(connections) == 1

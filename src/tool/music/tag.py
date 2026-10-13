@@ -12,7 +12,7 @@ import unicodedata
 from collections import Counter
 
 from tool.music.api.acoustid import candidates, fetch_acoustid_metadata, get_audio_fingerprint
-from tool.music.api.musicbrainz import enrich
+from tool.music.api.musicbrainz import MusicBrainzRequestError, enrich
 from tool.music.api.musicbrainz import search as mb_search
 from tool.music.metadata import Candidate, Metadata, show
 from tool.music.tags import is_writable, read_tags, write_tags
@@ -299,7 +299,12 @@ def run(args: argparse.Namespace) -> None:
     cands = candidates(fetch_acoustid_metadata(duration, fingerprint) or [])
 
     if not cands:
-        cands = _fallback_search(args.file, current)
+        try:
+            cands = _fallback_search(args.file, current)
+        except MusicBrainzRequestError as exc:
+            cause = f": {exc.__cause__}" if exc.__cause__ else ""
+            print(f"error: {exc}{cause}", file=sys.stderr)
+            sys.exit(1)
         if not cands:
             print("No matches found for this audio fingerprint.")
             return

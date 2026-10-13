@@ -3,7 +3,8 @@
 Personal CLI tools, invoked as `uv run tool <name> ...`.
 
 - Build: `uv build`.
-- Check: `make fmtlint`.
+- Check: `make fmtlint` (read-only Ruff and ty checks).
+- Format and apply Ruff fixes: `make fmt`.
 - Tests: `uv run pytest`.
 
 ## Invariants

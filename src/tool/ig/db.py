@@ -11,9 +11,14 @@ DB_PATH = "instagram.db"
 
 
 def _profile_post_needs_saved_migration(db: sqlite3.Connection) -> bool:
+    old_table = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_post_old'"
+    ).fetchone()
+    if old_table:
+        return True
     cols = db.execute("PRAGMA table_info(profile_post)").fetchall()
     if not cols:
-        return False
+        return True
     names = {row[1] for row in cols}
     pk_cols = [row[1] for row in sorted((row for row in cols if row[5]), key=lambda row: row[5])]
     return "saved" not in names or pk_cols != ["username", "saved", "shortid"]
@@ -22,72 +27,101 @@ def _profile_post_needs_saved_migration(db: sqlite3.Connection) -> bool:
 def _migrate_profile_post_saved(db: sqlite3.Connection) -> None:
     if not _profile_post_needs_saved_migration(db):
         return
-    db.executescript("""
-        ALTER TABLE profile_post RENAME TO profile_post_old;
+    tables = [
+        name
+        for name in ("profile_post", "profile_post_old")
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone()
+    ]
 
-        CREATE TABLE profile_post (
-            username TEXT NOT NULL,
-            saved    INTEGER NOT NULL DEFAULT 0,
-            shortid  TEXT NOT NULL REFERENCES post(shortid),
-            seen_at  INTEGER NOT NULL,
-            seq      INTEGER NOT NULL,
-            PRIMARY KEY(username, saved, shortid)
-        ) WITHOUT ROWID;
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute("""
+            CREATE TABLE profile_post_new (
+                username TEXT NOT NULL,
+                saved    INTEGER NOT NULL DEFAULT 0,
+                shortid  TEXT NOT NULL REFERENCES post(shortid),
+                seen_at  INTEGER NOT NULL,
+                seq      INTEGER NOT NULL,
+                PRIMARY KEY(username, saved, shortid)
+            ) WITHOUT ROWID
+        """)
+        for table in tables:
+            cols = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+            required = {"username", "shortid", "seen_at", "seq"}
+            if not required.issubset(cols):
+                missing = ", ".join(sorted(required - cols))
+                raise RuntimeError(f"cannot migrate {table}: missing columns {missing}")
+            saved_expr = "saved" if "saved" in cols else "0"
+            ordering = "username, saved, seq, shortid" if "saved" in cols else "username, seq, shortid"
+            db.execute(
+                f"""
+                INSERT INTO profile_post_new (username, saved, shortid, seen_at, seq)
+                SELECT username, {saved_expr}, shortid, seen_at, seq
+                FROM {table}
+                WHERE 1
+                ORDER BY {ordering}
+                ON CONFLICT(username, saved, shortid) DO NOTHING
+                """
+            )
 
-        INSERT OR IGNORE INTO profile_post (username, saved, shortid, seen_at, seq)
-        SELECT username, 0, shortid, seen_at, seq
-        FROM profile_post_old
-        ORDER BY username, seq, shortid;
-
-        DROP TABLE profile_post_old;
-    """)
+        for table in tables:
+            db.execute(f"DROP TABLE {table}")
+        db.execute("ALTER TABLE profile_post_new RENAME TO profile_post")
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def init_db(path: str = DB_PATH) -> sqlite3.Connection:
     db = sqlite3.connect(path)
-    db.execute("PRAGMA journal_mode=WAL")
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS post (
-            shortid    TEXT PRIMARY KEY,
-            username   TEXT,
-            caption    TEXT,
-            post_type  TEXT,
-            scraped_at INTEGER
-        ) WITHOUT ROWID;
+    try:
+        db.execute("PRAGMA journal_mode=WAL")
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS post (
+                shortid    TEXT PRIMARY KEY,
+                username   TEXT,
+                caption    TEXT,
+                post_type  TEXT,
+                scraped_at INTEGER
+            ) WITHOUT ROWID;
 
-        CREATE TABLE IF NOT EXISTS profile_post (
-            username TEXT NOT NULL,
-            saved    INTEGER NOT NULL DEFAULT 0,
-            shortid  TEXT NOT NULL REFERENCES post(shortid),
-            seen_at  INTEGER NOT NULL,
-            seq      INTEGER NOT NULL,
-            PRIMARY KEY(username, saved, shortid)
-        ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS profile_post (
+                username TEXT NOT NULL,
+                saved    INTEGER NOT NULL DEFAULT 0,
+                shortid  TEXT NOT NULL REFERENCES post(shortid),
+                seen_at  INTEGER NOT NULL,
+                seq      INTEGER NOT NULL,
+                PRIMARY KEY(username, saved, shortid)
+            ) WITHOUT ROWID;
 
-        CREATE TABLE IF NOT EXISTS profile_following (
-            username          TEXT NOT NULL,
-            followee_username TEXT NOT NULL,
-            followee_id       TEXT,
-            full_name         TEXT,
-            is_private        INTEGER NOT NULL DEFAULT 0,
-            profile_pic_url   TEXT,
-            first_seen_at     INTEGER NOT NULL,
-            last_seen_at      INTEGER NOT NULL,
-            seq               INTEGER NOT NULL,
-            current           INTEGER NOT NULL DEFAULT 1,
-            PRIMARY KEY(username, followee_username)
-        ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS profile_following (
+                username          TEXT NOT NULL,
+                followee_username TEXT NOT NULL,
+                followee_id       TEXT,
+                full_name         TEXT,
+                is_private        INTEGER NOT NULL DEFAULT 0,
+                profile_pic_url   TEXT,
+                first_seen_at     INTEGER NOT NULL,
+                last_seen_at      INTEGER NOT NULL,
+                seq               INTEGER NOT NULL,
+                current           INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY(username, followee_username)
+            ) WITHOUT ROWID;
 
-        CREATE TABLE IF NOT EXISTS media (
-            shortid TEXT NOT NULL REFERENCES post(shortid),
-            idx     INTEGER NOT NULL,
-            url     TEXT,
-            PRIMARY KEY(shortid, idx)
-        ) WITHOUT ROWID;
-    """)
-    _migrate_profile_post_saved(db)
-    db.commit()
-    return db
+            CREATE TABLE IF NOT EXISTS media (
+                shortid TEXT NOT NULL REFERENCES post(shortid),
+                idx     INTEGER NOT NULL,
+                url     TEXT,
+                PRIMARY KEY(shortid, idx)
+            ) WITHOUT ROWID;
+        """)
+        _migrate_profile_post_saved(db)
+        db.commit()
+        return db
+    except BaseException:
+        db.close()
+        raise
 
 
 def is_done(

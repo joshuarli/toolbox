@@ -1,3 +1,4 @@
+import errno
 import subprocess
 import tempfile
 from pathlib import Path
@@ -5,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from tool.movies import mkvtomp4
+from tool.movies.probe import ProbeStream
 
 from .conftest import FIXTURE_DIR
 
@@ -211,3 +213,106 @@ def test_apply_remux_and_extract(tmp_path: Path) -> None:
 
     # Original MKV should still be there (we don't delete it).
     assert src.is_file()
+
+
+def test_failed_extraction_does_not_publish_remux_and_retry_succeeds(monkeypatch, tmp_path: Path) -> None:
+    src = tmp_path / "Movie.mkv"
+    src.write_bytes(b"source")
+    dest = tmp_path / "out"
+    dest.mkdir()
+    video = ProbeStream(index=0, codec_type="video", codec_name="h264")
+    audio = ProbeStream(index=1, codec_type="audio", codec_name="flac", tags={"language": "jpn"})
+    report = {
+        "mp4": [("video", video, None)],
+        "extract": [("audio", audio, (".flac", None))],
+        "block": [],
+    }
+    monkeypatch.setattr(mkvtomp4, "plan", lambda _path: (report, []))
+
+    def remux(_src: Path, _streams: list, stage_dir: Path) -> Path:
+        out = stage_dir / "Movie.mp4"
+        out.write_bytes(b"remux")
+        return out
+
+    extraction_attempts = 0
+
+    def extract(_src: Path, _streams: list, stage_dir: Path) -> list[Path]:
+        nonlocal extraction_attempts
+        extraction_attempts += 1
+        sidecar = stage_dir / "Movie.s1.jpn.flac"
+        sidecar.write_bytes(b"sidecar")
+        if extraction_attempts == 1:
+            raise RuntimeError("extraction failed")
+        return [sidecar]
+
+    monkeypatch.setattr(mkvtomp4, "_do_remux", remux)
+    monkeypatch.setattr(mkvtomp4, "_do_extractions", extract)
+
+    with pytest.raises(SystemExit, match="extraction failed"):
+        mkvtomp4.run(src, apply=True, dest=str(dest))
+
+    mp4 = dest / "Movie.mp4"
+    sidecar = dest / "Movie.s1.jpn.flac"
+    assert not mp4.exists()
+    assert not sidecar.exists()
+    assert list(dest.iterdir()) == []
+
+    mkvtomp4.run(src, apply=True, dest=str(dest))
+
+    assert mp4.read_bytes() == b"remux"
+    assert sidecar.read_bytes() == b"sidecar"
+
+
+def test_existing_sidecar_prevents_publishing_remux(monkeypatch, tmp_path: Path) -> None:
+    src = tmp_path / "Movie.mkv"
+    src.write_bytes(b"source")
+    dest = tmp_path / "out"
+    dest.mkdir()
+    video = ProbeStream(index=0, codec_type="video", codec_name="h264")
+    audio = ProbeStream(index=1, codec_type="audio", codec_name="flac", tags={"language": "jpn"})
+    report = {
+        "mp4": [("video", video, None)],
+        "extract": [("audio", audio, (".flac", None))],
+        "block": [],
+    }
+    monkeypatch.setattr(mkvtomp4, "plan", lambda _path: (report, []))
+    monkeypatch.setattr(mkvtomp4, "_do_remux", lambda *_args: pytest.fail("remux should not start"))
+    sidecar = dest / "Movie.s1.jpn.flac"
+    sidecar.write_bytes(b"existing sidecar")
+
+    with pytest.raises(SystemExit, match="sidecar already exists"):
+        mkvtomp4.run(src, apply=True, dest=str(dest))
+
+    assert sidecar.read_bytes() == b"existing sidecar"
+    assert not (dest / "Movie.mp4").exists()
+
+
+def test_output_publication_falls_back_when_hard_links_are_unsupported(monkeypatch, tmp_path: Path) -> None:
+    stage = tmp_path / "stage"
+    dest = tmp_path / "out"
+    stage.mkdir()
+    dest.mkdir()
+    staged = stage / "Movie.mp4"
+    output = dest / "Movie.mp4"
+    staged.write_bytes(b"remuxed video")
+
+    def no_hard_links(*_args) -> None:
+        raise OSError(errno.EOPNOTSUPP, "hard links are not supported")
+
+    monkeypatch.setattr(mkvtomp4.os, "link", no_hard_links)
+
+    mkvtomp4._publish_outputs([(staged, output)])
+
+    assert output.read_bytes() == b"remuxed video"
+
+    existing = dest / "existing.mp4"
+    other_staged = stage / "existing.mp4"
+    partial = dest / "partial.mp4"
+    partial_staged = stage / "partial.mp4"
+    existing.write_bytes(b"keep this file")
+    other_staged.write_bytes(b"replacement")
+    partial_staged.write_bytes(b"first output")
+    with pytest.raises(FileExistsError, match="output already exists"):
+        mkvtomp4._publish_outputs([(partial_staged, partial), (other_staged, existing)])
+    assert not partial.exists()
+    assert existing.read_bytes() == b"keep this file"

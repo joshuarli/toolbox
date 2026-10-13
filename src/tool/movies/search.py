@@ -166,56 +166,108 @@ def _strip_quotes(s: str) -> str:
     return s.replace("'", "").replace("\u2018", "").replace("\u2019", "").replace("\u201b", "")
 
 
-def ensure_fts() -> None:
-    """Create the movie_fts trigram index if missing, rebuilding it when stale.
+def _ensure_fts(con: sqlite3.Connection) -> None:
+    """Ensure the index and keep the transaction open for a consistent caller query."""
+    con.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS movie_fts USING fts5(
+            slug UNINDEXED, title, alt_title, directors_text,
+            tokenize='trigram'
+        )
+    """)
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "movie" not in tables:
+        return
 
-    Indexes every enriched movie (no popularity filter) so search/rename can
-    find obscure films; popularity stays a ranking tiebreaker in _rank_score.
-    """
+    con.execute("BEGIN IMMEDIATE")
+    trigger_names = {
+        "movie_fts_dirty_insert",
+        "movie_fts_dirty_update",
+        "movie_fts_dirty_delete",
+    }
+    installed_triggers = {
+        r[0]
+        for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'movie_fts_dirty_%'"
+        )
+    }
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS movie_fts_state (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            dirty INTEGER NOT NULL CHECK (dirty IN (0, 1))
+        )
+        """
+    )
+    con.execute("INSERT OR IGNORE INTO movie_fts_state(singleton, dirty) VALUES (1, 1)")
+    con.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS movie_fts_dirty_insert
+        AFTER INSERT ON movie
+        BEGIN
+            UPDATE movie_fts_state SET dirty = 1 WHERE singleton = 1;
+        END
+        """
+    )
+    con.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS movie_fts_dirty_update
+        AFTER UPDATE OF slug, title, alt_title, directors, enriched_at ON movie
+        BEGIN
+            UPDATE movie_fts_state SET dirty = 1 WHERE singleton = 1;
+        END
+        """
+    )
+    con.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS movie_fts_dirty_delete
+        AFTER DELETE ON movie
+        BEGIN
+            UPDATE movie_fts_state SET dirty = 1 WHERE singleton = 1;
+        END
+        """
+    )
+
+    movie_count = con.execute(
+        "SELECT COUNT(*) FROM movie WHERE enriched_at IS NOT NULL AND title IS NOT NULL"
+    ).fetchone()[0]
+    fts_count = con.execute("SELECT COUNT(*) FROM movie_fts").fetchone()[0]
+    dirty = con.execute("SELECT dirty FROM movie_fts_state WHERE singleton = 1").fetchone()[0]
+    if fts_count != movie_count or dirty or not trigger_names.issubset(installed_triggers):
+        print(f"Building FTS index ({movie_count} movies)...", flush=True)
+        con.execute("DELETE FROM movie_fts")
+        rows = con.execute(
+            "SELECT slug, title, alt_title, directors"
+            " FROM movie WHERE enriched_at IS NOT NULL AND title IS NOT NULL"
+        ).fetchall()
+        con.executemany(
+            "INSERT INTO movie_fts(slug, title, alt_title, directors_text) VALUES (?,?,?,?)",
+            [
+                (
+                    slug,
+                    _strip_quotes(title or ""),
+                    _strip_quotes(alt or ""),
+                    _strip_quotes(" ".join(_name(s) for s in _blob(directors))),
+                )
+                for slug, title, alt, directors in rows
+            ],
+        )
+        con.execute("UPDATE movie_fts_state SET dirty = 0 WHERE singleton = 1")
+        print("FTS index ready.", flush=True)
+
+
+def ensure_fts() -> None:
+    """Create the movie_fts trigram index if missing, rebuilding it when stale."""
     con = sqlite3.connect(db_path())
     try:
-        con.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS movie_fts USING fts5(
-                slug UNINDEXED, title, alt_title, directors_text,
-                tokenize='trigram'
-            )
-        """)
-        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "movie" not in tables:
-            return
-        movie_count = con.execute(
-            "SELECT COUNT(*) FROM movie WHERE enriched_at IS NOT NULL AND title IS NOT NULL"
-        ).fetchone()[0]
-        fts_count = con.execute("SELECT COUNT(*) FROM movie_fts").fetchone()[0]
-        if fts_count != movie_count:
-            print(f"Building FTS index ({movie_count} movies)...", flush=True)
-            con.execute("DELETE FROM movie_fts")
-            rows = con.execute(
-                "SELECT slug, title, alt_title, directors"
-                " FROM movie WHERE enriched_at IS NOT NULL AND title IS NOT NULL"
-            ).fetchall()
-            con.executemany(
-                "INSERT INTO movie_fts(slug, title, alt_title, directors_text) VALUES (?,?,?,?)",
-                [
-                    (
-                        slug,
-                        _strip_quotes(title or ""),
-                        _strip_quotes(alt or ""),
-                        _strip_quotes(" ".join(_name(s) for s in _blob(directors))),
-                    )
-                    for slug, title, alt, directors in rows
-                ],
-            )
-            con.commit()
-            print("FTS index ready.", flush=True)
+        _ensure_fts(con)
+        con.commit()
     finally:
         con.close()
 
 
-def search(query: str, year: int | None = None, limit: int = 10) -> list[sqlite3.Row]:
-    ensure_fts()
-    con = sqlite3.connect(db_path())
-    con.row_factory = sqlite3.Row
+def _search_with_connection(
+    con: sqlite3.Connection, query: str, year: int | None, limit: int
+) -> list[sqlite3.Row]:
     fts_query = _fts5_safe(query)
 
     def _execute(fts_expr: str, year_filter: int | None, row_limit: int) -> list[sqlite3.Row]:
@@ -323,6 +375,21 @@ def search(query: str, year: int | None = None, limit: int = 10) -> list[sqlite3
                     if r["slug"] not in seen:
                         rows.append(r)
                         seen.add(r["slug"])
-    con.close()
     ranked = sorted(rows, key=lambda r: _rank_score(r, query, year), reverse=True)
     return ranked[:limit]
+
+
+def search(query: str, year: int | None = None, limit: int = 10) -> list[sqlite3.Row]:
+    con = sqlite3.connect(db_path())
+    try:
+        con.row_factory = sqlite3.Row
+        _ensure_fts(con)
+        results = _search_with_connection(con, query, year, limit)
+        con.commit()
+        return results
+    finally:
+        try:
+            if con.in_transaction:
+                con.rollback()
+        finally:
+            con.close()

@@ -12,7 +12,7 @@ from typing import Any
 from tool.ig.browser import browser_session, fetch_bytes
 from tool.ig.errors import InstagramHttpError
 from tool.ig.hq_video import parse_retry_after
-from tool.ig.media import dest_path, media_url_ext, profile_key
+from tool.ig.media import dest_path, media_url_ext, profile_key, resolve_media_destination
 from tool.ig.scraper import (
     SegmentCapture,
     navigate_to,
@@ -171,10 +171,13 @@ async def _save_mixed_carousel_videos(
 
     total = len(post.media_urls)
     for idx, video_url in video_items:
-        dest = dest_path(post.shortid, idx, total, ".mp4", media_dir=media_dir, profile=profile)
+        dest = resolve_media_destination(
+            media_dir,
+            dest_path(post.shortid, idx, total, ".mp4", media_dir=media_dir, profile=profile),
+        )
         if reporter is not None:
             _progress(reporter, f"carousel video mux started ({idx + 1}/{total})")
-        await download_and_mux_av(video_url, audio_url, dest, reporter=reporter)
+        await download_and_mux_av(video_url, audio_url, dest, media_dir=media_dir, reporter=reporter)
         if reporter is not None:
             _progress(reporter, f"carousel video mux finished ({idx + 1}/{total})")
         fresh_files.add(dest)

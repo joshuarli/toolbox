@@ -21,6 +21,17 @@ def media_url_ext(post_type: str | None, url: str | None = None) -> str:
     return media_ext(post_type)
 
 
+def resolve_media_destination(media_dir: str | Path, dest: str | Path) -> Path:
+    """Resolve a media destination and reject paths outside the configured root."""
+    root = Path(media_dir).resolve()
+    resolved = Path(dest).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        raise ValueError(f"media destination is outside the media directory: {dest}") from None
+    return resolved
+
+
 def dest_path(
     shortid: str,
     idx: int,
@@ -32,8 +43,11 @@ def dest_path(
     name = f"{shortid}{ext}" if total == 1 else f"{shortid}_{idx + 1}{ext}"
     base = Path(media_dir)
     if profile:
-        return base / "by-profile" / profile / name
-    return base / shortid[-2:].lower() / name
+        dest = base / "by-profile" / profile / name
+    else:
+        dest = base / shortid[-2:].lower() / name
+    resolve_media_destination(base, dest)
+    return dest
 
 
 def media_path(

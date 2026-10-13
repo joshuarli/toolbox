@@ -206,6 +206,19 @@ class TestRun:
         assert "Air: no clear MusicBrainz match" in captured.out
         assert "no artists to seed from" in captured.err
 
+    def test_musicbrainz_artist_search_error_is_not_reported_as_no_match(self, tmp_path, flac_file, capsys):
+        d = self.untagged(tmp_path, flac_file)
+        with (
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=TimeoutError("slow response")),
+            pytest.raises(SystemExit) as exc,
+        ):
+            run(_args(d, tmp_path / "nolib", no_tag=True))
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "MusicBrainz artist search failed" in captured.err
+        assert "slow response" in captured.err
+        assert "no clear MusicBrainz match" not in captured.out
+
     def test_empty_playlist(self, tmp_path, capsys):
         with pytest.raises(SystemExit) as exc:
             run(_args(tmp_path, tmp_path))

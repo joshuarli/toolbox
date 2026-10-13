@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,17 @@ class ImportDbConflictError(ImportDbError):
     def __init__(self, conflicts: list[str]) -> None:
         self.conflicts = conflicts
         super().__init__("source database contains collections already present in target")
+
+
+_INSTAGRAM_USERNAME = re.compile(r"[A-Za-z0-9._]{1,30}\Z")
+
+
+def _valid_imported_username(username: object) -> bool:
+    return (
+        isinstance(username, str)
+        and username not in {".", ".."}
+        and _INSTAGRAM_USERNAME.fullmatch(username) is not None
+    )
 
 
 @dataclass(frozen=True)
@@ -59,6 +71,29 @@ def _check_foreign_keys(db: sqlite3.Connection, schema: str, label: str) -> None
         raise ImportDbError(
             f"{label} database failed foreign_key_check: {table} rowid={rowid} parent={parent} fkid={fkid}"
         )
+
+
+def _validate_imported_usernames(db: sqlite3.Connection) -> None:
+    username_columns = {
+        "post": ("username",),
+        "profile_post": ("username",),
+        "profile_following": ("username", "followee_username"),
+        "profile_scrape": ("username",),
+        "profile_failure": ("username",),
+    }
+    for table, columns in username_columns.items():
+        if not _table_exists(db, "src", table):
+            continue
+        available = _columns(db, "src", table)
+        for column in columns:
+            if column not in available:
+                continue
+            rows = db.execute(f"SELECT DISTINCT {column} FROM src.{table} WHERE {column} IS NOT NULL")
+            for (username,) in rows:
+                if not _valid_imported_username(username):
+                    raise ImportDbError(
+                        f"source database contains invalid Instagram username in {table}.{column}: {username!r}"
+                    )
 
 
 def _profile_collection_labels(rows: set[tuple[str, int]]) -> list[str]:
@@ -286,6 +321,7 @@ def import_db(source_path: str | Path, *, target_path: str | Path = DB_PATH) -> 
             _check_quick(db, "main", "target")
             _check_foreign_keys(db, "main", "target")
             _check_quick(db, "src", "source")
+            _validate_imported_usernames(db)
 
             _preflight_import(db)
 

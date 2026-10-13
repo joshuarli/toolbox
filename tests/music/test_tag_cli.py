@@ -428,6 +428,34 @@ class TestRunFlow:
         assert meta.acoustid_id is None  # no AcoustID match, so none is claimed
         assert meta.acoustid_fingerprint == FINGERPRINT
 
+    def test_musicbrainz_search_error_is_reported_separately_from_no_matches(self, flac_file, capsys):
+        cause = TimeoutError("MusicBrainz timed out")
+        with (
+            patch("tool.music.tag.get_audio_fingerprint", return_value=(100, FINGERPRINT)),
+            patch("tool.music.api.acoustid._session.get_json", return_value={"status": "ok", "results": []}),
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=cause),
+            patch.dict("os.environ", {"ACOUSTID_API_KEY": "k"}),
+            pytest.raises(SystemExit) as exc,
+        ):
+            run(_args(flac_file))
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        assert "MusicBrainz recording search failed" in captured.err
+        assert "MusicBrainz timed out" in captured.err
+        assert "No matches found" not in captured.out
+
+    def test_empty_musicbrainz_search_reports_no_matches(self, flac_file, capsys):
+        with (
+            patch("tool.music.tag.get_audio_fingerprint", return_value=(100, FINGERPRINT)),
+            patch("tool.music.api.acoustid._session.get_json", return_value={"status": "ok", "results": []}),
+            patch("tool.music.api.musicbrainz._session.get_json", return_value={"recordings": []}),
+            patch.dict("os.environ", {"ACOUSTID_API_KEY": "k"}),
+        ):
+            run(_args(flac_file))
+        captured = capsys.readouterr()
+        assert "No matches found" in captured.out
+        assert "MusicBrainz" not in captured.err
+
 
 class TestAutotag:
     @staticmethod
@@ -528,7 +556,7 @@ class TestAutotag:
         with (
             patch("tool.music.tag.get_audio_fingerprint", return_value=(306.4, FINGERPRINT)),
             patch("tool.music.api.acoustid._session.get_json", return_value=load_fixture("acoustid_kalandra.json")),
-            patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception("down")),
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=TimeoutError("down")),
             patch.dict("os.environ", {"ACOUSTID_API_KEY": "k"}),
         ):
             assert autotag(legacy_flac) is None

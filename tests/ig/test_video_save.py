@@ -153,7 +153,7 @@ class TestSaveVideoPostMedia:
 
         mux_calls = []
 
-        async def fake_download_and_mux(video_url, audio_url, dest, reporter=None):
+        async def fake_download_and_mux(video_url, audio_url, dest, **_kwargs):
             mux_calls.append((video_url, audio_url, dest))
 
         save_called = []
@@ -345,7 +345,7 @@ class TestSaveVideoPostMedia:
         async def fake_resolve_hq(tab, shortid):
             return hq_tracks
 
-        async def failing_download_and_mux(video_url, audio_url, dest, reporter=None):
+        async def failing_download_and_mux(video_url, audio_url, dest, **_kwargs):
             raise RuntimeError("ffmpeg failed")
 
         save_called = []
@@ -384,7 +384,7 @@ class TestSaveVideoPostMedia:
 
         mux_called = []
 
-        async def fake_mux(video_bytes, audio_bytes, dest):
+        async def fake_mux(video_bytes, audio_bytes, dest, **_kwargs):
             mux_called.append((video_bytes, audio_bytes, dest))
 
         save_called = []
@@ -458,7 +458,7 @@ class TestSaveVideoPostMedia:
 
         mux_av_calls = []
 
-        async def fake_download_and_mux(video_url, audio_url, dest, reporter=None):
+        async def fake_download_and_mux(video_url, audio_url, dest, **_kwargs):
             mux_av_calls.append((video_url, audio_url, dest))
 
         save_called = []
@@ -528,7 +528,7 @@ class TestSaveVideoPostMedia:
         post.media_urls = [video_base]
         tab = MagicMock()
 
-        async def failing_mux(video_bytes, audio_bytes, dest):
+        async def failing_mux(video_bytes, audio_bytes, dest, **_kwargs):
             raise RuntimeError("ffmpeg not found")
 
         save_called = []
@@ -563,7 +563,7 @@ class TestSaveVideoPostMedia:
         seg = SegmentCapture()
         tab = MagicMock()
 
-        async def failing_download_and_mux(video_url, audio_url, dest, reporter=None):
+        async def failing_download_and_mux(video_url, audio_url, dest, **_kwargs):
             raise RuntimeError("connection reset")
 
         save_called = []
@@ -604,7 +604,7 @@ class TestSaveVideoPostMedia:
 
         mux_calls = []
 
-        async def fake_download_and_mux(video_url, audio_url, dest, reporter=None):
+        async def fake_download_and_mux(video_url, audio_url, dest, **_kwargs):
             mux_calls.append(video_url)
 
         monkeypatch.setattr("tool.ig.video_save.download_and_mux_av", fake_download_and_mux)

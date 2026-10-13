@@ -103,6 +103,57 @@ class TestBrowserSession:
 
 
 @pytest.mark.asyncio
+async def test_ensure_browser_closes_started_resources_when_tab_setup_fails(monkeypatch):
+    setup_error = RuntimeError("tab setup failed")
+    tab = MagicMock()
+    tab.close = AsyncMock()
+    browser = MagicMock()
+    browser.close = AsyncMock()
+    shadowdriver = MagicMock()
+    shadowdriver.ensure_browser = AsyncMock(return_value=(browser, tab))
+    monkeypatch.setattr(browser_mod, "require_shadowdriver", lambda: shadowdriver)
+    monkeypatch.setattr(browser_mod, "_setup_tab", AsyncMock(side_effect=setup_error))
+
+    with pytest.raises(RuntimeError) as exc:
+        await browser_mod.ensure_browser(ublock=False)
+
+    assert exc.value is setup_error
+    tab.close.assert_awaited_once()
+    browser.close.assert_awaited_once_with(terminate=True)
+
+
+@pytest.mark.asyncio
+async def test_ensure_browser_reports_cleanup_errors_without_masking_setup_error(monkeypatch, caplog):
+    setup_error = RuntimeError("tab setup failed")
+    cleanup_error = RuntimeError("tab close failed")
+    tab = MagicMock()
+    tab.close = AsyncMock(side_effect=cleanup_error)
+    browser = MagicMock()
+    browser.close = AsyncMock()
+    shadowdriver = MagicMock()
+    shadowdriver.ensure_browser = AsyncMock(return_value=(browser, tab))
+    monkeypatch.setattr(browser_mod, "require_shadowdriver", lambda: shadowdriver)
+    monkeypatch.setattr(browser_mod, "_setup_tab", AsyncMock(side_effect=setup_error))
+
+    with pytest.raises(RuntimeError) as exc:
+        await browser_mod.ensure_browser(ublock=False)
+
+    assert exc.value is setup_error
+    assert any("tab close failed" in note for note in getattr(setup_error, "__notes__", []))
+    assert "browser setup cleanup failed" in caplog.text
+    browser.close.assert_awaited_once_with(terminate=True)
+
+
+@pytest.mark.asyncio
+async def test_fetch_bytes_rejects_non_bytes_result():
+    tab = MagicMock()
+    tab.fetch_bytes = AsyncMock(return_value="not bytes")
+
+    with pytest.raises(TypeError, match="must return bytes"):
+        await browser_mod.fetch_bytes(tab, "https://example.test/media")
+
+
+@pytest.mark.asyncio
 class TestResourceObservation:
     async def test_media_observation_records_url_for_cdn_fallback(self):
         handlers = {}

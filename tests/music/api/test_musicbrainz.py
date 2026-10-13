@@ -1,10 +1,11 @@
 """Tests for the MusicBrainz client — recorded real responses (tests/music/fixtures), no network."""
 
+import json
 from unittest.mock import patch
 
 import pytest
 
-from tool.music.api.musicbrainz import enrich, find_artist, search
+from tool.music.api.musicbrainz import MusicBrainzRequestError, enrich, find_artist, search
 from tool.music.metadata import Artist, Metadata
 
 KAL_REC = "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7"
@@ -237,7 +238,7 @@ class TestRecordingOnly:
 class TestFailure:
     def test_lookup_failure_keeps_selection(self, capsys):
         sel = selected(KAL_REC, KAL_CD)
-        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception("boom")):
+        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=TimeoutError("boom")):
             assert enrich(sel) == sel
         assert "boom" in capsys.readouterr().err
 
@@ -294,9 +295,35 @@ class TestSearch:
         assert cand.score == 0.8
         assert cand.meta.musicbrainz_albumid is None
 
-    def test_handles_network_error(self):
-        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception):
-            assert search('recording:"Test"') == []
+    def test_network_error_is_not_an_empty_result(self):
+        cause = TimeoutError("slow response")
+        with (
+            patch("tool.music.api.musicbrainz._session.get", side_effect=cause),
+            pytest.raises(MusicBrainzRequestError) as exc,
+        ):
+            search('recording:"Test"')
+        assert exc.value.__cause__ is cause
+
+    @pytest.mark.parametrize(
+        ("body", "error_type"),
+        [(b"{", json.JSONDecodeError), (b"\xff", UnicodeDecodeError)],
+    )
+    def test_response_decoding_error_is_a_request_error(self, body, error_type):
+        with (
+            patch("tool.music.api.musicbrainz._session.get", return_value=body),
+            pytest.raises(MusicBrainzRequestError) as exc,
+        ):
+            search('recording:"Test"')
+        assert isinstance(exc.value.__cause__, error_type)
+
+    def test_unexpected_programming_error_is_not_wrapped(self):
+        bug = AssertionError("unexpected internal state")
+        with (
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=bug),
+            pytest.raises(AssertionError) as exc,
+        ):
+            search('recording:"Test"')
+        assert exc.value is bug
 
     def test_empty_response(self):
         with patch("tool.music.api.musicbrainz._session.get_json", return_value={"recordings": []}):
@@ -330,11 +357,16 @@ class TestFindArtist:
         with patch("tool.music.api.musicbrainz._session.get_json", return_value=resp):
             assert find_artist("Something Else") is None
 
-    def test_no_hits_and_network_error(self):
+    def test_no_hits_and_network_error_are_distinct(self):
         with patch("tool.music.api.musicbrainz._session.get_json", return_value={"artists": []}):
             assert find_artist("Nobody") is None
-        with patch("tool.music.api.musicbrainz._session.get_json", side_effect=Exception):
-            assert find_artist("Nobody") is None
+        cause = TimeoutError("slow response")
+        with (
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=cause),
+            pytest.raises(MusicBrainzRequestError) as exc,
+        ):
+            find_artist("Nobody")
+        assert exc.value.__cause__ is cause
 
     def test_quotes_are_escaped(self):
         with patch("tool.music.api.musicbrainz._session.get_json", return_value={"artists": []}) as get:

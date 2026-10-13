@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import time
 from collections.abc import Callable, Sequence
 from contextlib import asynccontextmanager, suppress
@@ -8,13 +9,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from tool.browser_require import require_shadowdriver
+from tool.browser_require import shadowdriver as _shadowdriver
+
 # Browser adapter over the optional shadowdriver extension. Plain installs omit
 # the ``browser`` extra, so this module must import without shadowdriver
 # present. Browser entry points call ``require_shadowdriver()`` to fail
 # with the install hint.
-
-from tool.browser_require import require_shadowdriver
-from tool.browser_require import shadowdriver as _shadowdriver
 
 if _shadowdriver is not None:
     ProtocolError = _shadowdriver.ProtocolError
@@ -43,6 +44,8 @@ BLOCKED_URL_PATTERNS = (
     },
 )
 
+_logger = logging.getLogger(__name__)
+
 
 async def _profile_process_commands() -> list[str]:
     return list(await require_shadowdriver().profile_process_commands())
@@ -62,6 +65,15 @@ async def close_browser(browser: Any, *, terminate: bool = False) -> None:
         if "terminate" not in str(exc):
             raise
         result = close()
+    if inspect.isawaitable(result):
+        await result
+
+
+async def _close_tab(tab: Any) -> None:
+    close = getattr(tab, "close", None)
+    if close is None:
+        return
+    result = close()
     if inspect.isawaitable(result):
         await result
 
@@ -90,7 +102,7 @@ async def browser_session(
         yield browser, tab
     finally:
         with suppress(Exception):
-            await tab.close()
+            await _close_tab(tab)
         await close_browser(browser, terminate=terminate)
 
 
@@ -118,13 +130,27 @@ async def ensure_browser(
         stealth=True,
         extensions=[str(p) for p in ext_paths] if ext_paths else None,
     )
-    await _setup_tab(
-        tab,
-        on_url_captured=on_url_captured,
-        url_filter=url_filter,
-        on_media_segment=on_media_segment,
-        on_response_status=on_response_status,
-    )
+    try:
+        await _setup_tab(
+            tab,
+            on_url_captured=on_url_captured,
+            url_filter=url_filter,
+            on_media_segment=on_media_segment,
+            on_response_status=on_response_status,
+        )
+    except BaseException as setup_error:
+        cleanup = (
+            ("tab", lambda: _close_tab(tab)),
+            ("browser", lambda: close_browser(browser, terminate=True)),
+        )
+        for resource, close in cleanup:
+            try:
+                await close()
+            except BaseException as cleanup_error:
+                note = f"{resource} cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}"
+                setup_error.add_note(note)
+                _logger.error("browser setup cleanup failed for %s: %s", resource, cleanup_error, exc_info=True)
+        raise
     return browser, tab
 
 
@@ -167,8 +193,11 @@ async def _setup_tab(
     await enable_network_logging(tab)
 
 
-async def fetch_bytes(tab, url: str) -> bytes:
-    return await tab.fetch_bytes(url)
+async def fetch_bytes(tab: Any, url: str) -> bytes:
+    body = await tab.fetch_bytes(url)
+    if not isinstance(body, bytes):
+        raise TypeError("browser tab fetch_bytes() must return bytes")
+    return body
 
 
 async def navigate(tab, url: str, timeout: float = 15.0) -> None:

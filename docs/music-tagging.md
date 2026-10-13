@@ -1,6 +1,6 @@
 # Music tagging and identity
 
-`tool music tag FILE` fingerprints one file with `fpcalc`, sends one lookup request to AcoustID, shows release-aware candidates, and enriches the selected candidate from MusicBrainz. If AcoustID returns no candidates, MusicBrainz search uses existing tags and then a normalized filename. The selected candidate determines the release, release group, medium, and track when those are supplied; the tool never silently chooses the first release.
+`tool music tag FILE` fingerprints one file with `fpcalc`, sends one lookup request to AcoustID, shows release-aware candidates, and enriches the selected candidate from MusicBrainz. If AcoustID returns no candidates, MusicBrainz search uses existing tags and then a normalized filename. A successful search with no matches is reported as such; a failed request is reported as an error. The selected candidate determines the release, release group, medium, and track when those are supplied; the tool never silently chooses the first release.
 
 The typed `Metadata` model uses MusicBrainz Picard field names. Scalar values use `str | None`; multi-value fields use `list[str]`. MusicBrainz JSON parsing stays in the API modules, while `tags.py` owns the conversion between `Metadata` and audio-container tags.
 

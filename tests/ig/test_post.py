@@ -81,10 +81,12 @@ async def test_download_and_mux_av_uses_selected_video_and_audio(monkeypatch, tm
     monkeypatch.setattr("tool.ig.video_save.mux_av", mux)
 
     dest = tmp_path / "out.mp4"
-    await download_and_mux_av("https://cdn/video.mp4", "https://cdn/audio.mp4", dest)
+    await download_and_mux_av("https://cdn/video.mp4", "https://cdn/audio.mp4", dest, media_dir=tmp_path)
 
     assert sorted(downloaded) == ["https://cdn/audio.mp4", "https://cdn/video.mp4"]
-    mux.assert_awaited_once_with(b"bytes:https://cdn/video.mp4", b"bytes:https://cdn/audio.mp4", dest)
+    mux.assert_awaited_once_with(
+        b"bytes:https://cdn/video.mp4", b"bytes:https://cdn/audio.mp4", dest, media_dir=tmp_path
+    )
 
 
 @pytest.mark.asyncio

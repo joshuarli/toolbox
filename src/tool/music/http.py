@@ -6,7 +6,10 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 
-from urllib3 import PoolManager
+from urllib3 import PoolManager, Timeout
+
+_CONNECT_TIMEOUT = 5.0
+_READ_TIMEOUT = 30.0
 
 
 class RateLimiter:
@@ -42,7 +45,11 @@ class Session:
         rate_limiter: RateLimiter | None = None,
     ):
         self.headers = {"User-Agent": user_agent}
-        self.pool = PoolManager(num_pools=pool_size, maxsize=pool_size)
+        self.pool = PoolManager(
+            num_pools=pool_size,
+            maxsize=pool_size,
+            timeout=Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT),
+        )
         self.rate_limiter = rate_limiter
 
     def _wait(self) -> None:

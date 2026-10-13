@@ -10,11 +10,10 @@ from typing import Any
 from tool.ig.browser import ProtocolError
 from tool.ig.browser_types import TabLike
 from tool.ig.hq_video import HqVideoFetchError, resolve_hq_video_tracks
-from tool.ig.media import profile_key
+from tool.ig.media import MEDIA_DIR, dest_path, profile_key, resolve_media_destination
 from tool.ig.scraper import (
     SegmentCapture,
     _ranked_video_urls,
-    dest_path,
     download_bytes,
     mux_av,
     resolve_audio_url,
@@ -45,7 +44,14 @@ def captured_video_base_for_url(
     return None
 
 
-async def download_and_mux_av(video_url: str, audio_url: str, dest: Path, *, reporter: Any | None = None) -> None:
+async def download_and_mux_av(
+    video_url: str,
+    audio_url: str,
+    dest: Path,
+    *,
+    media_dir: str | Path = MEDIA_DIR,
+    reporter: Any | None = None,
+) -> None:
     if reporter is None:
         reporter = logging.getLogger(__name__)
     _progress(reporter, "CDN mux download started")
@@ -56,7 +62,7 @@ async def download_and_mux_av(video_url: str, audio_url: str, dest: Path, *, rep
     _progress(reporter, "CDN mux download finished")
     reporter.info(f"  muxing CDN tracks ({len(video_bytes) // 1024}KB video + {len(audio_bytes) // 1024}KB audio)")
     _progress(reporter, "muxing started")
-    await mux_av(video_bytes, audio_bytes, dest)
+    await mux_av(video_bytes, audio_bytes, dest, media_dir=media_dir)
     _progress(reporter, "muxing finished")
 
 
@@ -136,7 +142,10 @@ async def save_video_post_media(
 
     ext = ".mp4"
     _pkey = profile_key(username_hint, profile_saved) if username_hint else username
-    dest = dest_path(post.shortid, 0, 1, ext, media_dir=media_dir, profile=_pkey)
+    dest = resolve_media_destination(
+        media_dir,
+        dest_path(post.shortid, 0, 1, ext, media_dir=media_dir, profile=_pkey),
+    )
     v_base = None
     a_base = None
     selected_url = post.media_urls[0]
@@ -183,7 +192,7 @@ async def save_video_post_media(
 
     if hq_tracks_selected and audio_url:
         try:
-            await download_and_mux_av(selected_url, audio_url, dest, reporter=reporter)
+            await download_and_mux_av(selected_url, audio_url, dest, media_dir=media_dir, reporter=reporter)
         except Exception:
             reporter.info("  hq mux failed, falling back to CDN download")
             post.media_urls = original_media_urls
@@ -243,7 +252,7 @@ async def save_video_post_media(
         reporter.info(f"  muxing ({len(v_bytes) // 1024}KB video + {len(a_bytes) // 1024}KB audio)")
         try:
             _progress(reporter, "captured segment mux started")
-            await mux_av(v_bytes, a_bytes, dest)
+            await mux_av(v_bytes, a_bytes, dest, media_dir=media_dir)
             _progress(reporter, "captured segment mux finished")
         except Exception:
             reporter.info("  captured segment mux failed, falling back to CDN download")
@@ -299,7 +308,7 @@ async def save_video_post_media(
     elif not hq_tracks_selected and audio_url:
         video_url = _best_video_url_from_captures(seg_capture, selected_url, exclude=bases_before)
         try:
-            await download_and_mux_av(video_url, audio_url, dest, reporter=reporter)
+            await download_and_mux_av(video_url, audio_url, dest, media_dir=media_dir, reporter=reporter)
         except Exception:
             reporter.info("  CDN mux failed, falling back to plain CDN download")
             await _fallback_cdn_save(

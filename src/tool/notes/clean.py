@@ -7,10 +7,11 @@ in the vault. Plain substring matching covers every Obsidian reference style
 (``![[name]]``, ``![[name|300]]``, ``![](z-images/name)``, ``[[name]]``),
 including folder-prefixed embeds such as ``![[z-images/name]]``.
 
-Duplicate notes are exact byte-identical ``*.md`` files grouped by md5.
-Empty (0-byte) notes are all listed for trashing. In each non-empty
-duplicate group the survivor is the shortest vault-relative path, ties
-broken alphabetically; the rest are trashed.
+Duplicate notes are exact byte-identical ``*.md`` files. MD5 narrows the
+candidate set; byte comparisons confirm duplicates before they are listed
+for trashing. Empty (0-byte) notes are all listed for trashing. In each
+non-empty duplicate group the survivor is the shortest vault-relative path,
+ties broken alphabetically; the rest are trashed.
 """
 
 from __future__ import annotations
@@ -130,12 +131,19 @@ def list_note_files(vault: Path) -> list[Path]:
     return sorted(kept)
 
 
-def _md5_of(path: Path) -> str | None:
+def _md5_of(path: Path) -> str:
     try:
         return hashlib.md5(path.read_bytes()).hexdigest()
     except OSError as exc:
-        print(f"warning: skipping {path.name} ({exc})", file=sys.stderr)
-        return None
+        raise NotesError(f"could not read note {path} for duplicate detection: {exc}") from exc
+
+
+def _same_bytes(left: Path, right: Path) -> bool:
+    """Return whether two notes have identical bytes, or fail with path context."""
+    try:
+        return left.read_bytes() == right.read_bytes()
+    except OSError as exc:
+        raise NotesError(f"could not compare notes {left} and {right}: {exc}") from exc
 
 
 def find_empty_notes(vault: Path) -> list[Path]:
@@ -153,9 +161,10 @@ def find_empty_notes(vault: Path) -> list[Path]:
 def find_duplicate_groups(vault: Path) -> list[list[Path]]:
     """Return groups of byte-identical non-empty notes, survivor first.
 
-    Files are grouped by md5; groups with a single member are dropped.
-    Within a group the survivor is the shortest vault-relative path, ties
-    broken alphabetically, so ``hackernews.md`` beats ``hackernews 2.md``.
+    MD5 forms candidate groups, then byte comparisons split any collisions
+    into groups of truly identical files. Groups with a single member are
+    dropped. Within a group the survivor is the shortest vault-relative path,
+    ties broken alphabetically, so ``hackernews.md`` beats ``hackernews 2.md``.
     Groups are sorted by survivor for deterministic output.
     """
     by_hash: dict[str, list[Path]] = {}
@@ -164,18 +173,28 @@ def find_duplicate_groups(vault: Path) -> list[list[Path]]:
             if path.stat().st_size == 0:
                 continue
         except OSError as exc:
-            print(f"warning: skipping {path.name} ({exc})", file=sys.stderr)
-            continue
+            raise NotesError(f"could not inspect note {path} for duplicate detection: {exc}") from exc
         digest = _md5_of(path)
-        if digest is None:
-            continue
         by_hash.setdefault(digest, []).append(path)
     groups = []
     for paths in by_hash.values():
         if len(paths) < 2:
             continue
-        ordered = sorted(paths, key=lambda p: (len(p.relative_to(vault).as_posix()), p.relative_to(vault).as_posix()))
-        groups.append(ordered)
+        identical_groups: list[list[Path]] = []
+        for path in paths:
+            for group in identical_groups:
+                if _same_bytes(path, group[0]):
+                    group.append(path)
+                    break
+            else:
+                identical_groups.append([path])
+        for group in identical_groups:
+            if len(group) > 1:
+                ordered = sorted(
+                    group,
+                    key=lambda p: (len(p.relative_to(vault).as_posix()), p.relative_to(vault).as_posix()),
+                )
+                groups.append(ordered)
     return sorted(groups, key=lambda g: g[0].relative_to(vault).as_posix())
 
 
@@ -235,10 +254,8 @@ def trash_files(paths: list[Path], *, jobs: int = 8) -> None:
     failures: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         future_to_batch = {pool.submit(_trash_chunk, chunk): n for n, chunk in enumerate(chunks, start=1)}
-        done = 0
-        for future in concurrent.futures.as_completed(future_to_batch):
+        for done, future in enumerate(concurrent.futures.as_completed(future_to_batch), start=1):
             failures.extend(future.result())
-            done += 1
             print(f"trashed {done}/{total} batches", flush=True)
     if failures:
         raise NotesError(f"trash failed for {len(failures)} file(s): {failures[0]}")

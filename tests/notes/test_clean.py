@@ -214,6 +214,46 @@ def test_find_duplicate_groups_keeps_shortest(tmp_path: Path) -> None:
     ]
 
 
+def test_find_duplicate_groups_compares_bytes_within_hash_group(tmp_path: Path) -> None:
+    v = tmp_path / "Notes"
+    v.mkdir()
+    first = v / "first.md"
+    copy = v / "copy.md"
+    collision = v / "collision.md"
+    first.write_bytes(b"same bytes")
+    copy.write_bytes(b"same bytes")
+    collision.write_bytes(b"different bytes")
+
+    with (
+        patch.object(clean, "_md5_of", return_value="shared digest"),
+        patch.object(clean, "find_unreferenced", return_value=([], [])),
+        patch.object(clean, "trash_files") as trash,
+    ):
+        groups = clean.find_duplicate_groups(v)
+        assert clean.run(_args(v, apply=True)) == 0
+
+    assert [[path.name for path in group] for group in groups] == [["copy.md", "first.md"]]
+    assert [path.name for path in trash.call_args.args[0]] == ["first.md"]
+
+
+def test_find_duplicate_groups_fails_loudly_when_note_read_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    v = tmp_path / "Notes"
+    v.mkdir()
+    unreadable = v / "unreadable.md"
+    unreadable.write_bytes(b"content")
+
+    def fail_read_bytes(path: Path) -> bytes:
+        if path == unreadable:
+            raise PermissionError("permission denied")
+        raise AssertionError(f"unexpected read: {path}")
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read_bytes)
+    with pytest.raises(NotesError, match=str(unreadable)):
+        clean.find_duplicate_groups(v)
+
+
 def test_duplicate_groups_skip_empty_and_support_dirs(tmp_path: Path) -> None:
     v = tmp_path / "Notes"
     (v / "z-images").mkdir(parents=True)

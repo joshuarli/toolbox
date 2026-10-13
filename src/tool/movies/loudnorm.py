@@ -11,6 +11,7 @@ Usage: movies-cli loudnorm <file> [file ...]
 """
 
 import json
+import math
 import re
 import subprocess
 import sys
@@ -24,38 +25,56 @@ LOUDNORM_TP = -1.5
 LOUDNORM_LRA = 11.0
 
 
+class LoudnormMeasurementError(RuntimeError):
+    """The source could not be measured into finite loudness values."""
+
+
 def measure_gain(src: Path) -> tuple[float, float]:
     """Decode audio only; return (target_offset_db, input_i_lufs).
 
     target_offset already accounts for the TP ceiling — it's the net dB gain
     loudnorm would apply in a linear second pass.
     """
-    r = subprocess.run(
-        [
-            "ffmpeg",
-            "-nostdin",
-            "-i",
-            str(src),
-            "-map",
-            "0:a:0",
-            "-af",
-            f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA}:print_format=json",
-            "-f",
-            "null",
-            "/dev/null",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
+    try:
+        r = subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-i",
+                str(src),
+                "-map",
+                "0:a:0",
+                "-af",
+                f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA}:print_format=json",
+                "-f",
+                "null",
+                "/dev/null",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise LoudnormMeasurementError(f"ffmpeg loudness measurement timed out for {src}") from e
+    except OSError as e:
+        raise LoudnormMeasurementError(f"could not run ffmpeg to measure loudness for {src}: {e}") from e
+    if r.returncode != 0:
+        details = r.stderr.strip()
+        message = f"ffmpeg loudness measurement failed for {src} (exit status {r.returncode})"
+        raise LoudnormMeasurementError(f"{message}: {details}" if details else message)
+
     m = re.search(r"\{[^{}]+\}", r.stderr, re.DOTALL)
     if not m:
-        return 0.0, 0.0
+        raise LoudnormMeasurementError(f"ffmpeg did not return loudness measurement JSON for {src}")
     try:
         data = json.loads(m.group())
-        return float(data["target_offset"]), float(data["input_i"])
-    except KeyError, ValueError, json.JSONDecodeError:
-        return 0.0, 0.0
+        gain_db = float(data["target_offset"])
+        input_i = float(data["input_i"])
+    except (KeyError, TypeError, ValueError) as e:
+        raise LoudnormMeasurementError(f"ffmpeg returned invalid loudness measurement JSON for {src}") from e
+    if not math.isfinite(gain_db) or not math.isfinite(input_i):
+        raise LoudnormMeasurementError(f"ffmpeg returned non-finite loudness measurement values for {src}")
+    return gain_db, input_i
 
 
 def build_cmd(src: Path, dst: Path, info: probe.ProbeInfo, gain_db: float) -> list[str]:
@@ -148,7 +167,10 @@ def normalize(src: Path) -> None:
     duration = info.format.duration
 
     print("  Pass 1/2  measuring loudness...")
-    gain_db, input_i = measure_gain(src)
+    try:
+        gain_db, input_i = measure_gain(src)
+    except LoudnormMeasurementError as e:
+        sys.exit(f"Error: {e}")
     print(f"  Measured: {input_i:.1f} LUFS  target: {LOUDNORM_I:.0f} LUFS  gain: {gain_db:+.1f} dB")
 
     if abs(gain_db) < 0.1:

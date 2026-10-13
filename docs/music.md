@@ -7,9 +7,9 @@ Music commands scan, tag, transcode, and suggest artists for local audio files. 
 | `scan` | Reports codec, bitrate, artwork, missing tags, a lossy-transcode heuristic, and mastering flags; it does not write tags. See [music-scan.md](music-scan.md). |
 | `tag` | Looks up one audio file and writes the selected MusicBrainz/AcoustID metadata. Use `--read` to inspect tags, `--force` to refresh identity, and `-y` to skip the write confirmation. Details: [music-tagging.md](music-tagging.md). |
 | `suggest` | Ranks similar artists for a playlist directory or audio file. It can auto-tag unidentified playlist tracks; use `--no-tag` to avoid tag writes. |
-| `transcode` | Converts audio to 320 kbps AAC/M4A with `ffmpeg`; `-o` selects an output for one input. |
+| `transcode` | Converts audio to 320 kbps AAC/M4A with `ffmpeg`; `-o` selects an output for one input, and `--overwrite` replaces an existing output. |
 
-Without `-o`, transcode writes a same-stem `.m4a` beside each input.
+Without `-o`, transcode writes a same-stem `.m4a` beside each input. Existing outputs are refused unless `--overwrite` is set.
 
 `scan` and `transcode` need `ffprobe`/`ffmpeg`. `tag` needs `fpcalc` and an `ACOUSTID_API_KEY`; MusicBrainz lookups need no key. `suggest` queries MusicBrainz and ListenBrainz, and auto-tagging needs the same AcoustID setup as `tag`.
 

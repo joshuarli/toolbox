@@ -17,8 +17,11 @@ Dry run (default) prints what would happen; --apply performs the remux
 and extractions.
 """
 
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from tool.movies.probe import ProbeStream, ffprobe, is_image_video_stream
@@ -250,7 +253,7 @@ def _run_ffmpeg(cmd: list[str], label: str) -> None:
 def _do_remux(src: Path, mp4_streams: list[ReportEntry], dest: Path) -> Path:
     """Remux supported streams into an MP4.  Returns the output path."""
     out = dest / f"{src.stem}.mp4"
-    if out.exists():
+    if os.path.lexists(out):
         raise FileExistsError(f"output already exists: {out}")
 
     cmd = [
@@ -302,7 +305,7 @@ def _do_extractions(src: Path, extract_streams: list[ReportEntry], dest: Path) -
         assert ext_info is not None
         ext, fmt_override = ext_info
         out = dest / _sidecar_name(stem, stream, ext)
-        if out.exists():
+        if os.path.lexists(out):
             raise FileExistsError(f"sidecar already exists: {out}")
 
         cmd = [
@@ -332,6 +335,80 @@ def _do_extractions(src: Path, extract_streams: list[ReportEntry], dest: Path) -
         outputs.append(out)
 
     return outputs
+
+
+def _remove_if_same_identity(output: Path, identity: tuple[int, int]) -> None:
+    try:
+        current = os.stat(output, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if (current.st_dev, current.st_ino) == identity:
+        try:
+            os.unlink(output)
+        except FileNotFoundError:
+            # Another actor already removed this path, so there is nothing to clean.
+            pass
+
+
+def _copy_exclusive(staged: Path, output: Path) -> tuple[int, int]:
+    """Copy a staged file into a newly-created path when hard links are unavailable."""
+    fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    created = os.fstat(fd)
+    identity = (created.st_dev, created.st_ino)
+    try:
+        with staged.open("rb") as source, os.fdopen(fd, "wb", closefd=False) as target:
+            shutil.copyfileobj(source, target)
+            target.flush()
+            os.fsync(fd)
+    except BaseException:
+        try:
+            _remove_if_same_identity(output, identity)
+        finally:
+            os.close(fd)
+        raise
+    else:
+        try:
+            os.close(fd)
+        except OSError:
+            _remove_if_same_identity(output, identity)
+            raise
+        return identity
+
+
+def _publish_one(staged: Path, output: Path) -> tuple[int, int]:
+    """Publish one staged file without replacing an existing output."""
+    staged_stat = staged.stat()
+    identity = (staged_stat.st_dev, staged_stat.st_ino)
+    try:
+        os.link(staged, output)
+    except FileExistsError as e:
+        raise FileExistsError(f"output already exists: {output}") from e
+    except OSError:
+        try:
+            return _copy_exclusive(staged, output)
+        except FileExistsError as e:
+            raise FileExistsError(f"output already exists: {output}") from e
+    return identity
+
+
+def _publish_outputs(staged_outputs: list[tuple[Path, Path]]) -> None:
+    """Publish staged outputs without replacing files that appeared meanwhile."""
+    published: list[tuple[Path, tuple[int, int]]] = []
+    try:
+        for staged, output in staged_outputs:
+            identity = _publish_one(staged, output)
+            published.append((output, identity))
+    except OSError as publish_error:
+        cleanup_errors: list[OSError] = []
+        for output, identity in reversed(published):
+            try:
+                _remove_if_same_identity(output, identity)
+            except OSError as e:
+                cleanup_errors.append(e)
+        if cleanup_errors:
+            details = "; ".join(str(e) for e in cleanup_errors)
+            raise RuntimeError(f"output publication failed: {publish_error}; cleanup failed: {details}") from publish_error
+        raise
 
 
 # ── public entry point ──────────────────────────────────────────────────
@@ -377,8 +454,24 @@ def run(path: Path, *, apply: bool = False, dest: str | None = None) -> None:
     print(f"\nRemuxing to {dest_dir / mp4_name} …")
 
     try:
-        out = _do_remux(path, mp4_streams, dest_dir)
-    except (FileExistsError, RuntimeError, subprocess.TimeoutExpired) as e:
+        out = dest_dir / mp4_name
+        sidecar_paths: list[Path] = []
+        for _label, stream, ext_info in extract_streams:
+            assert ext_info is not None
+            sidecar_paths.append(dest_dir / _sidecar_name(stem, stream, ext_info[0]))
+        output_paths = [out, *sidecar_paths]
+        for output in output_paths:
+            if os.path.lexists(output):
+                label = "sidecar" if output in sidecar_paths else "output"
+                raise FileExistsError(f"{label} already exists: {output}")
+
+        with tempfile.TemporaryDirectory(prefix=".mkvtomp4-", dir=dest_dir) as stage_name:
+            stage_dir = Path(stage_name)
+            staged_remux = _do_remux(path, mp4_streams, stage_dir)
+            staged_sidecars = _do_extractions(path, extract_streams, stage_dir) if extract_streams else []
+            staged_outputs = [(staged_remux, out), *zip(staged_sidecars, sidecar_paths, strict=True)]
+            _publish_outputs(staged_outputs)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as e:
         sys.exit(f"Error: {e}")
 
     in_size = path.stat().st_size
@@ -389,15 +482,11 @@ def run(path: Path, *, apply: bool = False, dest: str | None = None) -> None:
     print(f"  done  {D}{path.name}{R}  →  {B}{rel}{R}  ({_fmt_size(out_size)}, {sign}{_fmt_size(delta)})")
 
     if extract_streams:
-        print(f"\nExtracting {len(extract_streams)} sidecar stream(s) …")
-        try:
-            sidecars = _do_extractions(path, extract_streams, dest_dir)
-            for sidecar in sidecars:
-                sz = _fmt_size(sidecar.stat().st_size)
-                rel = sidecar.name if dest_dir == path.parent else str(sidecar)
-                print(f"  {D}→{R}  {BY}{rel}{R}  ({sz})")
-        except (FileExistsError, RuntimeError, subprocess.TimeoutExpired) as e:
-            sys.exit(f"Error: {e}")
+        print(f"\nExtracted {len(extract_streams)} sidecar stream(s):")
+        for sidecar in sidecar_paths:
+            sz = _fmt_size(sidecar.stat().st_size)
+            rel = sidecar.name if dest_dir == path.parent else str(sidecar)
+            print(f"  {D}→{R}  {BY}{rel}{R}  ({sz})")
 
     print()
 
