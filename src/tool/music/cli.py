@@ -7,7 +7,9 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.description = "Scan, tag, transcode, and find recommendations for a local audio library."
     sub = parser.add_subparsers(dest="music_cmd", required=True)
 
-    p_scan = sub.add_parser("scan", help="report codec, bitrate, and lossy-transcode verdict for audio files")
+    p_scan = sub.add_parser(
+        "scan", help="report codec, bitrate, tags, lossy-transcode suspicion, and mastering flags for audio files"
+    )
     scan.configure_parser(p_scan)
     p_scan.set_defaults(handler=scan.run)
 

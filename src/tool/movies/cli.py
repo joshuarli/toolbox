@@ -214,7 +214,9 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
     _add_encode_parser(sub)
 
-    p_mkvtomp4 = sub.add_parser("mkvtomp4", help="remux MKV to MP4 with -c copy (no re-encoding)")
+    p_mkvtomp4 = sub.add_parser(
+        "mkvtomp4", help="remux supported MKV streams to MP4 and extract unsupported streams"
+    )
     p_mkvtomp4.add_argument("file", nargs="+", type=Path, help="MKV file(s) to remux")
     p_mkvtomp4.add_argument("--apply", action="store_true", help="actually remux (default is dry run)")
     p_mkvtomp4.add_argument("--dest", default=None, help="output directory (default: same as source)")

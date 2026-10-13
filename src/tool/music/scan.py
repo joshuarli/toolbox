@@ -359,7 +359,7 @@ def _print_file_detail(
 def configure_parser(p: argparse.ArgumentParser) -> None:
     p.description = (
         "Walk directories for audio files and report codec, "
-        "bitrate, cover art, missing tags, and a lossy-transcode verdict. "
+        "bitrate, cover art, missing tags, lossy-transcode suspicion, and EBU R 128 mastering flags. "
         "Given a single file, prints a detailed breakdown."
     )
     p.add_argument(

@@ -35,7 +35,7 @@ def configure_parser(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--apply",
         action="store_true",
-        help="move unreferenced images and duplicate notes to the Trash (default is dry run)",
+        help="move unreferenced images and duplicate/empty notes to the Trash (default is dry run)",
     )
     p.add_argument(
         "--vault",

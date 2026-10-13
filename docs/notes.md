@@ -1,46 +1,15 @@
 # `tool notes`
 
-Two CLI tools for the hardcoded Obsidian vault at
-`~/iCloud~md~obsidian/Documents/Notes`:
+These commands operate on the Obsidian vault at `~/iCloud~md~obsidian/Documents/Notes` by default. Both accept `--vault` to select another vault.
 
-- **`clean`** — move unreferenced `z-images/` files, duplicate notes, and empty
-  notes to the Trash. Dry run by default; `--apply` is recoverable from Trash.
-- **`localize`** — download remote `![alt](https://...)` images into
-  `z-images/` as WebP and rewrite the embeds. Dry run by default; `--apply`
-  downloads and rewrites.
+## Clean
 
-```bash
-uv run tool notes clean
-uv run tool notes clean --apply
-uv run tool notes localize
-uv run tool notes localize --apply
-```
-`localize` positional paths are optional scope limiters: relative paths resolve
-against the current directory, falling back to the vault; missing paths and
-paths outside the vault are errors.
+`uv run tool notes clean` previews files it would move to the system Trash. It finds unreferenced files directly inside the vault's `z-images` folder, byte-identical non-empty Markdown notes, and empty notes. Duplicate groups keep the shortest vault-relative path, breaking ties alphabetically. Pass `--apply` to move the other files to Trash; `rg` and the system `trash` command are required.
 
-## Layout
+## Localize
 
-```
-src/tool/notes/
-├── common.py       # vault path, shared errors, image conventions
-├── clean.py        # image reference and duplicate-note cleanup
-└── localize.py     # remote-image parser, downloader, WebP rewrite
-```
+`uv run tool notes localize [paths...]` previews remote Markdown image embeds it can download. Pass `--apply` to convert successful downloads to WebP in the vault's z-images folder and rewrite those embeds as Obsidian image links. Existing local images, HTML/reference images, code examples, and known video/social page URLs are left alone; failed downloads keep their original embeds.
 
-## `clean`
+Paths limit the scan to files/directories within the selected vault. Relative paths resolve from the current directory first, then from the vault; missing or outside-vault paths are errors. WebP conversion requires `ffmpeg`. `--quality` selects WebP quality from 1 to 100.
 
-`clean` lists files directly inside `z-images/` and shells out to `rg` for one
-fixed-string reference scan. It excludes `.trash` and `.obsidian`. `--apply`
-moves files with the system `trash` command, so the operation remains
-recoverable from the Trash. Duplicate and empty-note cleanup uses exact file
-bytes and keeps the shortest vault-relative path, with alphabetical tie
-breaking.
-
-## `localize`
-
-`localize` handles inline `![alt](https://...)` image embeds outside fenced and
-inline code. Local paths, data URLs, HTML image tags, reference-style images,
-and known video/social page URLs remain unchanged. Downloads use bounded
-retries, reject oversized/non-image responses, and store content-addressed
-WebP files. Failed downloads leave their original embeds intact.
+See `uv run tool notes clean --help` and `uv run tool notes localize --help` for all options. Implementation: [clean.py](../src/tool/notes/clean.py), [localize.py](../src/tool/notes/localize.py), and [common.py](../src/tool/notes/common.py).

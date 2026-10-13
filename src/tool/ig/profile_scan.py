@@ -1,4 +1,4 @@
-"""Profile scan stubs and direct-post downloading."""
+"""Scan normal and saved profile posts, then download incomplete media."""
 
 from __future__ import annotations
 

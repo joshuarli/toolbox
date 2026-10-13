@@ -242,7 +242,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         default="fast",
         help="scraping aggressiveness (default: fast)",
     )
-    scan_cmd = sub.add_parser("scan", help="scan a profile grid into post stubs")
+    scan_cmd = sub.add_parser("scan", help="scan profile posts into archive metadata")
     scan_cmd.set_defaults(handler=cmd_scan)
     info_cmd = sub.add_parser("info", help="print database summary of scanned profiles")
     info_cmd.set_defaults(handler=cmd_info)

@@ -13,7 +13,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
     p_clean = sub.add_parser(
         "clean",
-        help="move unreferenced z-images/ files and duplicate notes to the Trash",
+        help="move unreferenced z-images/ files and duplicate/empty notes to the Trash",
     )
     clean.configure_parser(p_clean)
     p_clean.set_defaults(handler=clean.run)

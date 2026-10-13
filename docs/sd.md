@@ -1,65 +1,28 @@
 # `tool sd`
 
-`sd` destructively benchmarks and verifies an entire removable/raw disk.
+`sd` qualifies a removable disk by benchmarking it and writing verification data across the entire device.
 
-**Normal mode erases the selected disk. Check the `diskN` identifier carefully.**
+**A normal run erases the selected disk. Check the whole-disk identifier before confirming.**
 
-Requires macOS 26+ and `fio` >= 3.42 (checked on every run):
+Requires macOS 26 or newer and `fio` 3.42 or newer:
 
 ```sh
 brew install fio
-```
-
-The dumbed-down default is interactive: pick a card from a numbered list
-and it runs and reports overall health.
-
-```sh
+uv run tool sd --help
 uv run tool sd
 ```
 
-Power users can pass the disk and flags explicitly:
+With no disk argument, the command offers an interactive picker. You can pass `diskN` or `/dev/diskN`; partition identifiers are rejected. Before raw access, `sd` checks that the target is a physical, writable removable or external whole disk, refuses the running system disk, asks for an exact `ERASE diskN` confirmation, and leaves the target unmounted.
 
-```sh
-diskutil list
-uv run tool sd disk4
-```
+The default performance suite runs five QD1 workloads for 30 seconds each: 1 MiB sequential read/write, 4 KiB random read/write, and 4 KiB 70/30 random read/write. It then writes verification data across the device and checks it with CRC32C. I/O or verification errors fail qualification; performance has no pass grade.
 
-Use longer benchmark samples when comparing cards:
-
-```sh
-uv run tool sd --seconds 60 disk4
-```
-
-The performance suite is deliberately QD1:
-
-- 1 MiB sequential read
-- 1 MiB sequential write
-- 4 KiB random read
-- 4 KiB random write
-- 4 KiB 70/30 random read/write
-
-It then writes fio verification data across the raw device and performs an
-unrestricted CRC32C readback pass. Any fio I/O or verification error is a
-qualification failure. Performance is reported without an arbitrary grade;
-compare bandwidth, IOPS, and especially high-percentile latency across cards
-using the same reader and port.
-
-The target must be a physical, writable removable/external whole disk. `sd`
-fails closed for the running macOS system disk and ordinary internal fixed
-media, has no `--force` bypass, unmounts before raw access, and leaves the disk
-unmounted afterward.
-
-## Persistence check
-
-After a successful full run, test whether the verification data survives a
-real power/removal cycle:
+Use `--seconds N` to change the duration of each performance workload. After a successful full run, eject and power-cycle the disk, then verify the saved data without intentionally rewriting it:
 
 ```sh
 diskutil eject /dev/disk4
-# Physically remove and reinsert the card, then find its new identifier:
+# Reinsert the disk and check its current identifier.
 diskutil list
 uv run tool sd --verify-only disk4
 ```
 
-`--verify-only` does not intentionally rewrite the card; it verifies the fio
-data written by the preceding full qualification pass.
+`--verify-only` skips the performance suite and checks the verification data from a previous full run.
