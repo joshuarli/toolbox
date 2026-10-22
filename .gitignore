@@ -10,23 +10,3 @@ dist/
 var/letterboxd/letterboxd.db*
 var/letterboxd/movie-library-data/
 library.html
-
-browser
-instagram.db
-instagram.db-shm
-instagram.db-wal
-
-# chrome-data: keep only session credentials, preferences
-chrome-data/*
-!chrome-data/Local State
-!chrome-data/Default
-chrome-data/Default/*
-!chrome-data/Default/Cookies
-!chrome-data/Default/Preferences
-!chrome-data/Default/Secure Preferences
-
-site/
-debug/
-web/bin/
-
-node_modules
