@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-12 · P3 · Browser setup failures can leave a managed process running
-
-- **Area:** Concurrency
-- **Where:** `src/tool/ig/browser.py:80`, `src/tool/ig/browser.py:89`, `src/tool/ig/browser.py:115`, `src/tool/ig/browser.py:121`
-- **Problem:** `browser_session` enters its cleanup block only after `ensure_browser` returns. If `_setup_tab` fails after Shadowdriver starts the browser, the caller never receives the context manager and no close runs. A focused setup-failure probe recorded browser start and setup failure with no close event; the process can remain until manually stopped.
-- **Recommendation:** Unwind the browser and tab inside `ensure_browser` when setup fails, preserving the original exception.
-- **Fix with:** `lifecycle-concurrency`, `error-model`
-- **Effort:** S
-
 ### TOOL-13 · P3 · Matching MD5 hashes can send distinct notes to Trash
 
 - **Area:** Data
