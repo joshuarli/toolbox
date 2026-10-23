@@ -1,14 +1,9 @@
-# Review: tool
+Prefix: TOOL
+Next: 15
 
-Scope: the repository's CLI, local storage, external-service boundaries, tests, build setup, and documentation. Checks run: `uv run --offline ruff check src tests` (2 diagnostics), `uv run --offline ty check` (1 diagnostic), six CLI `--help` calls (pass), focused `uv run --offline python -` repros (note truncation, path escape, interrupted migration, stale FTS, false no-op/error results, and blocked remux retry reproduced), `mdtool pointers src/tool/notes/clean.py` (clean), and `mdtool check --untracked` (exit 0; 0 errors, 57 warnings, 3 notes). Not covered: full pytest suite, package build, deployment, and live external services.
+# Backlog: tool
 
-## Summary
-
-The command surface is clearly divided by domain, and the topic docs mostly match the current help and storage behavior. Explicit dry-runs protect several file operations, and removable-disk qualification has strong fail-closed checks. The main risks are durable writes and migrations that do not recover cleanly from interruption, unsafe path components imported from an Instagram database, and error paths that report a normal no-op or empty result. The read-only static baseline reports two Ruff diagnostics and one `ty` diagnostic; no CI workflow is present.
-
-## Findings
-
-### R1 · P1 · Localizing notes can truncate user content on write failure
+### TOOL-1 · P1 · Localizing notes can truncate user content on write failure
 
 - **Area:** Data
 - **Where:** `src/tool/notes/localize.py:651`
@@ -17,7 +12,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `durable-state`, `os-boundaries`
 - **Effort:** M
 
-### R2 · P2 · Imported usernames can direct media writes outside the media root
+### TOOL-2 · P2 · Imported usernames can direct media writes outside the media root
 
 - **Area:** Security
 - **Where:** `src/tool/ig/cli/import_db.py:174`, `src/tool/ig/media.py:35`, `src/tool/ig/scraper.py:876`, `src/tool/ig/scraper.py:753`
@@ -26,7 +21,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `os-boundaries`
 - **Effort:** M
 
-### R3 · P2 · An interrupted profile-post migration hides existing memberships
+### TOOL-3 · P2 · An interrupted profile-post migration hides existing memberships
 
 - **Area:** Data
 - **Where:** `src/tool/ig/db.py:25`, `src/tool/ig/db.py:58`, `src/tool/ig/db.py:88`
@@ -35,7 +30,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `durable-state`
 - **Effort:** M
 
-### R4 · P2 · Music transcode silently replaces existing output
+### TOOL-4 · P2 · Music transcode silently replaces existing output
 
 - **Area:** Data
 - **Where:** `src/tool/music/transcode.py:81`, `src/tool/music/transcode.py:91`
@@ -44,7 +39,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `os-boundaries`, `durable-state`
 - **Effort:** S
 
-### R5 · P2 · Localization reports unreadable notes as no work
+### TOOL-5 · P2 · Localization reports unreadable notes as no work
 
 - **Area:** Errors
 - **Where:** `src/tool/notes/localize.py:502`, `src/tool/notes/localize.py:584`, `src/tool/notes/localize.py:670`
@@ -53,7 +48,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `error-model`, `isolate-effects`
 - **Effort:** S
 
-### R6 · P2 · Movie search keeps stale text after an indexed field changes
+### TOOL-6 · P2 · Movie search keeps stale text after an indexed field changes
 
 - **Area:** Data
 - **Where:** `src/tool/movies/search.py:186`, `src/tool/movies/search.py:190`, `src/tool/movies/scraper.py:908`
@@ -62,7 +57,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `durable-state`, `test-audit`
 - **Effort:** M
 
-### R7 · P2 · Failed sidecar extraction leaves a remux that blocks retry
+### TOOL-7 · P2 · Failed sidecar extraction leaves a remux that blocks retry
 
 - **Area:** Data
 - **Where:** `src/tool/movies/mkvtomp4.py:253`, `src/tool/movies/mkvtomp4.py:379`, `src/tool/movies/mkvtomp4.py:394`
@@ -71,7 +66,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `isolate-effects`, `error-model`
 - **Effort:** M
 
-### R8 · P2 · Failed loudness measurement is reported as a no-op
+### TOOL-8 · P2 · Failed loudness measurement is reported as a no-op
 
 - **Area:** Errors
 - **Where:** `src/tool/movies/loudnorm.py:51`, `src/tool/movies/loudnorm.py:154`
@@ -80,7 +75,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `error-model`
 - **Effort:** S
 
-### R9 · P2 · MusicBrainz request errors look like successful empty searches
+### TOOL-9 · P2 · MusicBrainz request errors look like successful empty searches
 
 - **Area:** Errors
 - **Where:** `src/tool/music/api/musicbrainz.py:58`, `src/tool/music/tag.py:304`
@@ -89,7 +84,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `error-model`, `isolate-effects`
 - **Effort:** S
 
-### R10 · P2 · Music API requests have no bounded timeout
+### TOOL-10 · P2 · Music API requests have no bounded timeout
 
 - **Area:** Errors
 - **Where:** `src/tool/music/http.py:45`, `src/tool/music/http.py:58`, `src/tool/music/http.py:92`
@@ -98,7 +93,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `error-model`, `isolate-effects`
 - **Effort:** S
 
-### R11 · P2 · The lint target rewrites files during a check
+### TOOL-11 · P2 · The lint target rewrites files during a check
 
 - **Area:** Build
 - **Where:** `Makefile:9`, `Makefile:10`, `Makefile:11`, `Makefile:12`
@@ -107,7 +102,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `none`
 - **Effort:** S
 
-### R12 · P3 · Browser setup failures can leave a managed process running
+### TOOL-12 · P3 · Browser setup failures can leave a managed process running
 
 - **Area:** Concurrency
 - **Where:** `src/tool/ig/browser.py:80`, `src/tool/ig/browser.py:89`, `src/tool/ig/browser.py:115`, `src/tool/ig/browser.py:121`
@@ -116,7 +111,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `lifecycle-concurrency`, `error-model`
 - **Effort:** S
 
-### R13 · P3 · Matching MD5 hashes can send distinct notes to Trash
+### TOOL-13 · P3 · Matching MD5 hashes can send distinct notes to Trash
 
 - **Area:** Data
 - **Where:** `src/tool/notes/clean.py:170`, `src/tool/notes/clean.py:173`, `src/tool/notes/clean.py:178`, `src/tool/notes/clean.py:311`
@@ -125,7 +120,7 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `durable-state`
 - **Effort:** S
 
-### R14 · P3 · No automated workflow runs the repository checks
+### TOOL-14 · P3 · No automated workflow runs the repository checks
 
 - **Area:** Build
 - **Where:** `Makefile:14`
@@ -133,10 +128,3 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Recommendation:** Add a small CI workflow that runs the read-only static checks and test suite on supported Python versions and platforms.
 - **Fix with:** `none`
 - **Effort:** M
-
-## Strengths to keep
-
-- `sd` checks whole-disk eligibility, requires exact destructive confirmation, and revalidates after unmounting.
-- Notes cleanup/localization and movie rename/remux default to previews before changing user files.
-- Music tagging keeps recording and release-track identity separate from container-specific tag mapping.
-- Instagram storage keeps saved-post membership separate from profile membership.
