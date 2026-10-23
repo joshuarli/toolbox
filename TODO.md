@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-3 · P2 · An interrupted profile-post migration hides existing memberships
-
-- **Area:** Data
-- **Where:** `src/tool/ig/db.py:25`, `src/tool/ig/db.py:58`, `src/tool/ig/db.py:88`
-- **Problem:** The migration renames the old table, creates and fills a replacement, then drops the old table in `executescript` without an explicit transaction. Reopening a database left immediately after the rename created an empty valid `profile_post`; the next migration check skipped it while the old membership row remained stranded in `profile_post_old`.
-- **Recommendation:** Make the migration atomic and make startup recover from an interrupted intermediate schema.
-- **Fix with:** `durable-state`
-- **Effort:** M
-
 ### TOOL-4 · P2 · Music transcode silently replaces existing output
 
 - **Area:** Data
