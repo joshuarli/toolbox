@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-8 · P2 · Failed loudness measurement is reported as a no-op
-
-- **Area:** Errors
-- **Where:** `src/tool/movies/loudnorm.py:51`, `src/tool/movies/loudnorm.py:154`
-- **Problem:** When ffmpeg fails without emitting parseable measurement JSON, `measure_gain` returns `(0.0, 0.0)`. The caller prints “Already at target loudness” and exits successfully. A focused probe with a failed ffmpeg result reproduced the zero-gain value, so invalid inputs such as files without audio are mistaken for completed measurements.
-- **Recommendation:** Check the process status and require valid measurement data before returning a gain; report measurement failures to the caller.
-- **Fix with:** `error-model`
-- **Effort:** S
-
 ### TOOL-9 · P2 · MusicBrainz request errors look like successful empty searches
 
 - **Area:** Errors
