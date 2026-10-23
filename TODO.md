@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-5 · P2 · Localization reports unreadable notes as no work
-
-- **Area:** Errors
-- **Where:** `src/tool/notes/localize.py:502`, `src/tool/notes/localize.py:584`, `src/tool/notes/localize.py:670`
-- **Problem:** `_read_text` turns both decode and filesystem errors into `None`, and callers silently skip those paths. A focused run with a non-UTF-8 Markdown file printed “No remote images found” and returned success, so the user cannot tell that a selected note was never examined.
-- **Recommendation:** Preserve the path and cause, then report skipped files or fail with a `NotesError`; define the policy for non-UTF-8 notes.
-- **Fix with:** `error-model`, `isolate-effects`
-- **Effort:** S
-
 ### TOOL-6 · P2 · Movie search keeps stale text after an indexed field changes
 
 - **Area:** Data
