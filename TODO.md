@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-2 · P2 · Imported usernames can direct media writes outside the media root
-
-- **Area:** Security
-- **Where:** `src/tool/ig/cli/import_db.py:174`, `src/tool/ig/media.py:35`, `src/tool/ig/scraper.py:876`, `src/tool/ig/scraper.py:753`
-- **Problem:** Database import copies `username` values without validating them. Media paths append that value as a directory component, and the writer creates parent directories before replacing the destination. Calling the real path helper with an imported username of `../../outside` resolves the destination outside the configured media directory. A crafted imported database can make later downloads write outside the archive tree.
-- **Recommendation:** Validate imported identifiers and enforce that every resolved media destination remains inside the configured media root at the path boundary.
-- **Fix with:** `os-boundaries`
-- **Effort:** M
-
 ### TOOL-3 · P2 · An interrupted profile-post migration hides existing memberships
 
 - **Area:** Data
