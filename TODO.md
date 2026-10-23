@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-7 · P2 · Failed sidecar extraction leaves a remux that blocks retry
-
-- **Area:** Data
-- **Where:** `src/tool/movies/mkvtomp4.py:253`, `src/tool/movies/mkvtomp4.py:379`, `src/tool/movies/mkvtomp4.py:394`
-- **Problem:** The MP4 is published before unsupported streams are extracted. If extraction fails, the MP4 remains; the next run rejects it as an existing output before retrying extraction. A focused run reproduced the failure and then the blocked retry.
-- **Recommendation:** Stage the MP4 and sidecars together before publishing, or remove outputs created by a failed attempt.
-- **Fix with:** `isolate-effects`, `error-model`
-- **Effort:** M
-
 ### TOOL-8 · P2 · Failed loudness measurement is reported as a no-op
 
 - **Area:** Errors
