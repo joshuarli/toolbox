@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-6 · P2 · Movie search keeps stale text after an indexed field changes
-
-- **Area:** Data
-- **Where:** `src/tool/movies/search.py:186`, `src/tool/movies/search.py:190`, `src/tool/movies/scraper.py:908`
-- **Problem:** `ensure_fts` rebuilds only when the number of indexed movies changes. Scraping can update a title or director while the count stays constant. A focused run changed a title from “Old title” to “New title”; the index still contained “Old title” after `ensure_fts`, so search results can be silently stale.
-- **Recommendation:** Keep FTS rows synchronized with movie updates or track indexed-field freshness rather than only row count.
-- **Fix with:** `durable-state`, `test-audit`
-- **Effort:** M
-
 ### TOOL-7 · P2 · Failed sidecar extraction leaves a remux that blocks retry
 
 - **Area:** Data
