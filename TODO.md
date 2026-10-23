@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-9 · P2 · MusicBrainz request errors look like successful empty searches
-
-- **Area:** Errors
-- **Where:** `src/tool/music/api/musicbrainz.py:58`, `src/tool/music/tag.py:304`
-- **Problem:** `search` catches every exception and returns the same empty list as a successful no-match response. A focused probe raised a timeout and received `[]`; `tag` then prints “No matches found,” hiding a service outage or other request failure.
-- **Recommendation:** Preserve request failures as a distinct error or result so the CLI can distinguish outages from empty searches.
-- **Fix with:** `error-model`, `isolate-effects`
-- **Effort:** S
-
 ### TOOL-10 · P2 · Music API requests have no bounded timeout
 
 - **Area:** Errors
