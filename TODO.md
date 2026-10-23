@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-1 · P1 · Localizing notes can truncate user content on write failure
-
-- **Area:** Data
-- **Where:** `src/tool/notes/localize.py:651`
-- **Problem:** `Path.write_text` truncates the existing note before writing its replacement. A focused fault injection raised an `OSError` after writing a prefix; `_rewrite_notes` reported `NotesError` while the note remained truncated. A crash or storage error during `notes localize --apply` can therefore destroy the rest of a user's note.
-- **Recommendation:** Write each replacement to a sibling temporary file, then atomically replace the note and remove the temporary file on failure.
-- **Fix with:** `durable-state`, `os-boundaries`
-- **Effort:** M
-
 ### TOOL-2 · P2 · Imported usernames can direct media writes outside the media root
 
 - **Area:** Security
