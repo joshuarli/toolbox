@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-11 · P2 · The lint target rewrites files during a check
-
-- **Area:** Build
-- **Where:** `Makefile:9`, `Makefile:10`, `Makefile:11`, `Makefile:12`
-- **Problem:** `make fmtlint` runs Ruff with `--fix --unsafe-fixes` and then formats the repository. Invoking a check can rewrite working files, and `ruff@latest` and `ty@latest` vary independently of the project lockfile.
-- **Recommendation:** Keep the check target read-only, separate explicit fix/format commands, and use the locked tool versions.
-- **Fix with:** `none`
-- **Effort:** S
-
 ### TOOL-12 · P3 · Browser setup failures can leave a managed process running
 
 - **Area:** Concurrency
