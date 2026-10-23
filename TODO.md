@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-10 · P2 · Music API requests have no bounded timeout
-
-- **Area:** Errors
-- **Where:** `src/tool/music/http.py:45`, `src/tool/music/http.py:58`, `src/tool/music/http.py:92`
-- **Problem:** The shared `PoolManager` and both request methods omit a timeout. The current urllib3 default uses the system socket timeout, which is unbounded in this process, so a stalled MusicBrainz, ListenBrainz, or Spotify request can keep a CLI command waiting indefinitely. A focused call confirmed the shared request boundary passes no timeout argument.
-- **Recommendation:** Set explicit connect and read limits at the shared request boundary and propagate timeout failures to callers.
-- **Fix with:** `error-model`, `isolate-effects`
-- **Effort:** S
-
 ### TOOL-11 · P2 · The lint target rewrites files during a check
 
 - **Area:** Build
