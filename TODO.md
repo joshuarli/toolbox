@@ -3,15 +3,6 @@ Next: 15
 
 # Backlog: tool
 
-### TOOL-4 · P2 · Music transcode silently replaces existing output
-
-- **Area:** Data
-- **Where:** `src/tool/music/transcode.py:81`, `src/tool/music/transcode.py:91`
-- **Problem:** Every transcode passes `-y` to ffmpeg, so a same-stem `.m4a` or explicit `-o` destination is replaced without prompting. The command can discard a prior output file without an explicit overwrite choice.
-- **Recommendation:** Refuse existing destinations by default and make replacement explicit.
-- **Fix with:** `os-boundaries`, `durable-state`
-- **Effort:** S
-
 ### TOOL-5 · P2 · Localization reports unreadable notes as no work
 
 - **Area:** Errors
