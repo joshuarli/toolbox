@@ -11,13 +11,22 @@ jobs:
   checks:
     name: Python ${{ matrix.python-version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: toolbox
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.14", "3.15"]
+        python-version: ["3.15"]
     steps:
       - uses: actions/checkout@v7
+        with:
+          path: toolbox
+      - uses: actions/checkout@v7
+        with:
+          repository: joshuarli/shadowdriver
+          path: shadowdriver
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
