@@ -2,7 +2,11 @@
 
 The Letterboxd database is SQLite at var/letterboxd/letterboxd.db, relative to the repository. Set `MOVIES_DATA_DIR` to use another directory; the database filename remains `letterboxd.db`.
 
-Scraping and login use the optional `shadowdriver` Chromium integration (`uv sync --extra browser`). Scraping works logged out for public film data; login is only needed for rating statistics. The browser profile is managed separately from the user's normal browser profile.
+Scraping and login use the optional `shadowdriver` Chromium integration
+(`uv sync --extra browser`), installed from the adjacent `../shadowdriver/py`
+checkout. Scraping works logged out for public film data; login is only needed
+for rating statistics. The browser profile is managed separately from the
+user's normal browser profile.
 
 ## Commands
 

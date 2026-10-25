@@ -4,10 +4,12 @@ A collection of command-line tools for removable disks, movie files, music libra
 
 ## Install and run
 
-Requires `uv` and Python 3.14 or newer. From a checkout:
+Requires `uv` and Python 3.15 or newer. From adjacent `toolbox` and
+`shadowdriver` checkouts:
 
 ```sh
 git clone https://github.com/joshuarli/tool.git
+git clone https://github.com/joshuarli/shadowdriver.git
 cd tool
 uv sync
 uv run tool --help
@@ -19,7 +21,7 @@ Letterboxd scraping uses the optional browser extra:
 uv sync --extra browser
 ```
 
-The extra installs `shadowdriver` from a GitHub SSH URL, so browser setup requires access to that repository.
+The browser extra uses the adjacent `../shadowdriver/py` checkout.
 
 Run a command with `uv run tool <name> ...`. For example:
 

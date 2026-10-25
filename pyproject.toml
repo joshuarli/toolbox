@@ -26,7 +26,7 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
-shadowdriver = { git = "ssh://git@github.com/joshuarli/shadowdriver.git", subdirectory = "py" }
+shadowdriver = { path = "../shadowdriver/py" }
 
 [dependency-groups]
 dev = [
