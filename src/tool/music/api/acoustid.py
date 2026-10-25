@@ -118,8 +118,8 @@ def _release_candidates(base: Metadata, rg: dict[str, Any] | None, rel: dict[str
         releasecountry=rel.get("country"),
         totaldiscs=str(rel["medium_count"]) if rel.get("medium_count") else None,
         musicbrainz_albumid=rel.get("id"),
-        musicbrainz_releasegroupid=rg.get("id") if rg else None,
-        releasetype=[rg["type"].lower()] if rg and rg.get("type") else [],
+        musicbrainz_releasegroupid=rg.get("id") if rg is not None and rg else None,
+        releasetype=[rg["type"].lower()] if rg is not None and rg and rg.get("type") else [],
     )
     out = [
         replace(

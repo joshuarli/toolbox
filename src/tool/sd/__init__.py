@@ -166,7 +166,7 @@ class FioTest:
         ]
         if self.runtime_seconds is not None:
             argv.extend(["--time_based=1", f"--runtime={self.runtime_seconds}"])
-            if self.ramp_seconds:
+            if self.ramp_seconds is not None and self.ramp_seconds:
                 argv.append(f"--ramp_time={self.ramp_seconds}")
         if self.read_only:
             # Bare flag: fio 3.42 rejects `--readonly=1`.

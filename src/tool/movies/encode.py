@@ -587,9 +587,9 @@ def build_cmd(
     for out_idx, audio_stream in enumerate(audio_streams):
         map_args += ["-map", f"0:{audio_stream.index}"]
         source_kbps = round(audio_stream.bit_rate / 1000) if audio_stream.bit_rate else None
-        if not source_kbps:
+        if source_kbps is None or not source_kbps:
             est = probe.probe_audio_br(src, _audio_ordinal(info, audio_stream))
-            source_kbps = round(est / 1000) if est else None
+            source_kbps = round(est / 1000) if est is not None and est else None
         audio_br = probe.target_audio_bitrate(audio_stream.channels or 2, source_kbps or None)
         audio_args += [f"-c:a:{out_idx}", "aac_at", f"-b:a:{out_idx}", audio_br]
 
@@ -711,7 +711,7 @@ def _choose_streams(
             print(f"Enter comma-separated numbers from 1 to {len(streams)}.")
             continue
         selected = [streams[num - 1] for num in nums]
-        if compatible_codecs:
+        if compatible_codecs is not None and compatible_codecs:
             incompatible = [s.codec_name.lower() for s in selected if s.codec_name.lower() not in compatible_codecs]
             if incompatible:
                 print(
@@ -801,7 +801,7 @@ def _applescript_string(value: str) -> str:
 
 
 def notify_user(title: str, message: str) -> None:
-    if sys.platform != "darwin" or not sys.stdout.isatty() or not shutil.which("osascript"):
+    if sys.platform != "darwin" or not sys.stdout.isatty() or shutil.which("osascript") is None:
         return
     script = f'display notification "{_applescript_string(message)}" with title "{_applescript_string(title)}"'
     try:
@@ -845,10 +845,10 @@ def run_encode(
         if secs is None or duration <= 0:
             continue
         pct = min(secs / duration, 1.0)
-        if label and progress_display:
+        if label is not None and label and progress_display:
             progress_display.update(label, pct, progress.fps, progress.speed)
             continue
-        if label:
+        if label is not None and label:
             milestone = int(pct * 100)
             if milestone >= next_milestone:
                 locked_print(f"  {label}: {min(milestone, 100)}%")
@@ -858,7 +858,7 @@ def run_encode(
         bar = "█" * filled + "░" * (bar_w - filled)
         print(f"\r  [{bar}] {pct * 100:5.1f}%", end="", flush=True)
 
-    if not label:
+    if label is None or not label:
         print()
     returncode = proc.wait()
     stderr_thread.join(timeout=1)
@@ -890,7 +890,7 @@ def report_failure(
 
     message = "\n".join(lines)
     sys.stdout.flush()
-    if label and progress_display:
+    if label is not None and label and progress_display:
         progress_display.fail(label, message)
     else:
         print(message, file=sys.stderr)
@@ -1142,9 +1142,9 @@ def encode_task(
         task.subtitle_streams,
         task.crop,
     )
-    if label and progress_display:
+    if label is not None and label and progress_display:
         progress_display.start(label)
-    elif label:
+    elif label is not None and label:
         print(f"Start:  {task.src.name}")
     else:
         print(f"Output: {task.dst.name}")
@@ -1182,7 +1182,7 @@ def encode_task(
     if sidecar_paths:
         names = ", ".join(path.name for path in sidecar_paths)
         done += f"  subtitles: {names}"
-    if label and progress_display:
+    if label is not None and label and progress_display:
         progress_display.finish(label, done)
     else:
         print(done)
@@ -1207,7 +1207,7 @@ def encode_task_delete(
     tmp_root: Path | None = None,
 ) -> bool:
     preflight_reason = _delete_preflight_reason(task.subtitle_streams)
-    if preflight_reason:
+    if preflight_reason is not None and preflight_reason:
         report_failure(
             task.src,
             "delete safety preflight",
@@ -1232,9 +1232,9 @@ def encode_task_delete(
             task.subtitle_streams,
             task.crop,
         )
-        if label and progress_display:
+        if label is not None and label and progress_display:
             progress_display.start(label)
-        elif label:
+        elif label is not None and label:
             print(f"Start:  {task.src.name}")
         else:
             print(f"Output: {task.dst.name}")
@@ -1317,7 +1317,7 @@ def encode_task_delete(
         if sidecar_paths:
             names = ", ".join(path.name for path in sidecar_paths)
             done += f"  subtitles: {names}"
-        if label and progress_display:
+        if label is not None and label and progress_display:
             progress_display.finish(label, done)
         else:
             print(done)

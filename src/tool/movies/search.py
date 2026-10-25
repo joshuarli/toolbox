@@ -84,7 +84,7 @@ def _rank_score(row, query_title: str, query_year: int | None) -> float:
     popularity is a weak tiebreaker.  Weights chosen so that an exact year match
     can't be overridden by a popular title with a mediocre name similarity."""
     title_sim = _title_sim(query_title, row)
-    year_bonus = 1.0 if (query_year and _row_year(row) == query_year) else 0.0
+    year_bonus = 1.0 if (query_year is not None and query_year and _row_year(row) == query_year) else 0.0
     # Normalise popularity to [0, 1] (log-scale max ~25 for a 5★, 1M-vote film)
     pop = min(_popularity(row), 25.0) / 25.0
 

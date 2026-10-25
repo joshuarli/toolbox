@@ -50,7 +50,7 @@ def _fmt_conf(query_title: str, query_year: int | None, row) -> str:
         year_part = None
 
     pop_part = f"{D}pop {bd['pop']}{R}"
-    parts = [title_part] + ([year_part] if year_part else []) + [pop_part]
+    parts = [title_part] + ([year_part] if year_part is not None and year_part else []) + [pop_part]
     breakdown = f"  {D}·{R}  ".join(parts)
     return f"{cc}{B}[{pct}%]{R}  {breakdown}"
 
@@ -96,14 +96,14 @@ def cmd_rename(args: argparse.Namespace) -> None:
             n_skip += 1
             continue
 
-        if err or new_path is None:
+        if (err is not None and err) or new_path is None:
             print(f"  {BR}✗{R} {D}{path.name}{R}  {BR}{err or 'unknown error'}{R}")
             n_error += 1
             continue
 
         if not dry_run:
             rename_err = apply_rename(path, new_path)
-            if rename_err:
+            if rename_err is not None and rename_err:
                 print(f"  {BR}✗{R} {D}{path.name}{R}  {BR}{rename_err}{R}")
                 n_error += 1
                 continue

@@ -22,7 +22,7 @@ def propose_rename(path: Path) -> tuple[Path | None, object, int | None, str | N
         return None, None, year, "no results"
     clean = _safe(_clean_title(match))
     director = _director_full_name(match["directors"])
-    stem = f"{_safe(director)} - {clean}" if director else clean
+    stem = f"{_safe(director)} - {clean}" if director is not None and director else clean
     new_name = f"{stem} ({match['year']}).{ext}"
     new_path = path.parent / new_name
     if new_path == path:

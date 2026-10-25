@@ -89,7 +89,9 @@ class Metadata:
         Optional fields (label, ISRC, credits, ...) legitimately may not exist, so only
         identity counts.  A recording with no release has no album to identify.
         """
-        release = (self.musicbrainz_albumid and self.musicbrainz_releasegroupid) or not self.album
+        release = (
+            (self.musicbrainz_albumid and self.musicbrainz_releasegroupid) or self.album is None or not self.album
+        )
         return bool(self.title and self.artist and self.musicbrainz_recordingid and release)
 
 

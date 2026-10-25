@@ -150,7 +150,7 @@ def _read_tags_ffprobe(filepath: str) -> Metadata:
     values: dict[str, list[str]] = {}
     for ff_key, val in data.get("format", {}).get("tags", {}).items():
         name = _FFPROBE_TAG_MAP.get(ff_key.lower())
-        if name and val:
+        if name is not None and name and val:
             values[name] = [str(val)]
     return Metadata.from_values(values)
 

@@ -256,7 +256,7 @@ def merge_one(video_path: Path, srt_path: Path, sub_charenc: str | None = None) 
     # The new SRT stream will be the N-th subtitle stream in the output,
     # where N = number of existing subtitle streams (0-indexed).
     n_subs = 0
-    if lang:
+    if lang is not None and lang:
         try:
             from tool.movies import probe
 
@@ -287,7 +287,7 @@ def merge_one(video_path: Path, srt_path: Path, sub_charenc: str | None = None) 
         "error",
         "-i",
         str(video_path),
-        *(["-sub_charenc", sub_charenc] if sub_charenc else []),
+        *(["-sub_charenc", sub_charenc] if sub_charenc is not None and sub_charenc else []),
         "-i",
         str(srt_path),
         "-map",
@@ -297,7 +297,7 @@ def merge_one(video_path: Path, srt_path: Path, sub_charenc: str | None = None) 
         "-c",
         "copy",
         *sub_args,
-        *([f"-metadata:s:s:{n_subs}", f"language={lang}"] if lang else []),
+        *([f"-metadata:s:s:{n_subs}", f"language={lang}"] if lang is not None and lang else []),
         *mux_args,
         "-map_metadata",
         "0",
@@ -372,7 +372,7 @@ def merge_all(directory: Path) -> None:
         sub_charenc = _detect_srt_encoding(srt_path)
         if merge_one(video_path, srt_path, sub_charenc):
             if trash_file(srt_path):
-                note = f" (decoded as {sub_charenc})" if sub_charenc else ""
+                note = f" (decoded as {sub_charenc})" if sub_charenc is not None and sub_charenc else ""
                 print(f"    ✓ merged, SRT trashed{note}")
             else:
                 print("    ✓ merged (SRT kept — trash failed)")

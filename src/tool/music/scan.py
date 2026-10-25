@@ -284,7 +284,7 @@ def _print_file_detail(
     print(sep)
 
     print(f"  {bold('Codec:')}    {colored(codec.upper(), codec_color(codec), bold=True)}")
-    if bitrate:
+    if bitrate is not None and bitrate:
         print(f"  {bold('Bitrate:')}  {bitrate // 1000}k")
     print(
         f"  {bold('Sample:')}   {sample_rate or '?'} Hz, {bit_depth or '?'} bit, {channel_map.get(channels, f'{channels}ch') if channels else '?'}"
@@ -293,7 +293,7 @@ def _print_file_detail(
 
     if not no_mastering:
         loud_spec = analyze_ebur128(fp, duration_s)
-        if loud_spec:
+        if loud_spec is not None and loud_spec:
             master = compute_mastering_verdict(
                 loud_spec, true_peak_limit=true_peak_limit, lra_flat_limit=lra_flat_limit
             )
@@ -493,7 +493,7 @@ def run(args: argparse.Namespace) -> None:
 
         if not args.no_mastering:
             loud_spec = analyze_ebur128(fp, duration_s)
-            if loud_spec:
+            if loud_spec is not None and loud_spec:
                 master = compute_mastering_verdict(
                     loud_spec, true_peak_limit=args.true_peak_limit, lra_flat_limit=args.lra_flat_limit
                 )

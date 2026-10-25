@@ -117,7 +117,7 @@ def color_quality_score(score: int) -> str:
 
 def color_audio_bpc(br_kbps: int | None, channels: int, tier: str) -> str | None:
     """Audio bitrate-per-channel: the audio analog of video BPP."""
-    if not br_kbps or not channels or tier == "L":
+    if br_kbps is None or not br_kbps or not channels or tier == "L":
         return None
     bpc = br_kbps // channels
     if bpc < 16:
@@ -147,7 +147,7 @@ def render_audio_line(info: dict[str, Any]) -> str:
     if info["br_kbps"]:
         parts.append(f"{info['br_kbps']} kbps")
     bpc = color_audio_bpc(info["br_kbps"], info["channels"], info["tier"])
-    if bpc:
+    if bpc is not None and bpc:
         parts.append(bpc)
     if info["lang"]:
         parts.append(f"{DIM}({info['lang']}){RST}")

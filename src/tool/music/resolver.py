@@ -181,12 +181,12 @@ def resolve_tracks(
             "duration_ms": duration_ms,
         }
 
-        if mb:
+        if mb is not None and mb:
             resolved.append({**entry, "mb_recording": mb})
         else:
             unresolved.append(entry)
 
-        label = f"{mb['id']}" if mb else "unresolved"
+        label = f"{mb['id']}" if mb is not None and mb else "unresolved"
         print(f"  [{i + 1}/{len(tracks)}] {title[:60]} — {label}")
 
     return resolved, unresolved

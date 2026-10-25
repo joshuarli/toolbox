@@ -475,7 +475,7 @@ def collect_markdown_files(vault: Path, roots: list[Path] | None = None) -> list
     Skips the vault's ``.trash`` and ``.obsidian`` support directories.
     Explicit file roots are honored regardless of suffix.
     """
-    if roots:
+    if roots is not None and roots:
         candidates: set[Path] = set()
         for root in roots:
             if root.is_file():

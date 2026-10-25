@@ -54,7 +54,7 @@ def probe_audio(filepath: str) -> dict[str, Any] | None:
 def probe_codec(filepath: str) -> str | None:
     """Return the audio codec name from ffprobe, or None on failure."""
     info = probe_audio(filepath)
-    if not info:
+    if info is None or not info:
         return None
     codec = info.get("codec_name")
     return str(codec) if codec else None
