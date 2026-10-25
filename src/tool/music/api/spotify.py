@@ -192,7 +192,14 @@ class SpotifyPublicPlaylist:
         Uses the cached TOTP secret on first attempt. If the token endpoint
         rejects it, refetches the secret from network and retries once.
         """
-        if self._access_token and self._client_token and self._sha_hash:
+        if (
+            self._access_token is not None
+            and self._access_token
+            and self._client_token is not None
+            and self._client_token
+            and self._sha_hash is not None
+            and self._sha_hash
+        ):
             return
 
         # 1. TOTP from obfuscated secret (cached first, refetch on failure)

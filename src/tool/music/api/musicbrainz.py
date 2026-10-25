@@ -154,9 +154,9 @@ def enrich(meta: Metadata) -> Metadata:
     recording.  On failure the selection is returned as-is, with a warning.
     """
     try:
-        if meta.musicbrainz_albumid:
+        if meta.musicbrainz_albumid is not None and meta.musicbrainz_albumid:
             return _enrich_release(meta, _release_lookup(meta.musicbrainz_albumid))
-        if meta.musicbrainz_recordingid:
+        if meta.musicbrainz_recordingid is not None and meta.musicbrainz_recordingid:
             rec = _request_json(
                 f"{MB_BASE}/recording/{meta.musicbrainz_recordingid}",
                 params={"inc": _RECORDING_INC, "fmt": "json"},
@@ -234,7 +234,13 @@ def _find_track(rel: dict[str, Any], meta: Metadata) -> tuple[dict[str, Any], di
     """The selected track on *rel*: by release-track MBID, else by recording (and position if ambiguous)."""
     tracks = [(m, t) for m in rel.get("media", []) for t in m.get("tracks", [])]
     for matches in (
-        [mt for mt in tracks if meta.musicbrainz_trackid and mt[1]["id"] == meta.musicbrainz_trackid],
+        [
+            mt
+            for mt in tracks
+            if meta.musicbrainz_trackid is not None
+            and meta.musicbrainz_trackid
+            and mt[1]["id"] == meta.musicbrainz_trackid
+        ],
         [mt for mt in tracks if mt[1]["recording"]["id"] == meta.musicbrainz_recordingid],
     ):
         if len(matches) > 1:
@@ -274,7 +280,8 @@ def _apply_recording(meta: Metadata, rec: dict[str, Any], extra_genres: list[dic
         performer=_unique(performers),
         **{field: _unique(names) for field, names in by_field.items()},
     )
-    if not meta.musicbrainz_trackid and rec.get("artist-credit"):  # bare recording: no track credit available
+    no_track = meta.musicbrainz_trackid is None or not meta.musicbrainz_trackid
+    if no_track and rec.get("artist-credit"):  # bare recording: no track credit available
         out = replace(
             out,
             artist=_join_credit(rec["artist-credit"], "name"),

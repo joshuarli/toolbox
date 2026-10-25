@@ -59,7 +59,7 @@ class Session:
     def get(self, url: str, params: dict[str, str | int] | None = None, headers: dict[str, str] | None = None) -> bytes:
         """GET *url* with optional query params. Returns raw body bytes."""
         self._wait()
-        if params:
+        if params is not None and params:
             url = f"{url}?{urlencode(params)}"
         merged = {**self.headers, **(headers or {})}
         resp = self.pool.request("GET", url, headers=merged)
@@ -88,7 +88,7 @@ class Session:
     ) -> bytes:
         """POST *url* with optional query params and JSON body. Returns raw bytes."""
         self._wait()
-        if params:
+        if params is not None and params:
             url = f"{url}?{urlencode(params)}"
         merged = {**self.headers, **(headers or {})}
         if json_body is not None:

@@ -56,9 +56,9 @@ def _fallback_search(filepath: str, current: Metadata) -> list[Candidate]:
     # Only recording + artist — the album name from file tags rarely matches
     # MusicBrainz canonical release titles, so including it blocks valid hits.
     query_parts = []
-    if current.title:
+    if current.title is not None and current.title:
         query_parts.append(f"recording:({current.title})")
-    if current.artist:
+    if current.artist is not None and current.artist:
         query_parts.append(f"artist:({current.artist})")
 
     if query_parts:
@@ -98,12 +98,12 @@ def _rank(cands: list[Candidate], current: Metadata) -> list[Candidate]:
 
 def _edition(m: Metadata) -> str:
     """What distinguishes this release from others carrying the same recording."""
-    if not m.album:
+    if m.album is None or not m.album:
         return ""
-    detail = [p for p in (m.date, m.releasecountry, m.media) if p]
-    if m.discnumber and (int(m.totaldiscs or 0) > 1 or m.discnumber != "1"):
-        detail.append(f"disc {m.discnumber}/{m.totaldiscs}" if m.totaldiscs else f"disc {m.discnumber}")
-    if m.tracknumber:
+    detail = [p for p in (m.date, m.releasecountry, m.media) if p is not None and p]
+    if m.discnumber is not None and m.discnumber and (int(m.totaldiscs or 0) > 1 or m.discnumber != "1"):
+        detail.append(f"disc {m.discnumber}/{m.totaldiscs}" if m.totaldiscs is not None and m.totaldiscs else f"disc {m.discnumber}")
+    if m.tracknumber is not None and m.tracknumber:
         detail.append(f"#{m.tracknumber}")
     return f"[{m.album}" + (f" · {' · '.join(detail)}" if detail else "") + "]"
 
@@ -114,7 +114,7 @@ def format_match_line(idx: int, cand: Candidate, *, show_id: bool = False) -> st
     line = f"  #{idx}  {cand.score * 100:3.0f}%  {m.title or '?'} — {m.artist or '?'}"
     if edition := _edition(m):
         line += f"  {edition}"
-    if show_id and m.musicbrainz_albumid:
+    if show_id and m.musicbrainz_albumid is not None and m.musicbrainz_albumid:
         line += dim(f" {m.musicbrainz_albumid[:8]}")
     return line
 
@@ -254,7 +254,11 @@ def autotag(filepath: str) -> Metadata | None:
     best = max(strong, key=lambda c: c.score).meta
     album = read_tags(filepath).album
     sole_release = len({c.meta.musicbrainz_albumid for c in strong}) == 1 and best.musicbrainz_albumid
-    if sole_release and (not album or album.casefold() == (best.album or "").casefold()):
+    if (
+        sole_release is not None
+        and sole_release
+        and (album is None or not album or album.casefold() == (best.album or "").casefold())
+    ):
         selection = best
     else:
         selection = Metadata(musicbrainz_recordingid=best.musicbrainz_recordingid, acoustid_id=best.acoustid_id)
@@ -331,7 +335,7 @@ def run(args: argparse.Namespace) -> None:
             return
 
     actual_path = write_tags(args.file, metadata)
-    if metadata.title:
+    if metadata.title is not None and metadata.title:
         dirname = os.path.dirname(args.file)
         ext = os.path.splitext(args.file)[1]
         safe_title = metadata.title.replace("/", "-").replace("\x00", "")

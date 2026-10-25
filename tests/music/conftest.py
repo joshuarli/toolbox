@@ -1,4 +1,6 @@
+import functools
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -26,6 +28,28 @@ _FFMPEG = _ffmpeg_available()
 @pytest.fixture(scope="session")
 def ffmpeg() -> bool:
     return _FFMPEG
+
+
+@functools.cache
+def _ffmpeg_encoder_names() -> frozenset[str]:
+    """Names from `ffmpeg -encoders`; empty when ffmpeg is missing."""
+    try:
+        proc = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=30)
+    except Exception:
+        return frozenset()
+    if proc.returncode != 0:
+        return frozenset()
+    names = set()
+    for line in proc.stdout.splitlines():
+        match = re.match(r"^ [.A-Z]+ (\S+)", line)
+        if match:
+            names.add(match.group(1))
+    return frozenset(names)
+
+
+needs_libvorbis = pytest.mark.skipif(
+    "libvorbis" not in _ffmpeg_encoder_names(), reason="libvorbis encoder not available"
+)
 
 
 def _make_audio(path: str, codec: str, *, sample_rate: int = 44100) -> None:

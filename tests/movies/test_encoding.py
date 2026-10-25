@@ -12,9 +12,14 @@ import pytest
 
 from tool.movies import encode, loudnorm, probe, scan_encodes
 
-from .conftest import FIXTURE_DIR
+from .conftest import FIXTURE_DIR, ffmpeg_names
 
 ROOT = Path(__file__).resolve().parents[2]
+
+needs_videotoolbox = pytest.mark.skipif(
+    "hevc_videotoolbox" not in ffmpeg_names("-encoders"), reason="hevc_videotoolbox encoder not available"
+)
+needs_zscale = pytest.mark.skipif("zscale" not in ffmpeg_names("-filters"), reason="zscale filter not available")
 
 
 def run(cmd: list[str], cwd: Path = ROOT, check: bool = True) -> subprocess.CompletedProcess:
@@ -264,6 +269,7 @@ class EncodingTests(unittest.TestCase):
     def encode(self, *args: str) -> subprocess.CompletedProcess:
         return run([sys.executable, "-m", "tool", "movies", "encode", *args], cwd=ROOT)
 
+    @needs_videotoolbox
     def test_hq_outputs_apple_friendly_hevc_main10_mp4(self) -> None:
         src = self.copy_fixture(sdr_fixture())
         self.encode("-y", "hq", str(src))
@@ -279,6 +285,7 @@ class EncodingTests(unittest.TestCase):
         assert video["color_space"] == "bt709"
         assert audio["codec_name"] == "aac"
 
+    @needs_videotoolbox
     def test_directory_input_runs_multiple_real_encodes(self) -> None:
         self.copy_fixture(sdr_fixture(), "one.mp4")
         self.copy_fixture(sdr_fixture(), "two.mp4")
@@ -289,6 +296,7 @@ class EncodingTests(unittest.TestCase):
         assert (self.work / "one-encoded-hq.mp4").exists()
         assert (self.work / "two-encoded-hq.mp4").exists()
 
+    @needs_videotoolbox
     def test_single_file_uses_general_progress_path(self) -> None:
         src = self.copy_fixture(sdr_fixture())
 
@@ -298,6 +306,7 @@ class EncodingTests(unittest.TestCase):
         assert "Start:  sdr-1280x720.mp4" in result.stdout
         assert src.with_name("sdr-1280x720-encoded-hq.mp4").exists()
 
+    @needs_videotoolbox
     def test_interlaced_sources_are_deinterlaced_to_field_rate_progressive(self) -> None:
         src = self.copy_fixture(interlaced_fixture())
         input_video = stream(src, "video")
@@ -320,6 +329,8 @@ class EncodingTests(unittest.TestCase):
         assert "Skipping HDR source" in result.stdout
         assert not src.with_name("hdr-tagged-320x180-encoded-hq.mp4").exists()
 
+    @needs_videotoolbox
+    @needs_zscale
     def test_hdr_tonemap_outputs_bt709_main10(self) -> None:
         src = self.copy_fixture(hdr_fixture())
 
@@ -334,6 +345,7 @@ class EncodingTests(unittest.TestCase):
         assert video["color_transfer"] == "bt709"
         assert video["color_primaries"] == "bt709"
 
+    @needs_videotoolbox
     def test_not_h265_sources_are_encoded_without_confirmation(self) -> None:
         src = self.copy_fixture(sdr_fixture())
 
@@ -342,6 +354,7 @@ class EncodingTests(unittest.TestCase):
         assert "Skipping quality source" not in result.stdout
         assert src.with_name("sdr-1280x720-encoded-hq.mp4").exists()
 
+    @needs_videotoolbox
     def test_delete_option_removes_source_after_better_temp_encode(self) -> None:
         src = self.copy_fixture(bloated_mpeg2_fixture())
 
@@ -766,6 +779,7 @@ class EncodingTests(unittest.TestCase):
 
         assert scan_encodes.collect_files([src]) == [src]
 
+    @needs_videotoolbox
     def test_untagged_sd_defaults_to_smpte170m(self) -> None:
         src = self.copy_fixture(sd_untagged_fixture())
 

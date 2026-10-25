@@ -2,8 +2,10 @@ import argparse
 import functools
 import hashlib
 import http.server
+import re
 import shutil
 import stat
+import subprocess
 import threading
 from pathlib import Path
 from typing import Any, NoReturn
@@ -23,6 +25,26 @@ TINY_PNG = bytes.fromhex(
 MIN_WEBP = b"RIFF\x0e\x00\x00\x00WEBPpayload"
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+
+
+@functools.cache
+def _ffmpeg_encoder_names() -> frozenset[str]:
+    """Names from `ffmpeg -encoders`; empty when ffmpeg is missing."""
+    try:
+        proc = subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=30)
+    except OSError:
+        return frozenset()
+    if proc.returncode != 0:
+        return frozenset()
+    names = set()
+    for line in proc.stdout.splitlines():
+        match = re.match(r"^ [.A-Z]+ (\S+)", line)
+        if match:
+            names.add(match.group(1))
+    return frozenset(names)
+
+
+needs_libwebp = pytest.mark.skipif("libwebp" not in _ffmpeg_encoder_names(), reason="libwebp encoder not available")
 
 
 def urls(text: str) -> list[str]:
@@ -354,6 +376,7 @@ def test_webp_helpers() -> None:
 
 
 @needs_ffmpeg
+@needs_libwebp
 def test_convert_png_to_webp() -> None:
     out = localize.convert_to_webp(TINY_PNG)
     assert localize.is_webp_bytes(out)
@@ -435,6 +458,7 @@ def test_download_refuses_oversize(http_dir: Path, monkeypatch: pytest.MonkeyPat
 
 
 @needs_ffmpeg
+@needs_libwebp
 def test_fetch_and_store_dedups(http_dir: Path, tmp_path: Path) -> None:
     server, port = _serve(http_dir)
     try:
@@ -496,6 +520,7 @@ def test_run_only_pages(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> N
 
 
 @needs_ffmpeg
+@needs_libwebp
 def test_run_apply_rewrites(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

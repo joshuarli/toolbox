@@ -322,7 +322,7 @@ def _do_extractions(src: Path, extract_streams: list[ReportEntry], dest: Path) -
             "-c",
             "copy",
         ]
-        if fmt_override:
+        if fmt_override is not None and fmt_override:
             cmd += ["-f", fmt_override]
         cmd.append(str(out))
 
@@ -426,7 +426,7 @@ def run(path: Path, *, apply: bool = False, dest: str | None = None) -> None:
     if not path.is_file():
         sys.exit(f"Error: not a file: {path}")
 
-    dest_dir = Path(dest).resolve() if dest else path.parent
+    dest_dir = Path(dest).resolve() if dest is not None and dest else path.parent
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     report, issues = plan(path)

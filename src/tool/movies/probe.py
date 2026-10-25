@@ -274,7 +274,7 @@ def ffprobe(path: Path) -> ProbeInfo:
 
 def _packet_bitrate(path: Path, audio_ordinal: int, read_interval: str | None, timeout: int) -> int | None:
     cmd = ["ffprobe", "-v", "quiet", "-select_streams", f"a:{audio_ordinal}"]
-    if read_interval:
+    if read_interval is not None and read_interval:
         cmd += ["-read_intervals", read_interval]
     cmd += ["-show_packets", "-show_entries", "packet=size,pts_time,duration_time", "-print_format", "json", str(path)]
 
@@ -334,7 +334,7 @@ def probe_audio_br(path: Path, audio_ordinal: int = 0, sample_secs: int = 8) -> 
 def target_audio_bitrate(channels: int, source_kbps: int | None = None) -> str:
     """AAC target: 256k stereo, ~64k/ch surround, capped at 448k."""
     target = 256 if channels <= 2 else min(64 * channels, 448)
-    if source_kbps and 64 <= source_kbps < target:
+    if source_kbps is not None and source_kbps and 64 <= source_kbps < target:
         return f"{source_kbps}k"
     return f"{target}k"
 
@@ -467,7 +467,7 @@ def analyze_audio(stream: ProbeStream) -> tuple[dict[str, Any], list[str]]:
     elif tier == "B" and codec_name == "mp3":
         flags.append("mp3_audio")
 
-    if tier != "L" and br_kbps and channels:
+    if tier != "L" and br_kbps is not None and br_kbps and channels:
         min_kbps = MIN_KBPS_PER_CH.get(codec_name, 32) * channels
         if br_kbps < min_kbps:
             flags.append("low_audio_br")

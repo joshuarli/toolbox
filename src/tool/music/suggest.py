@@ -36,7 +36,7 @@ def _credits(meta: Metadata) -> list[tuple[str | None, str]]:
         return list(zip(ids, meta.artists, strict=True))
     if ids:
         return [(i, meta.artist or i) for i in ids]
-    return [(None, meta.artist)] if meta.artist else []
+    return [(None, meta.artist)] if meta.artist is not None and meta.artist else []
 
 
 def _name_key(name: str) -> str:
@@ -68,7 +68,7 @@ def _autotag(f: Path) -> Metadata | None:
         return None
     kind = (
         "recording + release"
-        if meta.musicbrainz_albumid
+        if meta.musicbrainz_albumid is not None and meta.musicbrainz_albumid
         else "recording only; run `tool music tag` to pick the release"
     )
     print(f"  {f.name}: tagged {meta.artist} — {meta.title} ({kind})")
@@ -87,7 +87,7 @@ def _collect_seeds(files: list[Path], *, tag: bool) -> Seeds:
                 print("  (set ACOUSTID_API_KEY and install fpcalc to auto-tag untagged files)")
                 noted = True
         for mbid, name in _credits(meta):
-            if mbid:
+            if mbid is not None and mbid:
                 seeds.add(mbid, name)
             else:
                 seeds.unresolved[name] += 1

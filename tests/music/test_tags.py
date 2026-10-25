@@ -6,7 +6,9 @@ from mutagen.mp4 import MP4, MP4Cover
 from tool.music.metadata import Metadata
 from tool.music.tags import _WRITABLE_TYPES, _write_tags_direct, read_tags, write_tags
 
-FORMATS = ["flac_file", "mp3_file", "m4a_file", "opus_file", "ogg_file"]
+from .conftest import needs_libvorbis
+
+FORMATS = ["flac_file", "mp3_file", "m4a_file", "opus_file", pytest.param("ogg_file", marks=needs_libvorbis)]
 
 REC = "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7"
 TRACK = "82185c30-f97f-4b1b-8c70-a0bd3d077649"

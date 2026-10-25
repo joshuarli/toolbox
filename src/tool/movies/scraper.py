@@ -387,7 +387,7 @@ def validate(info: dict[str, Any]) -> list[str]:
     year = info.get("year")
     if year is not None and not isinstance(year, int):
         warnings.append(f"year is {type(year).__name__} ({json.dumps(year)}), will be coerced to int")
-    elif not year or year < 1880 or year > 2100:
+    elif year is None or not year or year < 1880 or year > 2100:
         warnings.append(f"unexpected year: {json.dumps(year)}")
     if not info.get("directors"):
         warnings.append("no directors")
@@ -497,7 +497,7 @@ def seed(csv_path: str | Path) -> None:
         if not uri:
             continue
         slug = slug_from_uri(uri)
-        if slug:
+        if slug is not None and slug:
             direct.add(slug)
         elif "boxd.it" in uri:
             short.add(uri)
@@ -514,7 +514,7 @@ def seed(csv_path: str | Path) -> None:
                     slug = fut.result()
                 except Exception:
                     slug = None
-                if slug:
+                if slug is not None and slug:
                     resolved.add(slug)
                 else:
                     failed.append(uri)
