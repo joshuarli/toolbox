@@ -2,7 +2,6 @@
 
 fmt:
 	uv run --locked ruff check --fix --unsafe-fixes src tests
-	uv run --locked ruff format src tests
 
 fmtlint:
 	uv run --locked ruff check src tests
