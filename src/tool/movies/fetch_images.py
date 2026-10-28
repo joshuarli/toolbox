@@ -86,13 +86,30 @@ def download_and_convert(url: str, out_dir: Path | None = None) -> str:
     return out.name
 
 
+def _pending_work(
+    rows: list[tuple[str, str | None, str | None, str | None, str | None]],
+    out_dir: Path,
+) -> list[tuple[str, str, str]]:
+    work = []
+    for slug, backdrop_url, poster_url, backdrop_local, poster_local in rows:
+        for col, url, local in (
+            ("backdrop_local", backdrop_url, backdrop_local),
+            ("poster_local", poster_url, poster_local),
+        ):
+            if url is None or "empty-poster" in url:
+                continue
+            if local is not None and (out_dir / local).exists():
+                continue
+            work.append((slug, col, url))
+    return work
+
+
 def run(workers: int = WORKERS) -> None:
-    img_dir().mkdir(parents=True, exist_ok=True)
+    out_dir = img_dir()
+    out_dir.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(db_path())
     rows = db.execute(
-        """SELECT slug, backdrop_url, poster_url FROM movie
-           WHERE (backdrop_local IS NULL AND backdrop_url IS NOT NULL AND backdrop_url NOT LIKE '%empty-poster%')
-              OR (poster_local IS NULL AND poster_url IS NOT NULL AND poster_url NOT LIKE '%empty-poster%')"""
+        "SELECT slug, backdrop_url, poster_url, backdrop_local, poster_local FROM movie WHERE backdrop_url IS NOT NULL OR poster_url IS NOT NULL"
     ).fetchall()
 
     total = len(rows)
@@ -111,10 +128,8 @@ def run(workers: int = WORKERS) -> None:
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(download_and_convert, url): (slug, col)
-            for slug, backdrop_url, poster_url in rows
-            for col, url in [("backdrop_local", backdrop_url), ("poster_local", poster_url)]
-            if url
+            pool.submit(download_and_convert, url, out_dir): (slug, col)
+            for slug, col, url in _pending_work(rows, out_dir)
         }
 
         for fut in as_completed(futures):
