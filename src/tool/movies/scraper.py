@@ -318,11 +318,17 @@ _SCRAPE_JS = r"""
 
 async def wait_for_selector(tab, selector: str, timeout: float = 15.0) -> None:
     loop = asyncio.get_running_loop()
-    end = loop.time() + timeout
+    start = loop.time()
+    end = start + timeout
     selector_json = json.dumps(selector)
     while True:
         if await tab.evaluate(f"!!document.querySelector({selector_json})"):
             return
+        # 404 pages never render the wrapper. Only honor the signal a few
+        # seconds in: right after navigate() the tab may still show the
+        # previous page, which could itself have been a 404.
+        if loop.time() >= start + 3 and await tab.evaluate("document.title === 'Letterboxd - Not Found'"):
+            raise RuntimeError("letterboxd 404")
         if loop.time() >= end:
             raise TimeoutError(f"timed out waiting for selector: {selector}")
         await asyncio.sleep(0.1)
