@@ -98,7 +98,7 @@ def _pending_work(
         ):
             if url is None or "empty-poster" in url:
                 continue
-            if local is not None and (out_dir / local).exists():
+            if local is not None and local != "" and (out_dir / local).exists():
                 continue
             work.append((slug, col, url))
     return work

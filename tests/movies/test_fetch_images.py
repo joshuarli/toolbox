@@ -17,8 +17,10 @@ def test_pending_work_skips_present_files(tmp_path):
         ("film-b", "http://example.com/empty-poster.jpg", None, None, None),
         ("film-c", None, None, None, None),
         ("film-d", None, "http://example.com/d-poster.jpg", None, "gone.webp"),
+        ("film-e", None, "http://example.com/e-poster.jpg", None, ""),
     ]
     assert _pending_work(rows, tmp_path) == [
         ("film-a", "poster_local", "http://example.com/a-poster.jpg"),
         ("film-d", "poster_local", "http://example.com/d-poster.jpg"),
+        ("film-e", "poster_local", "http://example.com/e-poster.jpg"),
     ]
