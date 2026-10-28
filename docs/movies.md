@@ -17,7 +17,7 @@ Run `uv run tool movies --help` or `uv run tool movies <command> --help` for cur
 
 ## Letterboxd library
 
-`search`, `rename`, `scrape`, `seed`, `login`, and `kill` use the local Letterboxd database. `rename` previews changes unless `--apply` is passed. See [movies-letterboxd.md](movies-letterboxd.md) for database location, browser setup, and crawl behavior.
+`search`, `rename`, `scrape`, `seed`, `login`, `kill`, `serve`, and `fetch-images` use the local Letterboxd database. `rename` previews changes unless `--apply` is passed. See [movies-letterboxd.md](movies-letterboxd.md) for database location, browser setup, and crawl behavior.
 
 Examples:
 

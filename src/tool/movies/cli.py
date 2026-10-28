@@ -5,12 +5,14 @@ import uvloop
 
 from tool.movies import (
     encode,
+    fetch_images,
     generate_movie_library,
     loudnorm,
     merge_srt,
     mkvtomp4,
     scan_encodes,
     scraper,
+    serve,
 )
 from tool.movies.rename import apply_rename, collect_media, propose_rename
 from tool.movies.search import _blob, _name, confidence_breakdown, match_confidence, search
@@ -139,6 +141,17 @@ def cmd_scrape(args: argparse.Namespace) -> None:
         uvloop.run(scraper.scrape_from_args(args))
     except KeyboardInterrupt:
         pass
+
+
+def cmd_serve(args: argparse.Namespace) -> None:
+    try:
+        serve.run(args.host, args.port)
+    except KeyboardInterrupt:
+        pass
+
+
+def cmd_fetch_images(args: argparse.Namespace) -> None:
+    fetch_images.run(workers=args.workers)
 
 
 def cmd_login(_args: argparse.Namespace) -> None:
@@ -279,6 +292,17 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     p_library_fetch = library_sub.add_parser("fetch", help="fetch metadata for a specific movie")
     p_library_fetch.add_argument("query")
     p_library_fetch.set_defaults(handler=lambda args: generate_movie_library.run_fetch(args.query))
+
+    p_serve = sub.add_parser("serve", help="serve the Letterboxd library web UI")
+    p_serve.add_argument("--host", default="", help="bind address (default: all interfaces)")
+    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.set_defaults(handler=cmd_serve)
+
+    p_fetch_images = sub.add_parser(
+        "fetch-images", help="download poster/backdrop images missing local copies (needs cwebp)"
+    )
+    p_fetch_images.add_argument("--workers", type=int, default=8)
+    p_fetch_images.set_defaults(handler=cmd_fetch_images)
 
 
 def build_parser() -> argparse.ArgumentParser:

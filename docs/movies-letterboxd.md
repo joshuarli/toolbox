@@ -17,9 +17,16 @@ uv run tool movies scrape film-slug
 uv run tool movies search "title or director"
 uv run tool movies rename ~/Movies
 uv run tool movies rename ~/Movies --apply
+uv run tool movies fetch-images
+uv run tool movies serve
+uv run tool movies serve --port 8000 --host 127.0.0.1
 ```
 
 `seed` reads a Letterboxd diary/watchlist CSV export and adds its film slugs to the crawl. `scrape [slug]` crawls queued film and person pages into the database; `--concurrency`, `--live`, `--telemetry`, and `--rotate-tabs-every` control the crawl. Crawl progress is stored in SQLite so a later run continues with unfinished film/person rows.
+
+`serve` starts the library web UI (film pages plus `/api/movies`, `/api/search`, and `/api/person`) on port 8000 by default.
+
+`fetch-images` downloads poster and backdrop images for rows missing local copies, converting them to WebP with `cwebp` under `var/letterboxd/static/img/` (or `$MOVIES_DATA_DIR/static/img/`). Rows whose remote URL is an `empty-poster` placeholder are skipped.
 
 `login` opens the managed browser profile. `kill` stops its background browser process. A full crawl can run without logging in, but rating statistics are omitted when unavailable.
 

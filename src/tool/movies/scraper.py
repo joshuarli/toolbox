@@ -66,6 +66,8 @@ def init_db() -> sqlite3.Connection:
     add_col("crew", "BLOB")
     add_col("backdrop_url", "TEXT")
     add_col("poster_url", "TEXT")
+    add_col("backdrop_local", "TEXT")
+    add_col("poster_local", "TEXT")
     add_col("enriched_at", "INTEGER")
     # Fix existing rows where year was stored as a float text (e.g. '2025.0').
     # The legacy Waterfox BiDi client serialized JS numbers as doubles in JSON.
