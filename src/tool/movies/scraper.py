@@ -870,6 +870,67 @@ async def discover_people(
     return expanded, new_films
 
 
+async def seed_year(year: int) -> None:
+    """Seed every film slug listed on the year's Letterboxd year pages.
+
+    Person-driven discovery finds new releases only through people already
+    in the graph, so a fresh year stays thin. The year listing is the
+    systematic backfill: every page's film links are inserted (idempotent),
+    and the running `scrape` picks the new rows up on its next claim.
+    """
+    db = init_db()
+    base = f"https://letterboxd.com/films/year/{year}/"
+    page_re = re.compile(rf"/films/year/{year}/page/(\d+)/")
+    browser, tab = await require_shadowdriver().ensure_browser(headless=True, persistent=True, stealth=True)
+    try:
+        await tab.activate()
+        await tab.navigate(base)
+        try:
+            await wait_for_selector(tab, 'a[href*="/film/"]', timeout=15)
+        except (TimeoutError, RuntimeError):
+            pass
+        await asyncio.sleep(1)
+        title = await _evaluate_retry(tab, "document.title") or ""
+        for _ in range(12):
+            if "Just a moment" not in title:
+                break
+            await asyncio.sleep(5)
+            title = await _evaluate_retry(tab, "document.title") or ""
+        if "Just a moment" in title:
+            print("Cloudflare challenge on the year page; try again later.")
+            return
+        hrefs = await _evaluate_retry(tab, _PERSON_HREFS_JS)
+        pages = {int(m.group(1)) for m in page_re.finditer(hrefs or "")}
+        total_pages = max(pages) if pages else 1
+        print(f"Year {year}: {total_pages} pages", flush=True)
+        new = 0
+        for page in range(1, total_pages + 1):
+            url = base if page == 1 else f"{base}page/{page}/"
+            await tab.navigate(url)
+            try:
+                await wait_for_selector(tab, 'a[href*="/film/"]', timeout=15)
+            except (TimeoutError, RuntimeError):
+                pass
+            await asyncio.sleep(1)
+            hrefs = await _evaluate_retry(tab, _PERSON_HREFS_JS)
+            slugs = {m.group(1) for m in _FILM_HREF_RE.finditer(hrefs or "")}
+            before = int(db.execute("SELECT COUNT(*) FROM movie").fetchone()[0])
+            db.executemany("INSERT OR IGNORE INTO movie(slug) VALUES (?)", [(s,) for s in sorted(slugs)])
+            after = int(db.execute("SELECT COUNT(*) FROM movie").fetchone()[0])
+            db.commit()
+            new += after - before
+            print(f"  page {page}/{total_pages}: {len(slugs)} films ({after - before} new)", flush=True)
+        print(f"Year {year}: {new} new slugs")
+    finally:
+        with suppress(Exception):
+            await tab.close()
+        try:
+            await browser.close(terminate=True)
+        except Exception:
+            pass
+        db.close()
+
+
 async def scrape_from_args(args) -> None:
     single_slug = args.slug
     concurrency = max(1, args.concurrency)

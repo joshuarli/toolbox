@@ -271,6 +271,10 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     p_seed.add_argument("csv", help="export CSV containing Letterboxd URIs")
     p_seed.set_defaults(handler=lambda args: scraper.seed(args.csv))
 
+    p_seed_year = sub.add_parser("seed-year", help="seed every film slug from a Letterboxd year listing")
+    p_seed_year.add_argument("year", type=int, help="e.g. 2026")
+    p_seed_year.set_defaults(handler=lambda args: uvloop.run(scraper.seed_year(args.year)))
+
     p_login = sub.add_parser(
         "login",
         help="log in to Letterboxd in headed Chromium (optional; only rating stats need it)",
