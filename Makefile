@@ -1,4 +1,4 @@
-.PHONY: fmt fmtlint test sync-py
+.PHONY: fmt fmtlint lint test sync-py
 
 fmt:
 	uv run --locked ruff check --fix --unsafe-fixes src tests
@@ -6,6 +6,9 @@ fmt:
 fmtlint:
 	uv run --locked ruff check src tests
 	uv run --locked ty check
+
+lint:
+	uv run --locked ruff check src tests
 
 test:
 	# joshuarli-pytest-parallel (dev dependency) auto-shards across cpu_count workers
