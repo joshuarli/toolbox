@@ -10,3 +10,5 @@ dist/
 var/letterboxd/letterboxd.db*
 var/letterboxd/movie-library-data/
 library.html
+.mypy_cache/
+.tox/
