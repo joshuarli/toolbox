@@ -4,7 +4,7 @@ Scope: the repository's CLI, local storage, external-service boundaries, tests, 
 
 ## Summary
 
-The command surface is clearly divided by domain, and the topic docs mostly match the current help and storage behavior. Explicit dry-runs protect several file operations, and removable-disk qualification has strong fail-closed checks. The main risks are durable writes and migrations that do not recover cleanly from interruption, unsafe path components imported from an Instagram database, and error paths that report a normal no-op or empty result. The read-only static baseline reports two Ruff diagnostics and one `ty` diagnostic; no CI workflow is present.
+The command surface is clearly divided by domain, and the topic docs mostly match the current help and storage behavior. Explicit dry-runs protect several file operations, and removable-disk qualification has strong fail-closed checks. The main risks are durable writes and migrations that do not recover cleanly from interruption, and error paths that report a normal no-op or empty result. The read-only static baseline reports two Ruff diagnostics and one `ty` diagnostic; no CI workflow is present.
 
 ## Findings
 
@@ -15,24 +15,6 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Problem:** `Path.write_text` truncates the existing note before writing its replacement. A focused fault injection raised an `OSError` after writing a prefix; `_rewrite_notes` reported `NotesError` while the note remained truncated. A crash or storage error during `notes localize --apply` can therefore destroy the rest of a user's note.
 - **Recommendation:** Write each replacement to a sibling temporary file, then atomically replace the note and remove the temporary file on failure.
 - **Fix with:** `durable-state`, `os-boundaries`
-- **Effort:** M
-
-### R2 · P2 · Imported usernames can direct media writes outside the media root
-
-- **Area:** Security
-- **Where:** `src/tool/ig/cli/import_db.py:174`, `src/tool/ig/media.py:35`, `src/tool/ig/scraper.py:876`, `src/tool/ig/scraper.py:753`
-- **Problem:** Database import copies `username` values without validating them. Media paths append that value as a directory component, and the writer creates parent directories before replacing the destination. Calling the real path helper with an imported username of `../../outside` resolves the destination outside the configured media directory. A crafted imported database can make later downloads write outside the archive tree.
-- **Recommendation:** Validate imported identifiers and enforce that every resolved media destination remains inside the configured media root at the path boundary.
-- **Fix with:** `os-boundaries`
-- **Effort:** M
-
-### R3 · P2 · An interrupted profile-post migration hides existing memberships
-
-- **Area:** Data
-- **Where:** `src/tool/ig/db.py:25`, `src/tool/ig/db.py:58`, `src/tool/ig/db.py:88`
-- **Problem:** The migration renames the old table, creates and fills a replacement, then drops the old table in `executescript` without an explicit transaction. Reopening a database left immediately after the rename created an empty valid `profile_post`; the next migration check skipped it while the old membership row remained stranded in `profile_post_old`.
-- **Recommendation:** Make the migration atomic and make startup recover from an interrupted intermediate schema.
-- **Fix with:** `durable-state`
 - **Effort:** M
 
 ### R4 · P2 · Music transcode silently replaces existing output
@@ -107,15 +89,6 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `none`
 - **Effort:** S
 
-### R12 · P3 · Browser setup failures can leave a managed process running
-
-- **Area:** Concurrency
-- **Where:** `src/tool/ig/browser.py:80`, `src/tool/ig/browser.py:89`, `src/tool/ig/browser.py:115`, `src/tool/ig/browser.py:121`
-- **Problem:** `browser_session` enters its cleanup block only after `ensure_browser` returns. If `_setup_tab` fails after Shadowdriver starts the browser, the caller never receives the context manager and no close runs. A focused setup-failure probe recorded browser start and setup failure with no close event; the process can remain until manually stopped.
-- **Recommendation:** Unwind the browser and tab inside `ensure_browser` when setup fails, preserving the original exception.
-- **Fix with:** `lifecycle-concurrency`, `error-model`
-- **Effort:** S
-
 ### R13 · P3 · Matching MD5 hashes can send distinct notes to Trash
 
 - **Area:** Data
@@ -139,4 +112,3 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - `sd` checks whole-disk eligibility, requires exact destructive confirmation, and revalidates after unmounting.
 - Notes cleanup/localization and movie rename/remux default to previews before changing user files.
 - Music tagging keeps recording and release-track identity separate from container-specific tag mapping.
-- Instagram storage keeps saved-post membership separate from profile membership.
