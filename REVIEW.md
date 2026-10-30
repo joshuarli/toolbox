@@ -4,7 +4,7 @@ Scope: the repository's CLI, local storage, external-service boundaries, tests, 
 
 ## Summary
 
-The command surface is clearly divided by domain, and the topic docs mostly match the current help and storage behavior. Explicit dry-runs protect several file operations, and removable-disk qualification has strong fail-closed checks. The main risks are durable writes and migrations that do not recover cleanly from interruption, and error paths that report a normal no-op or empty result. The read-only static baseline reports two Ruff diagnostics and one `ty` diagnostic; no CI workflow is present.
+The command surface is clearly divided by domain, and the topic docs mostly match the current help and storage behavior. Explicit dry-runs protect several file operations, and removable-disk qualification has strong fail-closed checks. The main risks are durable writes and migrations that do not recover cleanly from interruption, and error paths that report a normal no-op or empty result. The read-only static baseline reports two Ruff diagnostics and one `ty` diagnostic.
 
 ## Findings
 
@@ -80,15 +80,6 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Fix with:** `error-model`, `isolate-effects`
 - **Effort:** S
 
-### R11 · P2 · The lint target rewrites files during a check
-
-- **Area:** Build
-- **Where:** `Makefile:9`, `Makefile:10`, `Makefile:11`, `Makefile:12`
-- **Problem:** `make fmtlint` runs Ruff with `--fix --unsafe-fixes` and then formats the repository. Invoking a check can rewrite working files, and `ruff@latest` and `ty@latest` vary independently of the project lockfile.
-- **Recommendation:** Keep the check target read-only, separate explicit fix/format commands, and use the locked tool versions.
-- **Fix with:** `none`
-- **Effort:** S
-
 ### R13 · P3 · Matching MD5 hashes can send distinct notes to Trash
 
 - **Area:** Data
@@ -97,15 +88,6 @@ The command surface is clearly divided by domain, and the topic docs mostly matc
 - **Recommendation:** Compare file contents within each hash group before treating notes as duplicates.
 - **Fix with:** `durable-state`
 - **Effort:** S
-
-### R14 · P3 · No automated workflow runs the repository checks
-
-- **Area:** Build
-- **Where:** `Makefile:14`
-- **Problem:** The repository has a test target but no CI workflow configuration. Test and static-check failures are caught only when a developer runs the commands locally, leaving changes without an automated gate.
-- **Recommendation:** Add a small CI workflow that runs the read-only static checks and test suite on supported Python versions and platforms.
-- **Fix with:** `none`
-- **Effort:** M
 
 ## Strengths to keep
 
