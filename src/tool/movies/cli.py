@@ -15,7 +15,13 @@ from tool.movies import (
     serve,
 )
 from tool.movies.rename import apply_rename, collect_media, propose_rename
-from tool.movies.search import _blob, _name, confidence_breakdown, match_confidence, search
+from tool.movies.search import (
+    _blob,
+    _name,
+    confidence_breakdown,
+    match_confidence,
+    search,
+)
 
 R = "\033[0m"
 B = "\033[1m"

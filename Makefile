@@ -1,7 +1,4 @@
-.PHONY: fmt fmtlint lint test sync-py
-
-fmt:
-	uv run --locked ruff check --fix --unsafe-fixes src tests
+.PHONY: fmtlint lint test sync-py
 
 fmtlint:
 	uv run --locked ruff check src tests

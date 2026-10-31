@@ -5,7 +5,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tool.music.api.acoustid import candidates, fetch_acoustid_metadata, get_audio_fingerprint
+from tool.music.api.acoustid import (
+    candidates,
+    fetch_acoustid_metadata,
+    get_audio_fingerprint,
+)
 
 # fpcalc JSON output
 FPCALC_OUTPUT = {"duration": 164.5, "fingerprint": "AQADtImS..."}

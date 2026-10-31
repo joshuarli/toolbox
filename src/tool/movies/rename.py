@@ -1,7 +1,13 @@
 import re
 from pathlib import Path
 
-from tool.movies.search import ALL_MEDIA_EXTS, _clean_title, _director_full_name, parse_filename, search
+from tool.movies.search import (
+    ALL_MEDIA_EXTS,
+    _clean_title,
+    _director_full_name,
+    parse_filename,
+    search,
+)
 
 
 def _safe(s: str) -> str:

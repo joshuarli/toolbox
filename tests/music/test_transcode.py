@@ -4,7 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tool.music.transcode import _BITRATE, AAC_EXT, main, probe_audio, probe_codec, transcode_to_aac
+from tool.music.transcode import (
+    _BITRATE,
+    AAC_EXT,
+    main,
+    probe_audio,
+    probe_codec,
+    transcode_to_aac,
+)
 
 
 class TestProbeAudio:

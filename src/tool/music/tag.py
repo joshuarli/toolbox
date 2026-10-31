@@ -11,7 +11,11 @@ import sys
 import unicodedata
 from collections import Counter
 
-from tool.music.api.acoustid import candidates, fetch_acoustid_metadata, get_audio_fingerprint
+from tool.music.api.acoustid import (
+    candidates,
+    fetch_acoustid_metadata,
+    get_audio_fingerprint,
+)
 from tool.music.api.musicbrainz import MusicBrainzRequestError, enrich
 from tool.music.api.musicbrainz import search as mb_search
 from tool.music.metadata import Candidate, Metadata, show

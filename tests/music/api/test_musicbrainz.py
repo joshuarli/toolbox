@@ -5,7 +5,12 @@ from unittest.mock import patch
 
 import pytest
 
-from tool.music.api.musicbrainz import MusicBrainzRequestError, enrich, find_artist, search
+from tool.music.api.musicbrainz import (
+    MusicBrainzRequestError,
+    enrich,
+    find_artist,
+    search,
+)
 from tool.music.metadata import Artist, Metadata
 
 KAL_REC = "1db8dba2-0d42-43e2-94d7-0a6a8df7d2d7"

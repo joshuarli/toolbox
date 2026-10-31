@@ -21,7 +21,17 @@ from typing import Any
 
 from mutagen import File as MutagenFile
 from mutagen.flac import FLAC
-from mutagen.id3 import ID3, TIPL, TMCL, TPOS, TRCK, TXXX, UFID, Frames, ID3NoHeaderError
+from mutagen.id3 import (
+    ID3,
+    TIPL,
+    TMCL,
+    TPOS,
+    TRCK,
+    TXXX,
+    UFID,
+    Frames,
+    ID3NoHeaderError,
+)
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4, AtomDataType, MP4FreeForm
 from mutagen.oggflac import OggFLAC
