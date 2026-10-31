@@ -8,8 +8,6 @@ from tool import sd
 from tool.browser_require import BrowserExtraMissingError
 from tool.movies import cli as movies_cli
 from tool.music import cli as music_cli
-from tool.notes import cli as notes_cli
-from tool.notes.common import NotesError
 from tool.sd import preflight
 
 
@@ -38,12 +36,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="scan/tag/transcode a local audio library",
     )
     music_cli.configure_parser(music_parser)
-
-    notes_parser = subparsers.add_parser(
-        "notes",
-        help="clean and localize the Obsidian notes vault",
-    )
-    notes_cli.configure_parser(notes_parser)
     return parser
 
 
@@ -59,6 +51,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130
-    except (preflight.PreflightError, sd.SdError, NotesError, BrowserExtraMissingError) as exc:
+    except (preflight.PreflightError, sd.SdError, BrowserExtraMissingError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
