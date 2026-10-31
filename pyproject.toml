@@ -104,3 +104,10 @@ ignore = [
     "PT027",  # (same) unittest.TestCase-style self.assertRaises
     "PT019",  # false positive on unittest.mock.patch-injected parameters
 ]
+
+[tool.uv]
+environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+
+[[tool.uv.index]]
+url = "https://pypi.17166969.xyz/current/simple/"
+default = true
