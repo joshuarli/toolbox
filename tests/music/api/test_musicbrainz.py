@@ -9,6 +9,7 @@ from tool.music.api.musicbrainz import (
     MusicBrainzRequestError,
     enrich,
     find_artist,
+    release_candidates,
     search,
 )
 from tool.music.metadata import Artist, Metadata
@@ -251,6 +252,59 @@ class TestFailure:
         with patch("tool.music.api.musicbrainz._session.get_json") as get:
             assert enrich(Metadata(title="T")) == Metadata(title="T")
         get.assert_not_called()
+
+
+class TestReleaseCandidates:
+    @staticmethod
+    def release(recording: str) -> dict:
+        return {
+            "release-count": 1,
+            "releases": [
+                {
+                    "id": "rel",
+                    "title": "Album",
+                    "date": "2020-01-02",
+                    "country": "XW",
+                    "status": "Official",
+                    "release-group": {"id": "rg", "primary-type": "Album", "secondary-types": []},
+                    "media": [
+                        {
+                            "position": 1,
+                            "format": "Digital Media",
+                            "track-count": 2,
+                            "tracks": [
+                                {"id": "t1", "position": 1, "title": "Song", "recording": {"id": recording}},
+                                {"id": "t2", "position": 2, "title": "Other", "recording": {"id": "other"}},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def test_returns_only_tracks_carrying_the_recording(self):
+        with patch("tool.music.api.musicbrainz._request_json", return_value=self.release(KAL_REC)):
+            candidates = release_candidates(KAL_REC)
+        assert len(candidates) == 1
+        meta = candidates[0].meta
+        assert meta.musicbrainz_recordingid == KAL_REC
+        assert meta.musicbrainz_trackid == "t1"
+        assert meta.musicbrainz_albumid == "rel"
+        assert meta.musicbrainz_releasegroupid == "rg"
+        assert meta.album == "Album"
+        assert meta.tracknumber == "1"
+        assert meta.discnumber == "1"
+        assert meta.media == "Digital Media"
+        assert meta.releasetype == ["album"]
+
+    def test_pages_until_release_count_is_reached(self):
+        first = self.release(KAL_REC)
+        first["release-count"] = 2
+        second = {"release-count": 2, "releases": [self.release(KAL_REC)["releases"][0]]}
+        with patch("tool.music.api.musicbrainz._request_json", side_effect=[first, second]) as request:
+            candidates = release_candidates(KAL_REC)
+        assert len(candidates) == 2
+        assert request.call_count == 2
 
 
 class TestSearch:

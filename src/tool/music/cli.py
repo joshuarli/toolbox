@@ -2,6 +2,7 @@ import argparse
 
 from tool.music import audit, scan, suggest, tag, transcode
 from tool.music import autotag as autotag_cmd
+from tool.music import resolve as resolve_cmd
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
@@ -25,6 +26,10 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     p_autotag = sub.add_parser("autotag", help="burn down a directory's tagging queue with unambiguous matches")
     autotag_cmd.configure_parser(p_autotag)
     p_autotag.set_defaults(handler=autotag_cmd.run)
+
+    p_resolve = sub.add_parser("resolve", help="choose a release for files that already have a recording MBID")
+    resolve_cmd.configure_parser(p_resolve)
+    p_resolve.set_defaults(handler=resolve_cmd.run)
 
     p_suggest = sub.add_parser("suggest", help="suggest artists to add to a playlist (ListenBrainz similar artists)")
     suggest.configure_parser(p_suggest)

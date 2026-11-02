@@ -29,6 +29,7 @@ _RELEASE_INC = (
     "recording-level-rels work-level-rels"
 )
 _RECORDING_INC = "artist-credits isrcs genres artist-rels work-rels work-level-rels"
+_BROWSE_INC = "media recordings release-groups"
 
 _MAX_GENRES = 5
 _ARTIST_MIN_SCORE = 95
@@ -118,6 +119,60 @@ def _search_release(base: Metadata, rel: dict[str, Any]) -> list[Metadata]:
                 )
             )
     return out or [meta]
+
+
+def release_candidates(recording_id: str) -> list[Candidate]:
+    """Every release and track carrying *recording_id*, for choosing a release edition.
+
+    Uses the release browse endpoint so each track is known to be the requested
+    recording; request failures raise MusicBrainzRequestError.
+    """
+    out: list[Candidate] = []
+    offset = 0
+    while True:
+        data = _request_json(
+            f"{MB_BASE}/release",
+            params={
+                "recording": recording_id,
+                "inc": _BROWSE_INC,
+                "fmt": "json",
+                "limit": "100",
+                "offset": str(offset),
+            },
+            operation="release browse",
+        )
+        releases = data.get("releases", [])
+        for rel in releases:
+            rg = rel.get("release-group", {})
+            for medium in rel.get("media", []):
+                for track in medium.get("tracks", []):
+                    if (track.get("recording") or {}).get("id") != recording_id:
+                        continue
+                    out.append(
+                        Candidate(
+                            1.0,
+                            Metadata(
+                                title=track.get("title"),
+                                musicbrainz_recordingid=recording_id,
+                                album=rel.get("title"),
+                                musicbrainz_albumid=rel.get("id"),
+                                musicbrainz_releasegroupid=rg.get("id"),
+                                musicbrainz_trackid=track.get("id"),
+                                tracknumber=str(track["position"]) if track.get("position") else None,
+                                discnumber=str(medium["position"]) if medium.get("position") else None,
+                                totaltracks=str(medium["track-count"]) if medium.get("track-count") else None,
+                                totaldiscs=str(len(rel["media"])) if rel.get("media") else None,
+                                media=medium.get("format"),
+                                date=rel.get("date"),
+                                releasecountry=_country(rel),
+                                releasestatus=rel.get("status"),
+                                releasetype=_release_types(rg),
+                            ),
+                        )
+                    )
+        offset += len(releases)
+        if not releases or offset >= data.get("release-count", 0):
+            return out
 
 
 def find_artist(name: str) -> Artist | None:
