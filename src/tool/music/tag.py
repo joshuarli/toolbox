@@ -12,6 +12,7 @@ import unicodedata
 from collections import Counter
 
 from tool.music.api.acoustid import (
+    AcoustIDError,
     candidates,
     fetch_acoustid_metadata,
     get_audio_fingerprint,
@@ -304,7 +305,12 @@ def run(args: argparse.Namespace) -> None:
     if not (duration and fingerprint):
         return
 
-    cands = candidates(fetch_acoustid_metadata(duration, fingerprint) or [])
+    try:
+        results = fetch_acoustid_metadata(duration, fingerprint)
+    except AcoustIDError as exc:
+        print(f"error: AcoustID: {exc}", file=sys.stderr)
+        results = []
+    cands = candidates(results or [])
 
     if not cands:
         try:

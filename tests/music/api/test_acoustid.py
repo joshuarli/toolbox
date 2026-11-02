@@ -1,12 +1,15 @@
 """Tests for AcoustID API client — uses mocked real API responses."""
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tool.music.api.acoustid import (
+    AcoustIDError,
     candidates,
+    ensure_acoustid_key,
     fetch_acoustid_metadata,
     get_audio_fingerprint,
 )
@@ -48,6 +51,43 @@ class TestGetAudioFingerprint:
                 get_audio_fingerprint("test.flac")
 
 
+class TestEnsureAcoustidKey:
+    def test_uses_environment_first(self, monkeypatch):
+        monkeypatch.setenv("ACOUSTID_API_KEY", "present")
+        with patch("subprocess.run") as run:
+            assert ensure_acoustid_key() is True
+        run.assert_not_called()
+
+    def test_falls_back_to_vault(self, monkeypatch):
+        monkeypatch.delenv("ACOUSTID_API_KEY", raising=False)
+        result = MagicMock(returncode=0, stdout="vault-key\n")
+        with (
+            patch("tool.music.api.acoustid.shutil.which", return_value="/usr/local/bin/vault"),
+            patch("subprocess.run", return_value=result) as run,
+        ):
+            assert ensure_acoustid_key() is True
+        assert os.environ["ACOUSTID_API_KEY"] == "vault-key"
+        cmd = run.call_args.args[0]
+        assert cmd == ["vault", "get", "ACOUSTID_API_KEY"]
+        assert run.call_args.kwargs["capture_output"] is True
+
+    def test_vault_failure_leaves_key_unset(self, monkeypatch):
+        monkeypatch.delenv("ACOUSTID_API_KEY", raising=False)
+        result = MagicMock(returncode=1, stdout="")
+        with (
+            patch("tool.music.api.acoustid.shutil.which", return_value="/usr/local/bin/vault"),
+            patch("subprocess.run", return_value=result),
+        ):
+            assert ensure_acoustid_key() is False
+        assert "ACOUSTID_API_KEY" not in os.environ
+
+    def test_missing_vault_leaves_key_unset(self, monkeypatch):
+        monkeypatch.delenv("ACOUSTID_API_KEY", raising=False)
+        with patch("tool.music.api.acoustid.shutil.which", return_value=None):
+            assert ensure_acoustid_key() is False
+        assert "ACOUSTID_API_KEY" not in os.environ
+
+
 class TestFetchAcoustidMetadata:
     def test_success(self, monkeypatch, load_fixture):
         monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
@@ -62,17 +102,22 @@ class TestFetchAcoustidMetadata:
 
     def test_no_api_key(self, monkeypatch):
         monkeypatch.delenv("ACOUSTID_API_KEY", raising=False)
-        with pytest.raises(SystemExit):
+        with (
+            patch("tool.music.api.acoustid.ensure_acoustid_key", return_value=False),
+            pytest.raises(SystemExit),
+        ):
             fetch_acoustid_metadata(200.0, "fp123")
 
     def test_api_error_status(self, monkeypatch):
         monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
-        with patch(
-            "tool.music.api.acoustid._session.get_json",
-            return_value={"status": "error", "error": {"message": "Bad fingerprint"}},
+        with (
+            patch(
+                "tool.music.api.acoustid._session.get_json",
+                return_value={"status": "error", "error": {"message": "Bad fingerprint"}},
+            ),
+            pytest.raises(AcoustIDError, match="Bad fingerprint"),
         ):
-            results = fetch_acoustid_metadata(200.0, "fp123")
-            assert results is None
+            fetch_acoustid_metadata(200.0, "fp123")
 
     def test_http_error(self, monkeypatch):
         monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")

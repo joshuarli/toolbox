@@ -1,6 +1,10 @@
 """Audio transcoding via ffmpeg.  Convert audio files to high-quality AAC
 in an M4A container, preserving channel layout and copying metadata.
 
+Sources in a non-taggable container whose audio codec has a taggable native
+container are remuxed losslessly instead (`opus` to Ogg Opus, `vorbis` to Ogg
+Vorbis, and so on).  Everything else is encoded to AAC.
+
 Accepts both files and directories.  Directories are walked recursively
 for known audio extensions.
 """
@@ -13,12 +17,23 @@ import sys
 from typing import Any
 
 from tool.music.scan import collect_files
+from tool.music.tags import is_writable
 
 # Prefer Apple AudioToolbox encoder on macOS (hardware-accelerated, higher quality)
 _AAC_ENCODER = "aac_at" if sys.platform == "darwin" else "aac"
 
 AAC_EXT = ".m4a"
 _BITRATE = "320k"
+
+# Audio codecs that can move into a taggable container without re-encoding.
+_REMUX_EXT = {
+    "opus": ".opus",
+    "vorbis": ".ogg",
+    "flac": ".flac",
+    "aac": ".m4a",
+    "alac": ".m4a",
+    "mp3": ".mp3",
+}
 
 
 def probe_audio(filepath: str) -> dict[str, Any] | None:
@@ -58,6 +73,71 @@ def probe_codec(filepath: str) -> str | None:
         return None
     codec = info.get("codec_name")
     return str(codec) if codec else None
+
+
+def remux_extension(filepath: str) -> str | None:
+    """Extension of the lossless remux target, or None when the source needs encoding."""
+    if is_writable(filepath):
+        return None
+    return _REMUX_EXT.get(probe_codec(filepath) or "")
+
+
+def transcode_destination(filepath: str) -> str:
+    """Where `transcode` writes for *filepath*: a remux target, else a `.m4a`."""
+    return os.path.splitext(filepath)[0] + (remux_extension(filepath) or AAC_EXT)
+
+
+def _remux(filepath: str, ext: str, dst: str | None, *, overwrite: bool) -> str | None:
+    """Move the audio stream into a taggable container without re-encoding."""
+    if dst is None:
+        dst = os.path.splitext(filepath)[0] + ext
+    if os.path.abspath(dst) == os.path.abspath(filepath):
+        return None
+
+    if not overwrite and os.path.lexists(dst):
+        return None
+
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-hide_banner",
+                "-y" if overwrite else "-n",
+                "-i",
+                filepath,
+                "-vn",
+                "-c:a",
+                "copy",
+                "-map_metadata",
+                "0",
+                dst,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").strip().splitlines()
+        if detail:
+            print(detail[-1], file=sys.stderr)
+        return None
+
+    return dst
+
+
+def transcode(filepath: str, dst: str | None = None, *, overwrite: bool = False) -> str | None:
+    """Make *filepath* available in a taggable container.
+
+    Remuxes losslessly when the audio codec has one and the source container is not
+    taggable; otherwise encodes to AAC.  An explicit *dst* with a different extension
+    forces the encoder.  Returns the written path, or None on failure.
+    """
+    ext = remux_extension(filepath)
+    if ext is not None and (dst is None or os.path.splitext(dst)[1].lower() == ext):
+        return _remux(filepath, ext, dst, overwrite=overwrite)
+    return transcode_to_aac(filepath, dst=dst, overwrite=overwrite)
 
 
 def transcode_to_aac(filepath: str, dst: str | None = None, *, overwrite: bool = False) -> str | None:
@@ -105,7 +185,10 @@ def transcode_to_aac(filepath: str, dst: str | None = None, *, overwrite: bool =
 
 
 def configure_parser(p: argparse.ArgumentParser) -> None:
-    p.description = "Transcode audio files to high-quality AAC in an M4A container."
+    p.description = (
+        "Transcode audio to AAC in an M4A container, or remux losslessly into a "
+        "taggable container when the codec allows it."
+    )
     p.add_argument("paths", nargs="*", default=["."], help="audio files or directories to transcode")
     p.add_argument("-o", "--output", help="output path (only valid for a single input file)")
     p.add_argument("--overwrite", action="store_true", help="replace existing output files")
@@ -138,16 +221,17 @@ def run(args: argparse.Namespace) -> None:
         ch_label = ch_map.get(channels, f"{channels}ch") if channels else "?"
 
         dst = args.output or None
-        result = transcode_to_aac(src, dst=dst, overwrite=args.overwrite)
+        result = transcode(src, dst=dst, overwrite=args.overwrite)
         if result is None:
             print(f"error: transcode failed: {src}", file=sys.stderr)
             failed += 1
         else:
+            action = "remuxed" if os.path.splitext(result)[1].lower() != AAC_EXT else "encoded"
             if len(files) > 1:
-                print(f"{src} → {result} ({codec}, {ch_label})")
+                print(f"{src} → {result} ({action}, {codec}, {ch_label})")
             else:
                 print(f"Source: {codec}, {ch_label}")
-                print(f"Wrote: {result}")
+                print(f"Wrote: {result} ({action})")
             success += 1
 
     if failed:

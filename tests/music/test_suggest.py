@@ -178,6 +178,7 @@ class TestRun:
         write_tags(str(d / "u.flac"), Metadata(artist="Corre"))
         with (
             lb,
+            patch("tool.music.suggest.ensure_acoustid_key", return_value=False),
             patch(
                 "tool.music.api.musicbrainz._session.get_json", return_value=load_fixture("mb_artist_search_corre.json")
             ),

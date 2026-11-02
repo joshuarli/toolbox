@@ -6,12 +6,12 @@ are auto-tagged when their fingerprint match is unambiguous (`tag.autotag`), unl
 """
 
 import argparse
-import os
 import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
 
+from tool.music.api.acoustid import AcoustIDError, ensure_acoustid_key
 from tool.music.api.listenbrainz import Similar, similar_artists
 from tool.music.api.musicbrainz import MusicBrainzRequestError, find_artist
 from tool.music.constants import AUDIO_EXTENSIONS
@@ -57,12 +57,16 @@ class Seeds:
 
 
 def _can_autotag() -> bool:
-    return bool(os.environ.get("ACOUSTID_API_KEY")) and shutil.which("fpcalc") is not None
+    return shutil.which("fpcalc") is not None and ensure_acoustid_key()
 
 
 def _autotag(f: Path) -> Metadata | None:
     """Identify an untagged file by fingerprint and write its tags; report what happened."""
-    meta = autotag(str(f))
+    try:
+        meta = autotag(str(f))
+    except AcoustIDError as exc:
+        print(f"  {f.name}: AcoustID error: {exc}")
+        return None
     if meta is None:
         print(f"  {f.name}: no unambiguous fingerprint match, left untagged")
         return None

@@ -7,6 +7,7 @@ API docs: https://acoustid.org/webservice
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import replace
@@ -17,6 +18,11 @@ from tool.music.metadata import Candidate, Metadata
 
 # AcoustID recommends no more than 3 req/sec
 _session = Session(user_agent="music-tag/0.1", rate_limiter=RateLimiter(rate=3.0))
+
+
+class AcoustIDError(Exception):
+    """The service rejected the request, as opposed to finding no match."""
+
 
 
 def get_audio_fingerprint(file_path):
@@ -40,13 +46,42 @@ def get_audio_fingerprint(file_path):
         sys.exit(1)
 
 
-def fetch_acoustid_metadata(duration, fingerprint):
-    """Queries AcoustID API for MusicBrainz recordings, release groups, releases and tracks."""
+def ensure_acoustid_key() -> bool:
+    """Make ACOUSTID_API_KEY available, consulting `vault` when the environment lacks it.
+
+    Returns whether a key is available.  The secret is read through a pipe, never argv,
+    and is not printed.
+    """
+    if bool(os.environ.get("ACOUSTID_API_KEY")):
+        return True
+    if shutil.which("vault") is None:
+        return False
     try:
-        api_key = os.environ["ACOUSTID_API_KEY"]
-    except KeyError:
+        result = subprocess.run(
+            ["vault", "get", "ACOUSTID_API_KEY"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    key = result.stdout.strip()
+    if result.returncode != 0 or not key:
+        return False
+    os.environ["ACOUSTID_API_KEY"] = key
+    return True
+
+
+def fetch_acoustid_metadata(duration, fingerprint):
+    """Queries AcoustID API for MusicBrainz recordings, release groups, releases and tracks.
+
+    Raises `AcoustIDError` when the service rejects the request.
+    """
+    if not ensure_acoustid_key():
         print("error: ACOUSTID_API_KEY not set in environment", file=sys.stderr)
         sys.exit(1)
+    api_key = os.environ["ACOUSTID_API_KEY"]
 
     params = {
         "client": api_key,
@@ -63,8 +98,7 @@ def fetch_acoustid_metadata(duration, fingerprint):
 
     if res_data.get("status") != "ok":
         error_msg = res_data.get("error", {}).get("message", "Unknown API error")
-        print(f"AcoustID API Error: {error_msg}", file=sys.stderr)
-        return None
+        raise AcoustIDError(str(error_msg))
 
     return res_data.get("results", [])
 

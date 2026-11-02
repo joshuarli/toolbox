@@ -33,6 +33,8 @@ Tag I/O supports FLAC, Ogg Vorbis/FLAC, Opus, MP3, and MP4/M4A. It writes only f
 
 A file is complete when title, artist, and recording MBID are present; if an album is claimed, release and release-group MBIDs are required too. Optional fields such as label or ISRC do not trigger repeated lookups. `--force` refreshes the tags. `--read` prints current tags without network access.
 
-The MusicBrainz enrichment makes one release lookup, or one recording lookup if no release was selected. If enrichment fails, the selected candidate can still be written with a warning. `tag` requires `ACOUSTID_API_KEY` and `fpcalc`; MusicBrainz needs no key.
+`music autotag DIR` applies the same unambiguous-match rule to a whole directory: it skips complete files, writes recording-level identity when the release is ambiguous, and leaves the rest for `music tag`.
+
+The MusicBrainz enrichment makes one release lookup, or one recording lookup if no release was selected. If enrichment fails, the selected candidate can still be written with a warning. `tag` and `autotag` require `fpcalc` and an `ACOUSTID_API_KEY`; when the variable is unset, the key is read with `vault get ACOUSTID_API_KEY`. MusicBrainz needs no key.
 
 The implementation is split across [metadata.py](../src/tool/music/metadata.py), [tags.py](../src/tool/music/tags.py), [acoustid.py](../src/tool/music/api/acoustid.py), and [musicbrainz.py](../src/tool/music/api/musicbrainz.py).

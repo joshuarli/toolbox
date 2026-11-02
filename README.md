@@ -34,7 +34,7 @@ uv run tool music scan ~/Music
 
 ## Configuration and data
 
-- `music tag` needs `fpcalc` and an `ACOUSTID_API_KEY` environment variable; it updates the supplied audio file.
+- `music tag` needs `fpcalc` and an `ACOUSTID_API_KEY` environment variable; it updates the supplied audio file. When the key is unset, the tool reads it from `vault`.
 - Video encoding and music transcoding write their outputs beside the source by default.
 - The Letterboxd database defaults to var/letterboxd/letterboxd.db; `MOVIES_DATA_DIR` changes its parent directory.
 

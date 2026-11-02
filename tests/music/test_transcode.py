@@ -10,6 +10,9 @@ from tool.music.transcode import (
     main,
     probe_audio,
     probe_codec,
+    remux_extension,
+    transcode,
+    transcode_destination,
     transcode_to_aac,
 )
 
@@ -119,6 +122,91 @@ class TestTranscodeToAac:
             assert result is None
 
 
+class TestRemuxExtension:
+    def test_opus_in_webm_remuxes_to_ogg_opus(self):
+        with (
+            patch("tool.music.transcode.is_writable", return_value=False),
+            patch("tool.music.transcode.probe_codec", return_value="opus"),
+        ):
+            assert remux_extension("song.webm") == ".opus"
+
+    def test_vorbis_in_webm_remuxes_to_ogg_vorbis(self):
+        with (
+            patch("tool.music.transcode.is_writable", return_value=False),
+            patch("tool.music.transcode.probe_codec", return_value="vorbis"),
+        ):
+            assert remux_extension("song.webm") == ".ogg"
+
+    def test_taggable_source_needs_no_remux(self):
+        with patch("tool.music.transcode.is_writable", return_value=True):
+            assert remux_extension("song.flac") is None
+
+    def test_unmapped_codec_needs_encoding(self):
+        with (
+            patch("tool.music.transcode.is_writable", return_value=False),
+            patch("tool.music.transcode.probe_codec", return_value="pcm_s16le"),
+        ):
+            assert remux_extension("song.wav") is None
+
+    def test_destination_uses_remux_extension(self):
+        with (
+            patch("tool.music.transcode.is_writable", return_value=False),
+            patch("tool.music.transcode.probe_codec", return_value="opus"),
+        ):
+            assert transcode_destination("music/song.webm") == "music/song.opus"
+
+    def test_destination_falls_back_to_aac(self):
+        with (
+            patch("tool.music.transcode.is_writable", return_value=False),
+            patch("tool.music.transcode.probe_codec", return_value="pcm_s16le"),
+        ):
+            assert transcode_destination("music/song.wav") == "music/song.m4a"
+
+
+class TestTranscodeDispatch:
+    def test_remuxes_taggable_codec_from_foreign_container(self):
+        with (
+            patch("tool.music.transcode.remux_extension", return_value=".opus"),
+            patch("tool.music.transcode._remux", return_value="song.opus") as remux,
+            patch("tool.music.transcode.transcode_to_aac") as encode,
+        ):
+            assert transcode("song.webm") == "song.opus"
+        remux.assert_called_once_with("song.webm", ".opus", None, overwrite=False)
+        encode.assert_not_called()
+
+    def test_explicit_m4a_destination_forces_encoding(self):
+        with (
+            patch("tool.music.transcode.remux_extension", return_value=".opus"),
+            patch("tool.music.transcode._remux") as remux,
+            patch("tool.music.transcode.transcode_to_aac", return_value="out.m4a") as encode,
+        ):
+            assert transcode("song.webm", dst="out.m4a") == "out.m4a"
+        encode.assert_called_once_with("song.webm", dst="out.m4a", overwrite=False)
+        remux.assert_not_called()
+
+    def test_taggable_source_is_encoded_as_before(self):
+        with (
+            patch("tool.music.transcode.remux_extension", return_value=None),
+            patch("tool.music.transcode.transcode_to_aac", return_value="song.m4a") as encode,
+        ):
+            assert transcode("song.flac") == "song.m4a"
+        encode.assert_called_once_with("song.flac", dst=None, overwrite=False)
+
+    def test_remux_copies_audio_and_metadata(self):
+        with (
+            patch("tool.music.transcode.remux_extension", return_value=".opus"),
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock()
+            assert transcode("song.webm") == "song.opus"
+        cmd = mock_run.call_args.args[0]
+        assert "-c:a" in cmd
+        assert "copy" in cmd
+        assert "-vn" in cmd
+        assert "-map_metadata" in cmd
+        assert cmd[-1] == "song.opus"
+
+
 class TestMain:
     def test_prints_help(self, capsys):
         with (
@@ -143,7 +231,7 @@ class TestMain:
         with (
             patch.object(sys, "argv", ["transcode", "song.flac"]),
             patch("tool.music.transcode.probe_audio") as mock_probe,
-            patch("tool.music.transcode.transcode_to_aac") as mock_xcode,
+            patch("tool.music.transcode.transcode") as mock_xcode,
         ):
             mock_probe.return_value = {"codec_name": "flac", "channels": 2}
             mock_xcode.return_value = "song.m4a"
@@ -157,7 +245,7 @@ class TestMain:
         with (
             patch.object(sys, "argv", ["transcode", "song.flac"]),
             patch("tool.music.transcode.probe_audio", return_value={"codec_name": "flac", "channels": 2}),
-            patch("tool.music.transcode.transcode_to_aac", return_value=None),
+            patch("tool.music.transcode.transcode", return_value=None),
             pytest.raises(SystemExit) as exc,
         ):
             main()
@@ -175,7 +263,7 @@ class TestMain:
             with (
                 patch.object(sys, "argv", ["transcode", "song.flac"]),
                 patch("tool.music.transcode.probe_audio") as mock_probe,
-                patch("tool.music.transcode.transcode_to_aac") as mock_xcode,
+                patch("tool.music.transcode.transcode") as mock_xcode,
             ):
                 mock_probe.return_value = {"codec_name": "flac", "channels": channels}
                 mock_xcode.return_value = "song.m4a"
@@ -187,7 +275,7 @@ class TestMain:
         with (
             patch.object(sys, "argv", ["transcode", "song.flac"]),
             patch("tool.music.transcode.probe_audio") as mock_probe,
-            patch("tool.music.transcode.transcode_to_aac") as mock_xcode,
+            patch("tool.music.transcode.transcode") as mock_xcode,
         ):
             mock_probe.return_value = {"codec_name": "flac"}
             mock_xcode.return_value = "song.m4a"
@@ -199,7 +287,7 @@ class TestMain:
         with (
             patch.object(sys, "argv", ["transcode", "song.flac", "-o", "custom.m4a"]),
             patch("tool.music.transcode.probe_audio") as mock_probe,
-            patch("tool.music.transcode.transcode_to_aac") as mock_xcode,
+            patch("tool.music.transcode.transcode") as mock_xcode,
         ):
             mock_probe.return_value = {"codec_name": "flac", "channels": 2}
             mock_xcode.return_value = "custom.m4a"
@@ -210,7 +298,7 @@ class TestMain:
         with (
             patch.object(sys, "argv", ["transcode", "song.flac", "--overwrite"]),
             patch("tool.music.transcode.probe_audio", return_value={"codec_name": "flac", "channels": 2}),
-            patch("tool.music.transcode.transcode_to_aac", return_value="song.m4a") as mock_xcode,
+            patch("tool.music.transcode.transcode", return_value="song.m4a") as mock_xcode,
         ):
             main()
         mock_xcode.assert_called_once_with("song.flac", dst=None, overwrite=True)
