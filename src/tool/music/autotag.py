@@ -13,7 +13,11 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from tool.music.api.acoustid import AcoustIDError, ensure_acoustid_key
+from tool.music.api.acoustid import (
+    ACOUSTID_KEY_HINT,
+    AcoustIDError,
+    ensure_acoustid_key,
+)
 from tool.music.constants import GOLD, GREEN, GREY, RED
 from tool.music.scan import collect_files
 from tool.music.tag import autotag
@@ -195,7 +199,7 @@ def run(args: argparse.Namespace) -> None:
         print("error: fpcalc not found. Install chromaprint.", file=sys.stderr)
         sys.exit(1)
     if not ensure_acoustid_key():
-        print("error: ACOUSTID_API_KEY not set and `vault get ACOUSTID_API_KEY` returned nothing", file=sys.stderr)
+        print(f"error: no AcoustID API key; {ACOUSTID_KEY_HINT}", file=sys.stderr)
         sys.exit(1)
 
     counts: Counter[str] = Counter()

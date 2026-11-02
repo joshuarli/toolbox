@@ -19,9 +19,21 @@ from tool.music.metadata import Candidate, Metadata
 # AcoustID recommends no more than 3 req/sec
 _session = Session(user_agent="music-tag/0.1", rate_limiter=RateLimiter(rate=3.0))
 
+_APPLICATION_URL = "https://acoustid.org/new-application"
+ACOUSTID_KEY_HINT = (
+    f"register an application at {_APPLICATION_URL} and store its key with `vault set ACOUSTID_API_KEY`"
+)
+
 
 class AcoustIDError(Exception):
     """The service rejected the request, as opposed to finding no match."""
+
+
+def _api_error(error: dict[str, Any]) -> str:
+    message = str(error.get("message", "Unknown API error"))
+    if error.get("code") == 4:
+        return f"{message}; {ACOUSTID_KEY_HINT}"
+    return message
 
 
 
@@ -79,7 +91,7 @@ def fetch_acoustid_metadata(duration, fingerprint):
     Raises `AcoustIDError` when the service rejects the request.
     """
     if not ensure_acoustid_key():
-        print("error: ACOUSTID_API_KEY not set in environment", file=sys.stderr)
+        print(f"error: no AcoustID API key; {ACOUSTID_KEY_HINT}", file=sys.stderr)
         sys.exit(1)
     api_key = os.environ["ACOUSTID_API_KEY"]
 
@@ -97,8 +109,8 @@ def fetch_acoustid_metadata(duration, fingerprint):
         sys.exit(1)
 
     if res_data.get("status") != "ok":
-        error_msg = res_data.get("error", {}).get("message", "Unknown API error")
-        raise AcoustIDError(str(error_msg))
+        error = res_data.get("error", {})
+        raise AcoustIDError(_api_error(error))
 
     return res_data.get("results", [])
 

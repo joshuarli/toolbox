@@ -119,6 +119,21 @@ class TestFetchAcoustidMetadata:
         ):
             fetch_acoustid_metadata(200.0, "fp123")
 
+    def test_invalid_api_key_says_how_to_replace_it(self, monkeypatch):
+        monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
+        with (
+            patch(
+                "tool.music.api.acoustid._session.get_json",
+                return_value={"status": "error", "error": {"code": 4, "message": "invalid API key"}},
+            ),
+            pytest.raises(AcoustIDError) as exc,
+        ):
+            fetch_acoustid_metadata(200.0, "fp123")
+        message = str(exc.value)
+        assert "invalid API key" in message
+        assert "https://acoustid.org/new-application" in message
+        assert "vault set ACOUSTID_API_KEY" in message
+
     def test_http_error(self, monkeypatch):
         monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
         with (

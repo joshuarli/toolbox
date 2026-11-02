@@ -195,7 +195,9 @@ class TestRun:
             run(self.args(tmp_path))
 
         assert exc.value.code == 1
-        assert "ACOUSTID_API_KEY" in capsys.readouterr().err
+        err = capsys.readouterr().err
+        assert "ACOUSTID_API_KEY" in err
+        assert "acoustid.org/new-application" in err
 
     def test_summary_counts_outcomes(self, tmp_path, monkeypatch, capsys):
         (tmp_path / "a.flac").write_bytes(b"x")
