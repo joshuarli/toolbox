@@ -54,6 +54,28 @@ class TestAlbumScore:
     def test_edition_suffix(self):
         assert _album_score("Album (Deluxe Edition)", "Album") == 2
 
+    def test_separator_and_bracket_variants_match(self):
+        assert (
+            _album_score(
+                "Broadchurch - The Final Chapter (Music From The Original TV Series)",
+                "Broadchurch: The Final Chapter",
+            )
+            == 2
+        )
+
+    def test_labelled_soundtrack_variant_matches_as_edition(self):
+        assert (
+            _album_score(
+                "The Lost Flowers of Alice Hart (Prime Video Original Series Soundtrack)",
+                "The Lost Flowers of Alice Hart: Prime Video Original Series Soundtrack",
+            )
+            == 1
+        )
+
+    def test_a_different_release_title_is_not_an_edition(self):
+        assert _album_score("Album", "Album Remixes") == 0
+        assert _album_score("Album", "Album II") == 0
+
     def test_unrelated(self):
         assert _album_score("Other", "Album") == 0
 
@@ -84,11 +106,22 @@ class TestChooseRelease:
     def test_ambiguous_release_group_is_left_alone(self):
         assert choose_release(meta(), [candidate(group="a"), candidate(group="b")]) is None
 
-    def test_track_number_must_match(self):
-        assert choose_release(meta(track="2"), [candidate(track="1")]) is None
+    def test_track_number_selects_the_matching_edition(self):
+        first = candidate(track="1", release="a")
+        second = candidate(track="2", release="b")
+        chosen = choose_release(meta(track="2"), [first, second])
+        assert chosen is not None
+        assert chosen.meta.musicbrainz_trackid == "b-t2"
 
-    def test_album_must_match(self):
-        assert choose_release(meta(album="Other"), [candidate()]) is None
+    def test_track_mismatch_falls_back_to_a_single_release_group(self):
+        chosen = choose_release(meta(track="9"), [candidate(track="1")])
+        assert chosen is not None
+        assert chosen.meta.musicbrainz_trackid == "rel-t1"
+
+    def test_album_mismatch_with_one_release_group_is_resolved(self):
+        chosen = choose_release(meta(album="Other"), [candidate()])
+        assert chosen is not None
+        assert chosen.meta.musicbrainz_albumid == "rel"
 
     def test_without_album_is_not_guessed(self):
         assert choose_release(meta(album=None), [candidate()]) is None
@@ -202,3 +235,21 @@ class TestRun:
         out = capsys.readouterr().out
         assert "1 resolved" in out
         assert "[Album · Digital Media, XW, 2020-01-01]" in out
+
+    def test_replaced_album_is_reported(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "a.mp3").touch()
+        monkeypatch.setattr(resolve, "read_tags", lambda p: meta(album="Wrong Album"))
+        resolved = Metadata(
+            title="Song",
+            artist="Artist",
+            album="Canonical Album",
+            musicbrainz_recordingid="rec",
+            musicbrainz_albumid="rel",
+            musicbrainz_releasegroupid="rg",
+            musicbrainz_trackid="t1",
+        )
+        monkeypatch.setattr(resolve, "resolve_file", lambda p: resolved)
+
+        run(self.args(tmp_path))
+
+        assert "(album tag replaced)" in capsys.readouterr().out

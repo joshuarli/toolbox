@@ -22,7 +22,23 @@ from tool.music.scan import collect_files
 from tool.music.tags import read_tags, write_tags
 from tool.music.ui import bold, colored
 
-_EDITION_RE = re.compile(r"\s*[\(\[][^\)\]]*[\)\]]\s*$")
+_BRACKETS_RE = re.compile(r"[\(\[]([^\)\]]*)[\)\]]")
+_SEPARATORS_RE = re.compile(r"[:–—-]+")
+_EDITION_WORDS = {
+    "anniversary",
+    "complete",
+    "deluxe",
+    "edition",
+    "expanded",
+    "from",
+    "music",
+    "original",
+    "remaster",
+    "remastered",
+    "series",
+    "soundtrack",
+    "version",
+}
 _ARTIST_SEPARATORS = (": ", " - ", " – ")
 
 
@@ -31,8 +47,20 @@ def _normalize(value: str | None) -> str:
     return " ".join(text.split())
 
 
+def _base_title(value: str | None) -> str:
+    """Title with bracketed annotations and separators removed, for edition comparisons."""
+    text = _BRACKETS_RE.sub(" ", _normalize(value))
+    return " ".join(_SEPARATORS_RE.sub(" ", text).split())
+
+
+def _edition_extension(shorter: str, longer: str) -> bool:
+    if not shorter or not longer.startswith(shorter + " "):
+        return False
+    return bool(set(longer[len(shorter) :].split()) & _EDITION_WORDS)
+
+
 def _album_score(file_album: str | None, release_title: str | None) -> int:
-    """How well a release title matches the file's album: 3 exact, 2 compatible, 0 no."""
+    """How well a release title matches the file's album: 3 exact, 2 compatible, 1 edition, 0 no."""
     album, title = _normalize(file_album), _normalize(release_title)
     if not title:
         return 0
@@ -40,8 +68,11 @@ def _album_score(file_album: str | None, release_title: str | None) -> int:
         return 3
     if any(album.endswith(sep + title) or album.startswith(title + sep) for sep in _ARTIST_SEPARATORS):
         return 2
-    if _EDITION_RE.sub("", album) == _EDITION_RE.sub("", title):
+    album_base, title_base = _base_title(file_album), _base_title(release_title)
+    if album_base and album_base == title_base:
         return 2
+    if _edition_extension(album_base, title_base) or _edition_extension(title_base, album_base):
+        return 1
     return 0
 
 
@@ -69,19 +100,24 @@ def _preference(meta: Metadata, candidate: Candidate) -> tuple[object, ...]:
 
 
 def choose_release(meta: Metadata, candidates: list[Candidate]) -> Candidate | None:
-    """The best release edition for *meta*, or None when the album is ambiguous or absent."""
+    """The best release edition for *meta*, or None when the album is ambiguous or absent.
+
+    When no release title matches the file's album, a single release group carrying the
+    recording is still unambiguous and is used; the caller reports that the album tag
+    was replaced.
+    """
     if not bool(meta.album) or not bool(meta.musicbrainz_recordingid):
         return None
-    scored = [
-        (_album_score(meta.album, c.meta.album), c)
-        for c in candidates
-        if _track_matches(meta, c) and bool(c.meta.album)
-    ]
+    playable = [c for c in candidates if _track_matches(meta, c) and bool(c.meta.album)]
+    if not playable:
+        playable = [c for c in candidates if bool(c.meta.album)]
+    scored = [(_album_score(meta.album, c.meta.album), c) for c in playable]
     scored = [(score, c) for score, c in scored if score > 0]
-    if not scored:
-        return None
-    best = max(score for score, _ in scored)
-    top = [c for score, c in scored if score == best]
+    if scored:
+        best = max(score for score, _ in scored)
+        top = [c for score, c in scored if score == best]
+    else:
+        top = playable
     groups = {c.meta.musicbrainz_releasegroupid for c in top if bool(c.meta.musicbrainz_releasegroupid)}
     if len(groups) != 1:
         return None
@@ -120,8 +156,8 @@ def _print_result(status: str, color: int, path: str, detail: str = "") -> None:
 def configure_parser(p: argparse.ArgumentParser) -> None:
     p.description = (
         "Resolve release identity for files that already have a recording MBID. Chooses an "
-        "edition only when the file's album and track point at one release group; ambiguous "
-        "files are left for `music tag`."
+        "edition when the recording appears in one release group and the track position matches; "
+        "a mismatched album tag is replaced and reported. Ambiguous files are left for `music tag`."
     )
     p.add_argument("paths", nargs="+", help="directories or files to resolve")
     p.add_argument("--dry-run", action="store_true", help="list the queue without network access or writes")
@@ -169,7 +205,10 @@ def run(args: argparse.Namespace) -> None:
             continue
         counts["resolved"] += 1
         edition = ", ".join(p for p in (resolved.media, resolved.releasecountry, resolved.date) if bool(p))
-        _print_result("resolved", GREEN, display, f"  [{resolved.album}" + (f" · {edition}" if edition else "") + "]")
+        detail = f"  [{resolved.album}" + (f" · {edition}" if edition else "") + "]"
+        if _normalize(meta.album) != _normalize(resolved.album):
+            detail += "  (album tag replaced)"
+        _print_result("resolved", GREEN, display, detail)
 
     print()
     print(
