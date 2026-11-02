@@ -1,6 +1,7 @@
 """Rate-limited HTTP session pool using urllib3."""
 
 import json
+import ssl
 import threading
 import time
 from typing import Any
@@ -45,10 +46,13 @@ class Session:
         rate_limiter: RateLimiter | None = None,
     ):
         self.headers = {"User-Agent": user_agent}
+        # urllib3 sets SSL_OP_NO_TICKET on its own context, which the Rustls-backed
+        # ssl module in this Python build refuses; an explicit context avoids it.
         self.pool = PoolManager(
             num_pools=pool_size,
             maxsize=pool_size,
             timeout=Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT),
+            ssl_context=ssl.create_default_context(),
         )
         self.rate_limiter = rate_limiter
 

@@ -1,4 +1,5 @@
 import json
+import ssl
 import time
 from unittest.mock import MagicMock, patch
 
@@ -59,6 +60,11 @@ class TestSessionInit:
         assert isinstance(timeout, Timeout)
         assert timeout.connect_timeout == 5.0
         assert timeout.read_timeout == 30.0
+
+    def test_pool_gets_an_explicit_ssl_context(self):
+        with patch("tool.music.http.PoolManager") as pool_manager:
+            Session()
+        assert isinstance(pool_manager.call_args.kwargs["ssl_context"], ssl.SSLContext)
 
 
 class TestSessionGet:
