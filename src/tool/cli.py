@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     music_parser = subparsers.add_parser(
         "music",
-        help="scan/tag/transcode a local audio library",
+        help="audit/scan/tag/transcode a local audio library",
     )
     music_cli.configure_parser(music_parser)
     return parser
