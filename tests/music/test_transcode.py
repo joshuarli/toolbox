@@ -155,6 +155,10 @@ class TestRemuxExtension:
         ):
             assert transcode_destination("music/song.webm") == "music/song.opus"
 
+    def test_destination_for_taggable_source_is_the_source(self):
+        with patch("tool.music.transcode.is_writable", return_value=True):
+            assert transcode_destination("music/song.flac") == "music/song.flac"
+
     def test_destination_falls_back_to_aac(self):
         with (
             patch("tool.music.transcode.is_writable", return_value=False),
@@ -166,12 +170,13 @@ class TestRemuxExtension:
 class TestTranscodeDispatch:
     def test_remuxes_taggable_codec_from_foreign_container(self):
         with (
+            patch("tool.music.transcode.is_writable", return_value=False),
             patch("tool.music.transcode.remux_extension", return_value=".opus"),
             patch("tool.music.transcode._remux", return_value="song.opus") as remux,
             patch("tool.music.transcode.transcode_to_aac") as encode,
         ):
             assert transcode("song.webm") == "song.opus"
-        remux.assert_called_once_with("song.webm", ".opus", None, overwrite=False)
+        remux.assert_called_once_with("song.webm", ".opus", "song.opus", overwrite=False)
         encode.assert_not_called()
 
     def test_explicit_m4a_destination_forces_encoding(self):
@@ -184,12 +189,22 @@ class TestTranscodeDispatch:
         encode.assert_called_once_with("song.webm", dst="out.m4a", overwrite=False)
         remux.assert_not_called()
 
-    def test_taggable_source_is_encoded_as_before(self):
+    def test_taggable_source_is_left_alone(self):
         with (
-            patch("tool.music.transcode.remux_extension", return_value=None),
+            patch("tool.music.transcode.is_writable", return_value=True),
+            patch("tool.music.transcode._remux") as remux,
+            patch("tool.music.transcode.transcode_to_aac") as encode,
+        ):
+            assert transcode("song.flac") == "song.flac"
+        remux.assert_not_called()
+        encode.assert_not_called()
+
+    def test_encode_flag_forces_aac(self):
+        with (
+            patch("tool.music.transcode.is_writable", return_value=True),
             patch("tool.music.transcode.transcode_to_aac", return_value="song.m4a") as encode,
         ):
-            assert transcode("song.flac") == "song.m4a"
+            assert transcode("song.flac", encode=True) == "song.m4a"
         encode.assert_called_once_with("song.flac", dst=None, overwrite=False)
 
     def test_remux_copies_audio_and_metadata(self):
@@ -292,7 +307,18 @@ class TestMain:
             mock_probe.return_value = {"codec_name": "flac", "channels": 2}
             mock_xcode.return_value = "custom.m4a"
             main()
-        mock_xcode.assert_called_once_with("song.flac", dst="custom.m4a", overwrite=False)
+        mock_xcode.assert_called_once_with("song.flac", dst="custom.m4a", overwrite=False, encode=False)
+
+    def test_already_taggable_source_is_skipped(self, capsys):
+        with (
+            patch.object(sys, "argv", ["transcode", "song.flac"]),
+            patch("tool.music.transcode.probe_audio", return_value={"codec_name": "flac", "channels": 2}),
+            patch("tool.music.transcode.is_writable", return_value=True),
+            patch("tool.music.transcode.transcode") as mock_xcode,
+        ):
+            main()
+        assert "already taggable, left alone" in capsys.readouterr().out
+        mock_xcode.assert_not_called()
 
     def test_overwrite_option(self):
         with (
@@ -301,4 +327,4 @@ class TestMain:
             patch("tool.music.transcode.transcode", return_value="song.m4a") as mock_xcode,
         ):
             main()
-        mock_xcode.assert_called_once_with("song.flac", dst=None, overwrite=True)
+        mock_xcode.assert_called_once_with("song.flac", dst=None, overwrite=True, encode=False)
