@@ -38,3 +38,5 @@ A file is complete when title, artist, and recording MBID are present; if an alb
 The MusicBrainz enrichment makes one release lookup, or one recording lookup if no release was selected. If enrichment fails, the selected candidate can still be written with a warning. `tag` and `autotag` require `fpcalc` and an `ACOUSTID_API_KEY`; when the variable is unset, the key is read with `vault get ACOUSTID_API_KEY`. MusicBrainz needs no key.
 
 The implementation is split across [metadata.py](../src/tool/music/metadata.py), [tags.py](../src/tool/music/tags.py), [acoustid.py](../src/tool/music/api/acoustid.py), and [musicbrainz.py](../src/tool/music/api/musicbrainz.py).
+
+Current library state, remaining queue composition, and the next techniques under consideration are in [music-tagging-handoff.md](music-tagging-handoff.md).
