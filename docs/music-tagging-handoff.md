@@ -9,12 +9,12 @@ The working commands are `music audit`, `music autotag`, `music resolve`, and
 
 | State | Before | Now |
 |---|---:|---:|
-| complete | 272 | 805 (69.8%) |
-| missing identity | 806 | 309 |
+| complete | 272 | 807 (69.9%) |
+| missing identity | 806 | 307 |
 | missing album identity | 40 | 14 |
 | untagged | 34 | 26 |
 | partial | 2 | 0 |
-| embedded front cover | 0 | 890 (77.1%) |
+| embedded front cover | 0 | 891 (77.2%) |
 
 The library has 1154 audio files. The 274 WebM sources were replaced by lossless Opus
 remuxes and then deleted after each output probed as valid. No source files remain
@@ -22,8 +22,8 @@ untagged only because of their container.
 
 The final audit is `uv run tool music audit ~/Sync/M`; `--json` returns the per-file
 states. Artwork coverage comes from `tool music art --dry-run` plus the Cover Art
-Archive: 890 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
-the remaining 264 split into 233 files with no album MBID and 31 files in seven releases
+Archive: 891 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
+the remaining 263 split into 231 files with no album MBID and 32 files in eight releases
 that have no front cover in the archive.
 
 ## What was run
@@ -45,15 +45,18 @@ that have no front cover in the archive.
   are not UUIDs; `music art` now reports them as skips instead of aborting the run.
 - `music autotag` again: 15 tagged recording-only, 350 left for manual review.
 - `music resolve` again: 1 release (Dire Straits — Sultans of Swing), 14 ambiguous.
-- `music match-album` over the library: 3 folders matched (15 files written), 16
-  ambiguous, 4 unmapped, 40 without album identity, 51 already complete.
-- `music art` over the three matched folders: 15 covers embedded.
+- `music match-album` over the library: 5 folders matched (17 files written) across two
+  passes, 15 ambiguous, 3 unmapped, 40 without album identity, 54 already complete. The
+  second pass sized matches by pending files only, because complete files in a playlist
+  folder belong to unrelated albums and were inflating the expected track count.
+- `music art` over the matched folders: 16 covers embedded. The Civilization VII release
+  has no front cover in the archive.
 
 ## What remains
 
-349 files: 309 missing identity, 14 missing album identity, 26 untagged.
+347 files: 307 missing identity, 14 missing album identity, 26 untagged.
 
-- 297 of the 349 still carry an album tag. The queue is concentrated in album folders:
+- 295 of the 347 still carry an album tag. The queue is concentrated in album folders:
   `WIP/evan call/Evan Call Orchestra Concert 2025` (28),
   `Music/Albums/Album - Sibelius, J.: Piano Music` (23),
   `WIP/agobay/keep/2024-may` (16), `Albums/Breathing` + `Breathing II` (27),
