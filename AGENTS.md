@@ -22,5 +22,6 @@ Personal CLI tools, invoked as `uv run tool <name> ...`.
 - Letterboxd library and scraping: [docs/movies-letterboxd.md](docs/movies-letterboxd.md)
 - Music commands: [docs/music.md](docs/music.md)
 - MusicBrainz tags and identity: [docs/music-tagging.md](docs/music-tagging.md)
+- Manual curation queue: [docs/music-manual-queue.md](docs/music-manual-queue.md)
 - Audio scan verdicts: [docs/music-scan.md](docs/music-scan.md)
 - Cover artwork fetching: [docs/music-art.md](docs/music-art.md)

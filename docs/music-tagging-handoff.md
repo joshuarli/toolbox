@@ -14,7 +14,7 @@ The working commands are `music audit`, `music autotag`, `music resolve`, and
 | missing album identity | 40 | 14 |
 | untagged | 34 | 11 |
 | partial | 2 | 0 |
-| embedded front cover | 0 | 882 (77.1%) |
+| embedded front cover | 0 | 895 (78.2%) |
 
 The library has 1144 audio files. The 274 WebM sources were replaced by lossless Opus
 remuxes and then deleted after each output probed as valid. No source files remain
@@ -25,8 +25,8 @@ and remuxed back to Opus.
 
 The final audit is `uv run tool music audit ~/Sync/M`; `--json` returns the per-file
 states. Artwork coverage comes from `tool music art --dry-run` plus the Cover Art
-Archive: 882 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
-the remaining 262 split into 230 files with no album MBID and 32 files in eight releases
+Archive: 895 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
+the remaining 249 split into 207 files with no album MBID and 42 files in nine releases
 that have no front cover in the archive.
 
 ## What was run
@@ -61,10 +61,15 @@ that have no front cover in the archive.
 - Fingerprinted the whole library to re-measure duplicates: 94 duplicate groups and 108
   redundant copies, but **no group mixes a complete file with a pending one**, so
   duplicate propagation would have identified nothing.
+- `music resolve` now accepts a sole release group when the file has no album tag. It
+  added albums to 23 files (dreamage, HULDA, Keith Jarrett, and others); 6 album-less
+  complete files stayed ambiguous. `music art` embedded 13 of the new covers; 10 belong
+  to releases with no Cover Art Archive front.
 
 ## What remains
 
-331 files: 306 missing identity, 14 missing album identity, 11 untagged.
+331 files: 306 missing identity, 14 missing album identity, 11 untagged. The per-bucket
+plan for finishing them is in [music-manual-queue.md](music-manual-queue.md).
 
 - 295 of the 331 still carry an album tag. The queue is concentrated in album folders:
   `WIP/evan call/Evan Call Orchestra Concert 2025` (28),
@@ -202,15 +207,12 @@ Relevant commits: `08991b3` audit, `2e8c613` SSL context, `407f89e` autotag and 
 `4627191` sole release groups and edition titles, `7952dbb` guarded name fallback,
 `24190ca` Cover Art Archive embedding, `ad3407e` malformed-ID skips, `34ecb0c`
 folder-level album matching, `f61a7fe` pending-file match sizing, `c93575e` filename
-fallback.
+fallback, `690209e` sole release groups for album-less files.
 
 ## Open decisions
 
-1. Whether a sole release group may choose an album for a file that carries no album tag.
-   `resolve` refuses today; all 15 filename-tagged files have exactly one release group,
-   so allowing it would give them a release and a cover.
-2. Whether a sole release group may continue to replace a mismatched album tag. This was
+1. Whether a sole release group may continue to replace a mismatched album tag. This was
    accepted for 83 files and is reported per file.
-3. Artwork in the 30 directories holding multiple releases: `--sidecar` skips them by
+2. Artwork in the 33 directories holding multiple releases: `--sidecar` skips them by
    design, so they currently rely on per-file embedding. Splitting sidecars by release, or
    keeping embedding as the only answer there, is unresolved.
