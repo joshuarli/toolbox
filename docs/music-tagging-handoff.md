@@ -9,12 +9,12 @@ The working commands are `music audit`, `music autotag`, `music resolve`, and
 
 | State | Before | Now |
 |---|---:|---:|
-| complete | 272 | 813 (71.1%) |
-| missing identity | 806 | 306 |
-| missing album identity | 40 | 14 |
-| untagged | 34 | 11 |
+| complete | 272 | 874 (76.4%) |
+| missing identity | 806 | 264 |
+| missing album identity | 40 | 0 |
+| untagged | 34 | 6 |
 | partial | 2 | 0 |
-| embedded front cover | 0 | 895 (78.2%) |
+| embedded front cover | 0 | 952 (83.2%) |
 
 The library has 1144 audio files. The 274 WebM sources were replaced by lossless Opus
 remuxes and then deleted after each output probed as valid. No source files remain
@@ -24,10 +24,9 @@ Sibelius album folder, recovered from the `.webm` sources on `/Volumes/UNTITLED/
 and remuxed back to Opus.
 
 The final audit is `uv run tool music audit ~/Sync/M`; `--json` returns the per-file
-states. Artwork coverage comes from `tool music art --dry-run` plus the Cover Art
-Archive: 895 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
-the remaining 249 split into 207 files with no album MBID and 42 files in nine releases
-that have no front cover in the archive.
+states. Artwork coverage comes from `tool music art ~/Sync/M` plus a direct
+`has_embedded_art` count: 952 files embed a front cover, 149 have no release or
+release-group MBID, and 43 have a release MBID but no front cover in the Cover Art Archive.
 
 ## What was run
 
@@ -65,25 +64,33 @@ that have no front cover in the archive.
   added albums to 23 files (dreamage, HULDA, Keith Jarrett, and others); 6 album-less
   complete files stayed ambiguous. `music art` embedded 13 of the new covers; 10 belong
   to releases with no Cover Art Archive front.
+- Manual pass (2026-11-03): chose the release edition for all 14 missing-album files by
+  album tag, date, country, media, and track number. Tagged Evan Call's 28-track
+  *Orchestra Concert 2025* folder, Anan Ryoko's *Usubenifuji* folder (9 tracks), four
+  title-mapped tracks of 王嘯's *黑馬河的兒子*, four fingerprint-confirmed Keith Jarrett
+  tracks, and three single tracks (齊秦 — 大約在冬季, Jeremiah Chiu & Marta Sofia Honer —
+  Snåcko, 齊秦 — 外面的世界 at recording level). 61 files written, 57 covers embedded. The
+  per-file writes went through `enrich` + `write_tags` from a throwaway plan, because
+  `music tag` has no non-interactive release selector.
 
 ## What remains
 
-331 files: 306 missing identity, 14 missing album identity, 11 untagged. The per-bucket
-plan for finishing them is in [music-manual-queue.md](music-manual-queue.md).
+270 files: 264 missing identity and 6 untagged. The per-bucket plan for finishing them is in
+[music-manual-queue.md](music-manual-queue.md).
 
-- 295 of the 331 still carry an album tag. The queue is concentrated in album folders:
-  `WIP/evan call/Evan Call Orchestra Concert 2025` (28),
-  `Music/Albums/Album - Sibelius, J.: Piano Music` (23),
-  `WIP/agobay/keep/2024-may` (16), `Albums/Breathing` + `Breathing II` (27),
-  `Music/bandcamp/Dreamage` (10), `Staging` (10),
-  `WIP/agobay` date folders (about 50 across 2023–2024),
-  `Albums/anan ryoko - usubenifuji` (9), `Albums/isos` (7).
-- The duplicate measurement from the previous pass (40 redundant copies in 36
-  Chromaprint-identical groups) predates the latest autotag/resolve passes; re-measure
-  with `fpcalc` before acting on it.
-- 14 files have recording identity but no release: 13 with 2–4 plausible release groups
-  and one (Nina Simone — I Put a Spell On You) with 142.
-- 26 untagged files are mostly Bandcamp and playlist-folder rips with no descriptive tags.
+- 239 of the 270 still carry an album tag. 100 are coherent albums or folder-level items that
+  MusicBrainz does not have: `Music/Albums/Album - Sibelius, J.: Piano Music` (23),
+  `Albums/Breathing` + `Breathing II` (27), *Fragments* (8), *LUMINA* (8), *Light* (8),
+  *Lungs* (7), *isos* (7), *Clarity & Stimulus* (6), *Altered States* (4), and three
+  one-offs. Every one was searched under its tagged artist and title plus plausible
+  romanizations. The rest are date batches and playlist folders.
+- The 14 missing-album files from the previous queue now have a chosen edition; none remain.
+- 6 files are untagged: five date-named radio recordings plus one file AcoustID cannot
+  identify.
+- Artwork: 952 files embed a front cover. 149 files have no release MBID to fetch from, and
+  the 43 remaining belong to releases that have no front cover in the Cover Art Archive.
+- The duplicate measurement from the earlier pass predates the latest autotag/resolve
+  passes; re-measure with `fpcalc` before acting on it.
 
 ## Techniques
 
@@ -129,9 +136,11 @@ refuses when the album tag is absent, by policy.
 
 ### 4. Manual queue
 
-`music tag` still resolves one file interactively. For the 14 missing-album files and the
-hard remainder, this is the fallback. A useful addition would be a command that prints a
-compact manual queue grouped by folder, excluding files already handled.
+`music tag` still resolves one file interactively. For the 2026-11-03 pass the decisions
+were made from MusicBrainz release browse results and applied through a throwaway plan that
+called `enrich` and `write_tags`; a `--release <mbid>` option on `music tag` would make the
+same work reproducible without a script, and a queue command that prints the pending files
+grouped by folder is still missing.
 
 ### 5. External identity sources (last resort)
 

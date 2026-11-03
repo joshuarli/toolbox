@@ -1,69 +1,61 @@
 # Music manual queue
 
-The automated passes have taken `~/Sync/M` as far as they can: 813 of 1144 files carry
-durable identity and 895 embed a front cover. This note lists what is left, why automation
-stops at each bucket, and the concrete way to finish it. Counts are from 2026-11-02.
+The automated passes and the 2026-11-03 manual pass have taken `~/Sync/M` to 874 of 1144
+files with durable identity (76.4%), and 952 embed a front cover. This note lists what is
+left, why each bucket is stuck, and what was deliberately skipped. Counts are from
+2026-11-03.
 
 Regenerate the numbers before starting:
 
 ```sh
 uv run tool music audit ~/Sync/M
 uv run tool music match-album ~/Sync/M --dry-run
+uv run tool music art --dry-run ~/Sync/M
 ```
 
 `audit --json` gives per-file states; `match-album --dry-run` gives a per-folder reason.
 
-## Buckets
+## State
 
-| Bucket | Files | Why automation stops |
-|---|---:|---|
-| Mixed or missing album tags | ~208 | The folder is not one album, so there is no folder identity to match |
-| Coherent album absent from MusicBrainz | 107 | No release exists under the tagged album and artist |
-| Coherent album, ambiguous release | 16 | Several release groups or no track-count match |
-| Recording identified, release ambiguous | 14 | Each recording appears on 2–4 release groups |
-| Untagged | 11 | Date-named radio recordings with no title or artist |
+| State | Files |
+|---|---:|
+| complete | 874 |
+| missing identity | 264 |
+| missing album identity | 0 |
+| untagged | 6 |
+| partial | 0 |
 
-The first three rows partition the 331 files. The last two are cross-cuts inside them: the
-files in mixed folders that already have a recording MBID, or no tags at all.
+The remaining 270 split into three groups: coherent albums or folder-level items that
+MusicBrainz does not have (100), mixed or playlist folders (164), and six untagged files.
+Artwork is down to 43 files whose release has no front cover in the Cover Art Archive, plus
+149 files with no release or release-group MBID to fetch from yet.
 
-## 1. Mixed and playlist folders
+## What the manual pass settled
 
-The queue is dominated by directories whose files belong to different albums, or whose
-`album` tag is a playlist name. Folder matching needs one album and one artist, so these
-never get a folder-level match.
+- **All 14 missing-album files got a release.** Each recording had 2–142 release groups;
+  the edition was chosen from the file's own album tag, date, country, media, and track
+  number:
+  - Nina Simone — *I Put a Spell on You*, the 2018-11-30 digital edition matching the file's `20181129` date.
+  - Trio Ternura — *A gira / Last Tango in Paris*, the 1973 Brazilian 7" the album tag calls *Compacto 1973*.
+  - Michael Nyman — *The Very Best of Michael Nyman: Film Music 1980–2001*, GB CD; the two files are consecutive tracks 8 and 9 of disc 2.
+  - Mt. Wolf — *Red*, the 2015-04-13 digital edition that has the file's 7 tracks.
+  - AVA — *Waves*, the 2019-07-12 digital edition that has the file's 10 tracks.
+  - 那英 — *干脆*, the CN 1999 edition already used by the three complete files in the same folder; six tracks mapped by recording MBID.
+- **Evan Call — *Evan Call Orchestra Concert 2025*:** 28 of the 30 live tracks, mapped by
+  title. The folder had no album artist, so `match-album` treated the varying per-track
+  artists as a mixed folder; the two absent tracks were already complete.
+- **Anan Ryoko — *Usubenifuji*:** nine of twelve tracks, mapped by title with the YouTube-ID suffix removed. The folder is partial.
+- **王嘯 — *黑馬河的兒子*:** four of five tracks, mapped by title. The digital release orders the two bonus tracks differently, so track numbers could not be used.
+- **Keith Jarrett — *The Melody at Night, With You*:** four untagged files, each confirmed by fingerprint, mapped to tracks 1, 4, 6, and 7.
+- **Single tracks:** 齊秦 — 大約在冬季 (from *齊秦精選*), Jeremiah Chiu & Marta Sofia Honer — Snåcko (the Åland folder's other seven files already used the 2022 digital edition), and 齊秦 — 外面的世界 at recording level only because the recording appears on several albums.
+- 57 covers were embedded for the releases those files joined.
+- Verified absent from MusicBrainz under every plausible spelling, so nothing else was
+  written for them: *Breathing* and *Breathing II* (Jeon Jin Hee / 전진희), *isos* (Koji
+  Maruyama), *Fragments* and *Altered States* (Uväll), *Light* (HAYA樂團 / HAYA), *LUMINA*
+  (Jane Antonia Cornish), *Lungs* (ARIGTO), *Clarity & Stimulus* (Junya Nishimura), and the
+  Sibelius piano compilation (Ralf Gothóni).
 
-Largest examples:
-
-| Folder | Files | Shape |
-|---|---:|---|
-| `WIP/evan call/Evan Call Orchestra Concert 2025` | 28 | one album name, but every track has a different artist and none has an album artist |
-| `WIP/agobay/keep/2024-may` | 16 | 16 album names |
-| `WIP/agobay/keep/2024-june` | 10 | 10 album names |
-| `WIP/agobay/keep/2024-july` | 10 | 10 album names |
-| `WIP/agobay/keep/2024-aug` | 10 | 10 album names |
-| `WIP/agobay/2024-july` | 10 | 10 album names |
-| `WIP/agobay/2024-aug` | 10 | 10 album names |
-| `Staging` | 10 | 4 album names |
-| `misc` | 7 | 6 album names |
-| `WIP/anime` | 7 | 2 album names |
-| `WIP/agobay/2023-nov` | 7 | 7 album names |
-
-The `agobay` date folders are download batches, not albums. Options, in order of effort:
-
-- Keep them as batches and leave the files at whatever identity the fingerprint or name
-  search gives them. This is a legitimate end state for playlist material.
-- Tag the interesting tracks one at a time with `uv run tool music tag <file>`. The
-  interactive picker chooses the release and writes the album.
-- If a directory really is one album, fix its `album` and `albumartist` tags first, then
-  run `match-album` on it. A folder only matches when every pending file agrees.
-
-`Playlists/Chinese Heart/Album - Totally Giving Up` (6 files) is the clearest repair: six
-files claim the playlist name while three neighbours are tagged `干脆`. Set the album to
-`干脆` and `match-album` has a 10-track release to map them into.
-
-## 2. Coherent albums absent from MusicBrainz
-
-These folders agree on album and artist, but a release search returns nothing:
+## 1. Coherent albums absent from MusicBrainz
 
 | Folder | Files | Album — artist |
 |---|---:|---|
@@ -71,66 +63,72 @@ These folders agree on album and artist, but a release search returns nothing:
 | `Albums/Breathing II` | 14 | Breathing II — Jeon Jin Hee |
 | `Albums/Breathing` | 13 | Breathing — Jeon Jin Hee |
 | `WIP/Fragments` | 8 | Fragments — Uväll |
-| `Staging/Light` | 8 | Light — HAYA樂團 |
 | `Staging/LUMINA` | 8 | LUMINA — Jane Antonia Cornish |
+| `Staging/Light` | 8 | Light — HAYA樂團 |
 | `Music/bandcamp/Arigto - Lungs` | 7 | Lungs — ARIGTO |
 | `Albums/isos` | 7 | isos — Koji Maruyama |
 | `Albums/Clarity & Stimulus` | 6 | Clarity & Stimulus — Junya Nishimura |
-| `Playlists/Chinese Heart/Album - Totally Giving Up` | 6 | Totally Giving Up — 那英 (the real album is `干脆`) |
 | `Music/bandcamp/Altered States` | 4 | Altered States — Uväll |
+| `Music/bandcamp/黑馬河的兒子 The Son of Black Horse River` | 1 | bonus track 塔里木河 (Live version), only on a physical edition |
 | `Playlists/japan-countryside-road-trip` | 1 | 위키드 Part 1 — 오연준 |
-| `Playlists/europe-trip` | 1 | Trio Ternura (Compacto 1973) — Trio Ternura |
-| `Playlists/ambiant/Album - Recordings from the Åland Islands` | 1 | Recordings from the Åland Islands — Jeremiah Chiu, Marta Sofia Honer |
 
-Options:
+The only remaining path that also produces a cover is to submit the release to MusicBrainz
+and rerun `match-album` on the folder. The alternative is to accept the current state:
+`autotag` can still identify individual tracks when AcoustID has them, and those files keep
+whatever identity the fingerprint gave them.
 
-- Submit the release to MusicBrainz, then rerun `match-album` on the folder. This is the
-  only path that also produces a cover.
-- Accept recording-level identity: `autotag` can still identify individual tracks, and
-  `resolve` can supply an album when a recording has exactly one release group.
-- Tag by hand with `music tag` and pick a release from another edition.
+## 2. Mixed and playlist folders
 
-## 3. Coherent folder, ambiguous release
+The queue is dominated by directories whose files belong to different albums, or whose
+`album` tag is a playlist name. These are a legitimate end state for playlist material;
+`autotag` has already written every unambiguous fingerprint match it could find.
 
-| Folder | Files | Reason |
+Largest examples:
+
+| Folder | Files | Shape |
 |---|---:|---|
-| `Albums/anan ryoko - usubenifuji` | 9 | one release hit, no track-count match |
-| `Music/bandcamp/黑馬河的兒子 The Son of Black Horse River` | 5 | one release hit, no track-count match |
-| `Playlists/Driving America` | 1 | 10 hits across several release groups |
-| `Playlists/Blues Soul Jazz` | 1 | 10 hits across several release groups |
+| `WIP/agobay/keep/2024-may` | 16 | 16 album names |
+| `WIP/agobay/keep/2024-june` | 10 | 10 album names |
+| `WIP/agobay/keep/2024-july` | 10 | 10 album names |
+| `WIP/agobay/2024-july` | 10 | 10 album names |
+| `Staging` | 10 | mixed singles |
+| `WIP/agobay/keep/2024-aug` | 9 | 9 album names |
+| `WIP/agobay/2024-aug` | 9 | 9 album names |
+| `WIP/agobay/keep/2023-dec` | 7 | date batch |
+| `WIP/agobay/2023-nov` | 7 | 7 album names |
+| `misc` | 7 | 6 album names |
+| `WIP/anime` | 6 | 2 album names |
+| `WIP/agobay/2024-feb` | 6 | date batch |
+| `archive/agobay` | 6 | date batch |
 
-For the first two, open the release in MusicBrainz and check the tracklist against the
-files; if the folder is partial in a way the title check cannot confirm, tag those tracks
-with `music tag`. For the singles, pick the edition interactively.
+The `agobay` date folders are download batches, not albums. To curate one, tag the
+interesting tracks one at a time with `uv run tool music tag <file>`; the interactive picker
+chooses the release and writes the album. To match a folder as a unit, first fix its `album`
+and `albumartist` tags, then run `match-album`.
 
-## 4. Recording identified, release ambiguous
+## 3. Untagged
 
-Fourteen files have a recording MBID and an album tag but no unique release group: 13 have
-2–4 groups and `Nina Simone — I Put a Spell On You` has 142. Run
-`uv run tool music tag <file>` and choose the edition; `resolve` will keep refusing them.
+Six files have no title or artist. Five are date-named radio recordings (`evan-kinori-radio`,
+`Staging/evan-kinori-radio`) and one is `WIP/Here’s “Those Eyes” …`, whose fingerprint has no
+AcoustID match. They cannot be parsed from the filename; rename one to `Artist - Title` and
+rerun `autotag`, or tag it by hand.
 
-## 5. Untagged
+## 4. Artwork
 
-Eleven files have no title or artist. They are date-named radio recordings
-(`evan-kinori-radio`, `Staging/evan-kinori-radio`, the remaining `kabuki-yusuke` files) and
-cannot be parsed from the filename. Rename one to `Artist - Title` and rerun `autotag`, or
-tag it by hand.
+43 files across nine directories have a release MBID but no front cover in the Cover Art
+Archive. `music art` reports them as `miss`; nothing can be fetched until a cover is uploaded
+to the archive or dropped in as `cover.jpg` beside the album. They are in ELEMENTS (16),
+dreamage (10), Over the Bakken Records (8), the Sibelius piano compilation (3), `misc` (2),
+and one each in *Continuum*, *interstellar-vibes*, the Japan playlist, and Civilization VII.
 
-## 6. Artwork
+Another 149 files have no release or release-group MBID, so there is nothing to fetch for
+them until bucket 1 or 2 is resolved.
 
-- **42 files in 9 releases have no front cover in the Cover Art Archive**: ELEMENTS (16),
-  dreamage (10), Over the Bakken Records (8), Sibelius and the Kalevala (3), and one each
-  for Constellations, Traditional Folk Songs of Taiwan, Lume d'Lenha, Righteously, and
-  Sid Meier's Civilization VII. Drop a `cover.jpg` into the album directory, or embed one
-  with your tagger. `music art` never overwrites an existing sidecar without `--force`.
-- **207 files have no album MBID**, so there is nothing to fetch until bucket 1, 2, or 3 is
-  resolved.
+## 5. Duplicate copies
 
-## 7. Duplicate copies
-
-The whole library fingerprints into 94 duplicate groups with 108 redundant copies. No group
-mixes a complete file with a pending one, so duplicates cannot supply missing identity.
-Deleting them is a storage decision:
+The library fingerprints into 94 duplicate groups with 108 redundant copies. No group mixes
+a complete file with a pending one, so duplicates cannot supply missing identity. Deleting
+them is a storage decision. Group by fingerprint plus duration before deleting anything:
 
 ```sh
 uv run python - <<'PY'
@@ -142,15 +140,11 @@ for path, display in collect_files(["$HOME/Sync/M"]):
 PY
 ```
 
-Group by fingerprint plus duration before deleting anything.
-
 ## Suggested order
 
-1. Resolve the 16 ambiguous releases and 14 recording-only files with `music tag`; they are
-   small and certain.
-2. Repair the 那英 folder's album tags, rerun `match-album`, and add a cover for it.
-3. Decide whether the `agobay` batches and `WIP` concert folders stay as playlist material
-   or get curated track by track.
-4. Submit the coherent albums that matter to MusicBrainz, then rerun `match-album`.
-5. Add missing covers for the nine releases.
-6. Delete duplicates only if storage matters.
+1. Decide whether the `agobay` batches and the `WIP` mixes stay as playlist material or get
+   curated track by track.
+2. Submit the coherent albums that matter to MusicBrainz, then rerun `match-album`.
+3. Add missing covers for the nine directories, or upload them to the Cover Art Archive so
+   `music art` can fetch them.
+4. Delete duplicates only if storage matters.
