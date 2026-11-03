@@ -9,12 +9,12 @@ The working commands are `music audit`, `music autotag`, `music resolve`, and
 
 | State | Before | Now |
 |---|---:|---:|
-| complete | 272 | 790 (68.5%) |
-| missing identity | 806 | 324 |
+| complete | 272 | 805 (69.8%) |
+| missing identity | 806 | 309 |
 | missing album identity | 40 | 14 |
 | untagged | 34 | 26 |
 | partial | 2 | 0 |
-| embedded front cover | 0 | 875 (75.8%) |
+| embedded front cover | 0 | 890 (77.1%) |
 
 The library has 1154 audio files. The 274 WebM sources were replaced by lossless Opus
 remuxes and then deleted after each output probed as valid. No source files remain
@@ -22,8 +22,8 @@ untagged only because of their container.
 
 The final audit is `uv run tool music audit ~/Sync/M`; `--json` returns the per-file
 states. Artwork coverage comes from `tool music art --dry-run` plus the Cover Art
-Archive: 875 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
-the remaining 279 split into 248 files with no album MBID and 31 files in seven releases
+Archive: 890 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
+the remaining 264 split into 233 files with no album MBID and 31 files in seven releases
 that have no front cover in the archive.
 
 ## What was run
@@ -45,12 +45,15 @@ that have no front cover in the archive.
   are not UUIDs; `music art` now reports them as skips instead of aborting the run.
 - `music autotag` again: 15 tagged recording-only, 350 left for manual review.
 - `music resolve` again: 1 release (Dire Straits — Sultans of Swing), 14 ambiguous.
+- `music match-album` over the library: 3 folders matched (15 files written), 16
+  ambiguous, 4 unmapped, 40 without album identity, 51 already complete.
+- `music art` over the three matched folders: 15 covers embedded.
 
 ## What remains
 
-364 files: 324 missing identity, 14 missing album identity, 26 untagged.
+349 files: 309 missing identity, 14 missing album identity, 26 untagged.
 
-- 312 of the 364 still carry an album tag. The queue is concentrated in album folders:
+- 297 of the 349 still carry an album tag. The queue is concentrated in album folders:
   `WIP/evan call/Evan Call Orchestra Concert 2025` (28),
   `Music/Albums/Album - Sibelius, J.: Piano Music` (23),
   `WIP/agobay/keep/2024-may` (16), `Albums/Breathing` + `Breathing II` (27),
@@ -64,38 +67,27 @@ that have no front cover in the archive.
   and one (Nina Simone — I Put a Spell On You) with 142.
 - 26 untagged files are mostly Bandcamp and playlist-folder rips with no descriptive tags.
 
-## Techniques to investigate
+## Techniques
 
-### 1. Album/folder-level matching (largest expected gain)
+### 1. Album/folder-level matching (implemented, low ceiling on this queue)
 
-Match a folder as a unit instead of one fingerprint at a time. This is how a track that
-AcoustID cannot identify gets tagged from its neighbours.
+`music match-album` is built and has run. It requires one album and artist across the
+pending files, keeps releases whose track count fits the folder, maps files by normalized
+title first and disc/track number second, and writes only when one release group and one
+complete, distinct mapping survive. A partial folder may match a longer release, but only
+when every position also agrees on the track title.
 
-Inputs already on disk: album tag, album artist, track/disc numbers, titles, and
-durations. Search MusicBrainz releases by album title and album artist, then require:
+Measured on the 114 folders: 3 matched (15 files: *Moon Shines At Night*, *Into Silence*,
+one Sibelius Festival track), 16 ambiguous, 4 unmapped, 40 without album identity, 51
+already complete. The 100–150-file estimate was wrong: most remaining folders are
+playlist or date dumps with mixed album tags, and the coherent albums that did fail
+(*Breathing*, *isos*, *LUMINA*, *Light*, *Fragments*, the Sibelius piano compilation)
+failed because no release exists under the tagged title and artist. The 那英 folder that
+looked like the best candidate has six files tagged with the playlist name and three with
+the album name, so folder identity is already mixed.
 
-- album title match using the normalization in `resolve._album_score`;
-- total track count equal to the folder's audio-file count (or a subset when the folder
-  is partial);
-- every file mapped to a distinct track by disc/track number, or by normalized title
-  when numbers are missing;
-- one release group across the candidate releases; otherwise treat it as ambiguous.
-
-On success, write `musicbrainz_recordingid`, `musicbrainz_albumid`,
-`musicbrainz_releasegroupid`, and `musicbrainz_trackid` per file, then let `enrich` fill
-the rest. `resolve.choose_release` already handles edition preference and album
-normalization; the new part is choosing a release from an album query and mapping a
-whole tracklist.
-
-Risks: two different albums with the same title. Require the album artist match and a
-complete tracklist match, and treat a partial match as no match.
-
-Expected: the dominant lever; roughly 100–150 files by folder size, but unmeasured.
-Suggested command shape: `music match-album DIR` with `--dry-run`, or a `--folder` mode on
-`resolve`. A review-first mode that prints the proposed tracklist and applies on
-confirmation would remove most of the false-positive risk for ~50 folders. The first
-candidate to test is `Playlists/Chinese Heart/Album - Totally Giving Up` (6 files, 2–3
-release groups each, all sharing one album folder).
+The next gain here is not more matching code but cleaning those folder-level album tags,
+or relying on sole-release-group resolution, which `resolve` already does.
 
 ### 2. Duplicate propagation (safe, small)
 
@@ -190,6 +182,7 @@ than one. The earlier pass found 36 groups over 365 files.
 | batch tagging and fallback reporting | `src/tool/music/autotag.py` |
 | fingerprint/name decision and write | `src/tool/music/tag.py` |
 | release resolution and album matching | `src/tool/music/resolve.py` |
+| folder-level release matching | `src/tool/music/album.py` |
 | cover fetch, batch command | `src/tool/music/art.py`, `src/tool/music/api/coverart.py` |
 | embedded/sidecar artwork I/O | `src/tool/music/artwork.py` |
 | MusicBrainz search, browse, enrich | `src/tool/music/api/musicbrainz.py` |
@@ -198,16 +191,15 @@ than one. The earlier pass found 36 groups over 365 files.
 Relevant commits: `08991b3` audit, `2e8c613` SSL context, `407f89e` autotag and remux,
 `ff02f09` key guidance, `394c24a` transcode default, `92ed3c9` release resolution,
 `4627191` sole release groups and edition titles, `7952dbb` guarded name fallback,
-`24190ca` Cover Art Archive embedding, `ad3407e` malformed-ID skips.
+`24190ca` Cover Art Archive embedding, `ad3407e` malformed-ID skips, `34ecb0c`
+folder-level album matching.
 
 ## Open decisions
 
-1. Album matching: apply automatically when the tracklist matches uniquely, or review one
-   proposal per folder before writing.
-2. Duplicate propagation: copy full tags, or identity fields only so playlist-specific
+1. Duplicate propagation: copy full tags, or identity fields only so playlist-specific
    album tags survive.
-3. Whether a sole release group may continue to replace a mismatched album tag. This was
+2. Whether a sole release group may continue to replace a mismatched album tag. This was
    accepted for 83 files and is reported per file.
-4. Artwork in the 30 directories holding multiple releases: `--sidecar` skips them by
+3. Artwork in the 30 directories holding multiple releases: `--sidecar` skips them by
    design, so they currently rely on per-file embedding. Splitting sidecars by release, or
    keeping embedding as the only answer there, is unresolved.
