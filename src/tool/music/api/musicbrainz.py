@@ -8,7 +8,7 @@ API docs: https://musicbrainz.org/doc/MusicBrainz_API
 import json
 import sys
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from urllib3.exceptions import HTTPError
@@ -175,6 +175,97 @@ def release_candidates(recording_id: str) -> list[Candidate]:
             return out
 
 
+@dataclass(frozen=True)
+class ReleaseSummary:
+    """A release search hit: enough to compare editions before fetching a tracklist."""
+
+    id: str
+    title: str
+    artist: str | None
+    group_id: str | None
+    date: str | None
+    country: str | None
+    status: str | None
+    types: list[str]
+    media: list[str | None]
+    track_count: int
+
+
+@dataclass(frozen=True)
+class ReleaseTrack:
+    """One track of a release, with the recording it plays."""
+
+    disc_number: str
+    track_number: str
+    title: str
+    recording_id: str
+    track_id: str
+
+
+@dataclass(frozen=True)
+class ReleaseTracklist:
+    summary: ReleaseSummary
+    tracks: list[ReleaseTrack]
+
+
+def search_releases(album: str, artist: str) -> list[ReleaseSummary]:
+    """Releases matching an album title and artist, best score first.
+
+    An empty list means no hits; request failures raise MusicBrainzRequestError.
+    """
+    query = f'release:"{_quoted(album)}" AND artist:"{_quoted(artist)}"'
+    data = _request_json(
+        f"{MB_BASE}/release/",
+        params={"query": query, "fmt": "json", "limit": "10"},
+        operation="release search",
+    )
+    out: list[ReleaseSummary] = []
+    for rel in data.get("releases", []):
+        if not rel.get("id") or not rel.get("title"):
+            continue
+        rg = rel.get("release-group") or {}
+        media = rel.get("media") or []
+        out.append(
+            ReleaseSummary(
+                id=rel["id"],
+                title=rel["title"],
+                artist=_join_credit(rel.get("artist-credit", []), "name"),
+                group_id=rg.get("id"),
+                date=rel.get("date"),
+                country=rel.get("country"),
+                status=rel.get("status"),
+                types=_release_types(rg),
+                media=[m.get("format") for m in media],
+                track_count=sum(m.get("track-count") or 0 for m in media),
+            )
+        )
+    return out
+
+
+def release_tracklist(summary: ReleaseSummary) -> ReleaseTracklist:
+    """Every track of *summary*'s release with its recording, for mapping a folder.
+
+    Request failures raise MusicBrainzRequestError.
+    """
+    rel = _release_lookup(summary.id)
+    tracks: list[ReleaseTrack] = []
+    for medium in rel.get("media", []):
+        for track in medium.get("tracks", []):
+            recording = track.get("recording") or {}
+            if not recording.get("id") or not track.get("id"):
+                continue
+            tracks.append(
+                ReleaseTrack(
+                    disc_number=str(medium["position"]),
+                    track_number=str(track["position"]),
+                    title=track.get("title") or recording.get("title") or "",
+                    recording_id=recording["id"],
+                    track_id=track["id"],
+                )
+            )
+    return ReleaseTracklist(summary, tracks)
+
+
 def find_artist(name: str) -> Artist | None:
     """Resolve an artist name to a MusicBrainz artist, or None unless the top hit is clearly the one.
 
@@ -182,10 +273,9 @@ def find_artist(name: str) -> Artist | None:
     ambiguous name ("Air") is left for the caller to report rather than guessed. Request failures raise
     MusicBrainzRequestError; None means no clear match.
     """
-    quoted = name.replace("\\", "\\\\").replace('"', '\\"')
     data = _request_json(
         f"{MB_BASE}/artist/",
-        params={"query": f'artist:"{quoted}"', "fmt": "json", "limit": "5"},
+        params={"query": f'artist:"{_quoted(name)}"', "fmt": "json", "limit": "5"},
         operation="artist search",
     )
     hits = data.get("artists", [])
@@ -354,6 +444,11 @@ def _apply_artist_relation(rel: dict[str, Any], by_field: dict[str, list[str]], 
     elif rel["type"] in _PERFORMER_TYPES:
         what = ", ".join(rel.get("attributes", []))
         performers.append(f"{name} ({what})" if what else name)
+
+
+def _quoted(value: str) -> str:
+    """Escape *value* for a MusicBrainz Lucene phrase query."""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _join_credit(credit: list[dict[str, Any]], key: str) -> str | None:

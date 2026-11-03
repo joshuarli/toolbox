@@ -42,14 +42,14 @@ _EDITION_WORDS = {
 _ARTIST_SEPARATORS = (": ", " - ", " – ")
 
 
-def _normalize(value: str | None) -> str:
+def normalize(value: str | None) -> str:
     text = unicodedata.normalize("NFKC", value or "").casefold().replace("’", "'")
     return " ".join(text.split())
 
 
 def _base_title(value: str | None) -> str:
     """Title with bracketed annotations and separators removed, for edition comparisons."""
-    text = _BRACKETS_RE.sub(" ", _normalize(value))
+    text = _BRACKETS_RE.sub(" ", normalize(value))
     return " ".join(_SEPARATORS_RE.sub(" ", text).split())
 
 
@@ -59,9 +59,9 @@ def _edition_extension(shorter: str, longer: str) -> bool:
     return bool(set(longer[len(shorter) :].split()) & _EDITION_WORDS)
 
 
-def _album_score(file_album: str | None, release_title: str | None) -> int:
+def album_score(file_album: str | None, release_title: str | None) -> int:
     """How well a release title matches the file's album: 3 exact, 2 compatible, 1 edition, 0 no."""
-    album, title = _normalize(file_album), _normalize(release_title)
+    album, title = normalize(file_album), normalize(release_title)
     if not title:
         return 0
     if album == title:
@@ -82,13 +82,13 @@ def _track_matches(meta: Metadata, candidate: Candidate) -> bool:
     return not (bool(meta.discnumber) and candidate.meta.discnumber != meta.discnumber)
 
 
-def _preference(meta: Metadata, candidate: Candidate) -> tuple[object, ...]:
+def preference(meta: Metadata, candidate: Candidate) -> tuple[object, ...]:
     """Sort key for competing editions of one release group, best first."""
     found = candidate.meta
     return (
         found.releasestatus != "Official",
-        bool(meta.media) and _normalize(found.media) != _normalize(meta.media),
-        not bool(meta.media) and _normalize(found.media) != "digital media",
+        bool(meta.media) and normalize(found.media) != normalize(meta.media),
+        not bool(meta.media) and normalize(found.media) != "digital media",
         bool(meta.releasecountry) and found.releasecountry != meta.releasecountry,
         not bool(meta.releasecountry) and found.releasecountry != "XW",
         bool(meta.date) and found.date != meta.date,
@@ -111,7 +111,7 @@ def choose_release(meta: Metadata, candidates: list[Candidate]) -> Candidate | N
     playable = [c for c in candidates if _track_matches(meta, c) and bool(c.meta.album)]
     if not playable:
         playable = [c for c in candidates if bool(c.meta.album)]
-    scored = [(_album_score(meta.album, c.meta.album), c) for c in playable]
+    scored = [(album_score(meta.album, c.meta.album), c) for c in playable]
     scored = [(score, c) for score, c in scored if score > 0]
     if scored:
         best = max(score for score, _ in scored)
@@ -121,7 +121,7 @@ def choose_release(meta: Metadata, candidates: list[Candidate]) -> Candidate | N
     groups = {c.meta.musicbrainz_releasegroupid for c in top if bool(c.meta.musicbrainz_releasegroupid)}
     if len(groups) != 1:
         return None
-    return min(top, key=lambda c: _preference(meta, c))
+    return min(top, key=lambda c: preference(meta, c))
 
 
 def resolve_file(path: str) -> Metadata | None:
@@ -206,7 +206,7 @@ def run(args: argparse.Namespace) -> None:
         counts["resolved"] += 1
         edition = ", ".join(p for p in (resolved.media, resolved.releasecountry, resolved.date) if bool(p))
         detail = f"  [{resolved.album}" + (f" · {edition}" if edition else "") + "]"
-        if _normalize(meta.album) != _normalize(resolved.album):
+        if normalize(meta.album) != normalize(resolved.album):
             detail += "  (album tag replaced)"
         _print_result("resolved", GREEN, display, detail)
 

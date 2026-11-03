@@ -2,7 +2,7 @@ import argparse
 
 from tool.music import resolve
 from tool.music.metadata import Candidate, Metadata
-from tool.music.resolve import _album_score, choose_release, run
+from tool.music.resolve import album_score, choose_release, run
 
 
 def candidate(
@@ -43,20 +43,20 @@ def meta(album: str | None = "Album", track: str | None = "1") -> Metadata:
 
 class TestAlbumScore:
     def test_exact(self):
-        assert _album_score("Album", "Album") == 3
+        assert album_score("Album", "Album") == 3
 
     def test_artist_prefix(self):
-        assert _album_score("Artist: Album", "Album") == 2
+        assert album_score("Artist: Album", "Album") == 2
 
     def test_artist_suffix(self):
-        assert _album_score("Album - Artist", "Album") == 2
+        assert album_score("Album - Artist", "Album") == 2
 
     def test_edition_suffix(self):
-        assert _album_score("Album (Deluxe Edition)", "Album") == 2
+        assert album_score("Album (Deluxe Edition)", "Album") == 2
 
     def test_separator_and_bracket_variants_match(self):
         assert (
-            _album_score(
+            album_score(
                 "Broadchurch - The Final Chapter (Music From The Original TV Series)",
                 "Broadchurch: The Final Chapter",
             )
@@ -65,7 +65,7 @@ class TestAlbumScore:
 
     def test_labelled_soundtrack_variant_matches_as_edition(self):
         assert (
-            _album_score(
+            album_score(
                 "The Lost Flowers of Alice Hart (Prime Video Original Series Soundtrack)",
                 "The Lost Flowers of Alice Hart: Prime Video Original Series Soundtrack",
             )
@@ -73,11 +73,11 @@ class TestAlbumScore:
         )
 
     def test_a_different_release_title_is_not_an_edition(self):
-        assert _album_score("Album", "Album Remixes") == 0
-        assert _album_score("Album", "Album II") == 0
+        assert album_score("Album", "Album Remixes") == 0
+        assert album_score("Album", "Album II") == 0
 
     def test_unrelated(self):
-        assert _album_score("Other", "Album") == 0
+        assert album_score("Other", "Album") == 0
 
 
 class TestChooseRelease:

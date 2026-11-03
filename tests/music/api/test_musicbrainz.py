@@ -7,10 +7,13 @@ import pytest
 
 from tool.music.api.musicbrainz import (
     MusicBrainzRequestError,
+    ReleaseSummary,
     enrich,
     find_artist,
     release_candidates,
+    release_tracklist,
     search,
+    search_releases,
 )
 from tool.music.metadata import Artist, Metadata
 
@@ -431,3 +434,80 @@ class TestFindArtist:
         with patch("tool.music.api.musicbrainz._session.get_json", return_value={"artists": []}) as get:
             find_artist('The "Quoted" One')
         assert get.call_args.kwargs["params"]["query"] == 'artist:"The \\"Quoted\\" One"'
+
+
+class TestReleaseSearch:
+    @staticmethod
+    def response(*releases):
+        return {"releases": list(releases)}
+
+    @staticmethod
+    def release(**overrides):
+        rel = {
+            "id": "rel",
+            "title": "乾脆",
+            "date": "1999-07-07",
+            "country": "TW",
+            "status": "Official",
+            "artist-credit": [{"name": "那英", "artist": {"id": "artist", "name": "那英", "sort-name": "Na Ying"}}],
+            "release-group": {"id": "group", "primary-type": "Album", "secondary-types": []},
+            "media": [{"format": "CD", "track-count": 10}],
+        }
+        rel.update(overrides)
+        return rel
+
+    def test_parses_editions_with_track_counts(self):
+        vinyl = {
+            "id": "vinyl",
+            "title": "乾脆",
+            "artist-credit": [],
+            "release-group": {"id": "group", "primary-type": "Album", "secondary-types": ["Remaster"]},
+            "media": [{"format": '12" Vinyl', "track-count": 5}, {"format": '12" Vinyl', "track-count": 5}],
+        }
+        response = self.response(self.release(), vinyl)
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value=response) as get:
+            hits = search_releases("乾脆", "那英")
+
+        assert [hit.id for hit in hits] == ["rel", "vinyl"]
+        assert (hits[0].title, hits[0].artist, hits[0].group_id) == ("乾脆", "那英", "group")
+        assert (hits[0].track_count, hits[0].media) == (10, ["CD"])
+        assert hits[1].track_count == 10
+        assert hits[1].types == ["album", "remaster"]
+        assert get.call_args.kwargs["params"]["query"] == 'release:"乾脆" AND artist:"那英"'
+
+    def test_quotes_and_backslashes_are_escaped(self):
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value={"releases": []}) as get:
+            search_releases('a "b" \\ c', "artist")
+        assert get.call_args.kwargs["params"]["query"] == 'release:"a \\"b\\" \\\\ c" AND artist:"artist"'
+
+    def test_request_failures_raise(self):
+        with (
+            patch("tool.music.api.musicbrainz._session.get_json", side_effect=TimeoutError("slow")),
+            pytest.raises(MusicBrainzRequestError),
+        ):
+            search_releases("Album", "Artist")
+
+
+class TestReleaseTracklist:
+    def test_reads_every_medium(self):
+        response = {
+            "media": [
+                {
+                    "position": 1,
+                    "tracks": [{"id": "t1", "position": 1, "title": "One", "recording": {"id": "r1"}}],
+                },
+                {
+                    "position": 2,
+                    "tracks": [{"id": "t2", "position": 1, "title": "Two", "recording": {"id": "r2", "title": "Two"}}],
+                },
+            ]
+        }
+        hit = ReleaseSummary("rel", "Album", "Artist", "group", None, None, None, ["album"], ["CD"], 2)
+        with patch("tool.music.api.musicbrainz._session.get_json", return_value=response):
+            result = release_tracklist(hit)
+
+        assert result.summary is hit
+        assert [(t.disc_number, t.track_number, t.title, t.recording_id, t.track_id) for t in result.tracks] == [
+            ("1", "1", "One", "r1", "t1"),
+            ("2", "1", "Two", "r2", "t2"),
+        ]

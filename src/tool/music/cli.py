@@ -1,5 +1,6 @@
 import argparse
 
+from tool.music import album as album_cmd
 from tool.music import art as art_cmd
 from tool.music import audit, scan, suggest, tag, transcode
 from tool.music import autotag as autotag_cmd
@@ -35,6 +36,10 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     p_resolve = sub.add_parser("resolve", help="choose a release for files that already have a recording MBID")
     resolve_cmd.configure_parser(p_resolve)
     p_resolve.set_defaults(handler=resolve_cmd.run)
+
+    p_match = sub.add_parser("match-album", help="match a folder to one release by album, artist, and track count")
+    album_cmd.configure_parser(p_match)
+    p_match.set_defaults(handler=album_cmd.run)
 
     p_suggest = sub.add_parser("suggest", help="suggest artists to add to a playlist (ListenBrainz similar artists)")
     suggest.configure_parser(p_suggest)
