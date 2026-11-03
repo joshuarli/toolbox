@@ -98,10 +98,15 @@ class Metadata:
 @dataclass
 class Candidate:
     """One selectable match: an exact recording on an exact release/medium/track
-    (where known), with whatever descriptive fields the lookup already supplied."""
+    (where known), with whatever descriptive fields the lookup already supplied.
+
+    `duration_ms` is the recording length when the source reports one; it is used to
+    check a name-search match against the file's own duration before trusting it.
+    """
 
     score: float
     meta: Metadata
+    duration_ms: int | None = None
 
 
 @dataclass(frozen=True)

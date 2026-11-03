@@ -18,9 +18,10 @@ from tool.music.api.acoustid import (
     AcoustIDError,
     ensure_acoustid_key,
 )
+from tool.music.api.musicbrainz import MusicBrainzRequestError
 from tool.music.constants import GOLD, GREEN, GREY, RED
 from tool.music.scan import collect_files
-from tool.music.tag import autotag
+from tool.music.tag import autotag_match
 from tool.music.tags import is_writable, read_tags
 from tool.music.transcode import (
     probe_audio,
@@ -39,6 +40,8 @@ class Outcome:
     artist: str | None = None
     title: str | None = None
     remuxed: bool = False
+    method: str | None = None
+    duration_delta: float | None = None
 
 
 STATUS_COLOR = {
@@ -94,20 +97,23 @@ def process(src: str, *, delete_source: bool) -> Outcome:
         return Outcome("already-complete", src, target=converted_target, remuxed=remuxed)
 
     try:
-        written = autotag(target)
+        written = autotag_match(target)
     except SystemExit:
         return Outcome("failed", src, target=converted_target, remuxed=remuxed)
 
     if written is None:
         return Outcome("needs-manual", src, target=converted_target, remuxed=remuxed)
-    status = "tagged-release" if bool(written.musicbrainz_albumid) else "tagged-recording"
+    meta = written.meta
+    status = "tagged-release" if bool(meta.musicbrainz_albumid) else "tagged-recording"
     return Outcome(
         status,
         src,
         target=converted_target,
-        artist=written.artist,
-        title=written.title,
+        artist=meta.artist,
+        title=meta.title,
         remuxed=remuxed,
+        method=written.method,
+        duration_delta=written.duration_delta,
     )
 
 
@@ -121,6 +127,11 @@ def _print_outcome(outcome: Outcome) -> None:
         line += f" → {outcome.target}"
     if outcome.status.startswith("tagged"):
         line += f"  {outcome.artist} — {outcome.title}"
+        if bool(outcome.method) and outcome.method != "fingerprint":
+            evidence = outcome.method.replace("fingerprint+", "fingerprint + ")
+            if outcome.duration_delta is not None:
+                evidence += f", Δ{outcome.duration_delta:.1f}s"
+            line += colored(f"  ({evidence})", GREY)
         if outcome.status == "tagged-recording":
             line += colored("  (release needs `tool music tag`)", GREY)
     elif outcome.status == "needs-conversion":
@@ -215,8 +226,8 @@ def run(args: argparse.Namespace) -> None:
             if outcome.remuxed:
                 counts["remuxed"] += 1
             _print_outcome(outcome)
-    except AcoustIDError as exc:
-        print(f"\nerror: AcoustID: {exc}", file=sys.stderr)
+    except (AcoustIDError, MusicBrainzRequestError) as exc:
+        print(f"\nerror: {exc}", file=sys.stderr)
         sys.exit(1)
 
     tagged = counts["tagged-release"] + counts["tagged-recording"]

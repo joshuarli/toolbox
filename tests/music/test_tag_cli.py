@@ -9,7 +9,9 @@ from tool.music.tag import (
     _fallback_search,
     _fallback_select,
     _match_lines,
+    _name_search,
     _normalize_filename,
+    _pick_fingerprint,
     _print_tags,
     _rank,
     autotag,
@@ -524,28 +526,57 @@ class TestAutotag:
         assert audio["COMMENT"] == ["from youtube"]
         assert [p.data for p in audio.pictures] == [b"\x89PNG-fake"]
 
-    def test_low_score_is_left_alone(self, legacy_flac, load_fixture):
+    def test_weak_fingerprint_falls_back_to_exact_name(self, legacy_flac, load_fixture):
         def weaken(results):
             results["results"][0]["score"] = 0.6
 
-        meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=weaken)
+        meta, _calls = self.run_autotag(legacy_flac, load_fixture, edit=weaken)
+        assert meta is not None
+        assert read_tags(legacy_flac).musicbrainz_recordingid == KAL_REC
+
+    def test_no_fingerprint_and_no_exact_name_is_left_alone(self, legacy_flac, load_fixture):
+        with patch("tool.music.tag._name_search", return_value=(None, None)):
+            meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=lambda r: r["results"].clear())
         assert meta is None
         assert calls == []
         assert read_tags(legacy_flac).musicbrainz_recordingid is None
 
-    def test_two_strong_recordings_are_ambiguous(self, legacy_flac, load_fixture):
+    def test_conflicting_recordings_are_resolved_by_exact_name(self, legacy_flac, load_fixture):
         def add_second_recording(results):
             other = {"id": "00000000-0000-0000-0000-000000000000", "title": "Other"}
             results["results"].append({"id": "x", "score": 0.95, "recordings": [other]})
 
-        meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=add_second_recording)
+        meta, _calls = self.run_autotag(legacy_flac, load_fixture, edit=add_second_recording)
+        assert meta is not None
+        assert read_tags(legacy_flac).musicbrainz_recordingid == KAL_REC
+
+    def test_conflicting_recordings_without_exact_name_are_ambiguous(self, legacy_flac, load_fixture):
+        audio = FLAC(legacy_flac)
+        del audio["ALBUM"]
+        audio.save()
+
+        def add_second_recording(results):
+            other = {
+                "id": "00000000-0000-0000-0000-000000000000",
+                "title": "It Gets Easier",
+                "artists": [{"id": "7c67fb96-7e24-4893-a020-fcc53a1f7814", "name": "Kalandra"}],
+            }
+            results["results"].append({"id": "x", "score": 0.95, "recordings": [other]})
+
+        with patch("tool.music.tag._name_search", return_value=(None, None)):
+            meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=add_second_recording)
         assert meta is None
         assert calls == []
 
-    def test_no_matches(self, legacy_flac, load_fixture):
+    def test_no_acoustid_match_falls_back_to_exact_name(self, legacy_flac, load_fixture):
         meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=lambda r: r["results"].clear())
-        assert meta is None
-        assert calls == []
+
+        assert meta is not None
+        assert calls == ["https://musicbrainz.org/ws/2/recording/", f"https://musicbrainz.org/ws/2/recording/{KAL_REC}"]
+        tags = read_tags(legacy_flac)
+        assert tags.musicbrainz_recordingid == KAL_REC
+        assert tags.musicbrainz_albumid is None  # name matches stay at recording level
+        assert tags.musicbrainz_artistid
 
     def test_unwritable_format_is_skipped_before_any_work(self, wav_file):
         with patch("tool.music.tag.get_audio_fingerprint") as fp:
@@ -561,3 +592,74 @@ class TestAutotag:
         ):
             assert autotag(legacy_flac) is None
         assert read_tags(legacy_flac).musicbrainz_recordingid is None
+
+
+class TestFingerprintAndName:
+    def test_conflicting_recordings_are_narrowed_by_exact_name(self):
+        current = Metadata(title="Song", artist="Artist", album="Album")
+        matched = Candidate(0.95, Metadata(title="Song", artist="Artist", musicbrainz_recordingid="a"))
+        other = Candidate(0.94, Metadata(title="Other", artist="Artist", musicbrainz_recordingid="b"))
+
+        selected, score, method = _pick_fingerprint([matched, other], current)
+
+        assert selected is not None
+        assert selected.musicbrainz_recordingid == "a"
+        assert score == 0.95
+        assert method == "fingerprint+name"
+
+    def test_without_an_exact_name_the_recordings_stay_ambiguous(self):
+        current = Metadata(title="Song", artist="Artist")
+        first = Candidate(0.95, Metadata(title="Different", artist="Artist", musicbrainz_recordingid="a"))
+        second = Candidate(0.94, Metadata(title="Other", artist="Artist", musicbrainz_recordingid="b"))
+
+        assert _pick_fingerprint([first, second], current) == (None, None, None)
+
+    def test_album_narrows_several_exact_name_recordings(self):
+        current = Metadata(title="Song", artist="Artist", album="Album")
+        first = Candidate(
+            0.95, Metadata(title="Song", artist="Artist", album="Album", musicbrainz_recordingid="a")
+        )
+        second = Candidate(
+            0.94, Metadata(title="Song", artist="Artist", album="Other", musicbrainz_recordingid="b")
+        )
+
+        selected, _, method = _pick_fingerprint([first, second], current)
+
+        assert selected is not None
+        assert selected.musicbrainz_recordingid == "a"
+        assert method == "fingerprint+name+album"
+
+
+class TestNameSearch:
+    @staticmethod
+    def hit(title: str = "Song", artist: str = "Artist", recording: str = "rec", length: int = 240000):
+        return Candidate(
+            1.0,
+            Metadata(title=title, artist=artist, musicbrainz_recordingid=recording),
+            duration_ms=length,
+        )
+
+    def test_accepts_exact_title_artist_and_duration(self):
+        with patch("tool.music.tag.mb_search", return_value=[self.hit()]):
+            selected, delta = _name_search(Metadata(title="Song", artist="Artist"), 240.0)
+        assert selected is not None
+        assert selected.musicbrainz_recordingid == "rec"
+        assert delta == 0.0
+
+    def test_rejects_duration_outside_tolerance(self):
+        with patch("tool.music.tag.mb_search", return_value=[self.hit()]):
+            assert _name_search(Metadata(title="Song", artist="Artist"), 260.0) == (None, None)
+
+    def test_rejects_inexact_title(self):
+        with patch("tool.music.tag.mb_search", return_value=[self.hit(title="Song (Live)")]):
+            assert _name_search(Metadata(title="Song", artist="Artist"), 240.0) == (None, None)
+
+    def test_rejects_multiple_exact_recordings(self):
+        hits = [self.hit(recording="a"), self.hit(recording="b")]
+        with patch("tool.music.tag.mb_search", return_value=hits):
+            assert _name_search(Metadata(title="Song", artist="Artist"), 240.0) == (None, None)
+
+    def test_requires_title_and_artist(self):
+        with patch("tool.music.tag.mb_search") as search:
+            assert _name_search(Metadata(title="Song"), 240.0) == (None, None)
+        search.assert_not_called()

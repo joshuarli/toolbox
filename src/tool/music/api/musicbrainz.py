@@ -84,9 +84,9 @@ def search(query: str) -> list[Candidate]:
         )
         score = rec.get("score", 100) / 100.0
         for rel in rec.get("releases", []):
-            out.extend(Candidate(score, m) for m in _search_release(base, rel))
+            out.extend(Candidate(score, m, rec.get("length")) for m in _search_release(base, rel))
         if not rec.get("releases"):
-            out.append(Candidate(score, base))
+            out.append(Candidate(score, base, rec.get("length")))
     return out
 
 

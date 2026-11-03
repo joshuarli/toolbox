@@ -10,6 +10,7 @@ import re
 import sys
 import unicodedata
 from collections import Counter
+from dataclasses import dataclass
 
 from tool.music.api.acoustid import (
     AcoustIDError,
@@ -234,46 +235,126 @@ def _fallback_select(cands: list[Candidate]) -> int:
 
 
 AUTOTAG_MIN_SCORE = 0.9
+FALLBACK_MIN_SCORE = 0.8
 
 
-def autotag(filepath: str) -> Metadata | None:
-    """Tag *filepath* without prompting, but only where the fingerprint match is unambiguous.
+@dataclass(frozen=True)
+class AutotagMatch:
+    meta: Metadata
+    method: str
+    score: float | None = None
+    duration_delta: float | None = None
 
-    Every AcoustID match scoring at least `AUTOTAG_MIN_SCORE` must be the same recording.  If
-    that recording is on exactly one release, and the file has no album or one of the same
-    title, the full release identity is written; otherwise only recording-level identity is,
-    leaving the album and the release choice to an interactive `tag` run.
-    Returns what was written, or None if the file was left alone.  Does not rename the file.
+
+def _same_text(left: str | None, right: str | None) -> bool:
+    def key(value: str | None) -> str:
+        text = unicodedata.normalize("NFKC", value or "").casefold().replace("’", "'")
+        return " ".join(text.split())
+
+    return bool(key(left)) and key(left) == key(right)
+
+
+def _same_name(candidate: Metadata, current: Metadata) -> bool:
+    return _same_text(candidate.title, current.title) and _same_text(candidate.artist, current.artist)
+
+
+def _pick_fingerprint(cands: list[Candidate], current: Metadata) -> tuple[Metadata | None, float | None, str | None]:
+    """The recording the fingerprint identifies, optionally confirmed by exact tags."""
+    strong = [c for c in cands if c.score >= AUTOTAG_MIN_SCORE and bool(c.meta.musicbrainz_recordingid)]
+    if len({c.meta.musicbrainz_recordingid for c in strong}) == 1:
+        best = max(strong, key=lambda c: c.score)
+        return best.meta, best.score, "fingerprint"
+
+    named = [
+        c
+        for c in cands
+        if c.score >= FALLBACK_MIN_SCORE and _same_name(c.meta, current) and bool(c.meta.musicbrainz_recordingid)
+    ]
+    named_ids = {c.meta.musicbrainz_recordingid for c in named}
+    if len(named_ids) == 1:
+        best = max(named, key=lambda c: c.score)
+        return best.meta, best.score, "fingerprint+name"
+    if len(named_ids) > 1 and bool(current.album):
+        album_named = [c for c in named if _same_text(c.meta.album, current.album)]
+        if len({c.meta.musicbrainz_recordingid for c in album_named}) == 1:
+            best = max(album_named, key=lambda c: c.score)
+            return best.meta, best.score, "fingerprint+name+album"
+    return None, None, None
+
+
+def _name_search(current: Metadata, duration: float) -> tuple[Metadata | None, float | None]:
+    """A recording found by exact title/artist search, only when duration agrees too."""
+    if not (bool(current.title) and bool(current.artist)):
+        return None, None
+    hits = mb_search(f"recording:({current.title}) AND artist:({current.artist})")
+    eligible = [
+        c
+        for c in hits
+        if c.score >= 1.0 and _same_name(c.meta, current) and c.duration_ms is not None
+    ]
+    if len({c.meta.musicbrainz_recordingid for c in eligible}) != 1:
+        return None, None
+    best = max(eligible, key=lambda c: c.score)
+    duration_ms = best.duration_ms
+    if duration_ms is None:
+        return None, None
+    delta = abs(duration - duration_ms / 1000.0)
+    if delta > max(3.0, duration * 0.02):
+        return None, None
+    return Metadata(musicbrainz_recordingid=best.meta.musicbrainz_recordingid), delta
+
+
+def autotag_match(filepath: str) -> AutotagMatch | None:
+    """Identify *filepath* and write its tags, reporting which evidence was used.
+
+    Fingerprint matches are trusted when unambiguous.  Conflicting fingerprint
+    recordings may be separated by an exact title/artist match.  Without a usable
+    fingerprint, MusicBrainz name search is accepted only for an exact title and
+    artist whose reported length agrees with the file.
     """
     if not is_writable(filepath):
         return None
     duration, fingerprint = get_audio_fingerprint(filepath)
     if not (duration and fingerprint):
         return None
-    strong = [
-        c for c in candidates(fetch_acoustid_metadata(duration, fingerprint) or []) if c.score >= AUTOTAG_MIN_SCORE
-    ]
-    if len({c.meta.musicbrainz_recordingid for c in strong}) != 1:
+
+    current = read_tags(filepath)
+    cands = candidates(fetch_acoustid_metadata(duration, fingerprint) or [])
+    selected, score, method = _pick_fingerprint(cands, current)
+    duration_delta = None
+    if selected is None:
+        selected, duration_delta = _name_search(current, duration)
+        method = "name"
+    if selected is None:
         return None
+    assert method is not None
 
-    best = max(strong, key=lambda c: c.score).meta
-    album = read_tags(filepath).album
-    sole_release = len({c.meta.musicbrainz_albumid for c in strong}) == 1 and best.musicbrainz_albumid
-    if (
-        sole_release is not None
-        and sole_release
-        and (album is None or not album or album.casefold() == (best.album or "").casefold())
-    ):
-        selection = best
+    if method == "name":
+        metadata = enrich(Metadata(musicbrainz_recordingid=selected.musicbrainz_recordingid))
     else:
-        selection = Metadata(musicbrainz_recordingid=best.musicbrainz_recordingid, acoustid_id=best.acoustid_id)
+        same = [c for c in cands if c.meta.musicbrainz_recordingid == selected.musicbrainz_recordingid]
+        best = max(same, key=lambda c: c.score)
+        album = current.album
+        sole_release = len({c.meta.musicbrainz_albumid for c in same}) == 1 and best.meta.musicbrainz_albumid
+        if bool(sole_release) and (album is None or not bool(album) or album.casefold() == (best.meta.album or "").casefold()):
+            selection = best.meta
+        else:
+            selection = Metadata(
+                musicbrainz_recordingid=selected.musicbrainz_recordingid,
+                acoustid_id=best.meta.acoustid_id,
+            )
+        metadata = enrich(selection)
 
-    metadata = enrich(selection)
-    if not metadata.musicbrainz_artistid:  # MusicBrainz lookup failed; nothing durable to write
+    if not metadata.musicbrainz_artistid:
         return None
     metadata.acoustid_fingerprint = fingerprint
     write_tags(filepath, metadata)
-    return metadata
+    return AutotagMatch(metadata, method, score=score, duration_delta=duration_delta)
+
+
+def autotag(filepath: str) -> Metadata | None:
+    match = autotag_match(filepath)
+    return match.meta if match else None
 
 
 def configure_parser(p: argparse.ArgumentParser) -> None:

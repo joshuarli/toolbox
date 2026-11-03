@@ -6,6 +6,7 @@ from tool.music import autotag as queue
 from tool.music.api.acoustid import AcoustIDError
 from tool.music.autotag import Outcome, process, run
 from tool.music.metadata import Metadata
+from tool.music.tag import AutotagMatch
 
 
 def complete_meta() -> Metadata:
@@ -23,7 +24,7 @@ class TestProcess:
     def test_complete_file_is_left_alone(self, monkeypatch):
         monkeypatch.setattr(queue, "read_tags", lambda _: complete_meta())
         called = []
-        monkeypatch.setattr(queue, "autotag", lambda _: called.append(_))
+        monkeypatch.setattr(queue, "autotag_match", lambda _: called.append(_))
 
         outcome = process("song.flac", delete_source=False)
 
@@ -33,7 +34,7 @@ class TestProcess:
     def test_writable_file_is_autotagged(self, monkeypatch):
         monkeypatch.setattr(queue, "read_tags", lambda _: Metadata(title="Song", artist="Artist"))
         monkeypatch.setattr(queue, "is_writable", lambda _: True)
-        monkeypatch.setattr(queue, "autotag", lambda _: complete_meta())
+        monkeypatch.setattr(queue, "autotag_match", lambda _: AutotagMatch(complete_meta(), "fingerprint"))
 
         outcome = process("song.flac", delete_source=False)
 
@@ -45,7 +46,7 @@ class TestProcess:
         written = Metadata(title="Song", artist="Artist", musicbrainz_recordingid="rec")
         monkeypatch.setattr(queue, "read_tags", lambda _: Metadata(title="Song", artist="Artist"))
         monkeypatch.setattr(queue, "is_writable", lambda _: True)
-        monkeypatch.setattr(queue, "autotag", lambda _: written)
+        monkeypatch.setattr(queue, "autotag_match", lambda _: AutotagMatch(written, "fingerprint"))
 
         outcome = process("song.flac", delete_source=False)
 
@@ -54,7 +55,7 @@ class TestProcess:
     def test_ambiguous_match_needs_manual(self, monkeypatch):
         monkeypatch.setattr(queue, "read_tags", lambda _: Metadata(title="Song", artist="Artist"))
         monkeypatch.setattr(queue, "is_writable", lambda _: True)
-        monkeypatch.setattr(queue, "autotag", lambda _: None)
+        monkeypatch.setattr(queue, "autotag_match", lambda _: None)
 
         assert process("song.flac", delete_source=False).status == "needs-manual"
 
@@ -64,7 +65,7 @@ class TestProcess:
 
         monkeypatch.setattr(queue, "read_tags", lambda _: Metadata(title="Song", artist="Artist"))
         monkeypatch.setattr(queue, "is_writable", lambda _: True)
-        monkeypatch.setattr(queue, "autotag", fail)
+        monkeypatch.setattr(queue, "autotag_match", fail)
 
         assert process("song.flac", delete_source=False).status == "failed"
 
@@ -73,7 +74,7 @@ class TestProcess:
         monkeypatch.setattr(queue, "is_writable", lambda _: False)
         monkeypatch.setattr(queue, "remux_extension", lambda _: None)
         called = []
-        monkeypatch.setattr(queue, "autotag", lambda _: called.append(_))
+        monkeypatch.setattr(queue, "autotag_match", lambda _: called.append(_))
 
         outcome = process("song.wav", delete_source=False)
 
@@ -90,7 +91,7 @@ class TestProcess:
         monkeypatch.setattr(queue, "remux_extension", lambda _: ".opus")
         monkeypatch.setattr(queue, "transcode_destination", lambda _: str(dst))
         monkeypatch.setattr(queue, "transcode", lambda _: pytest.fail("should reuse existing output"))
-        monkeypatch.setattr(queue, "autotag", lambda p: complete_meta())
+        monkeypatch.setattr(queue, "autotag_match", lambda p: AutotagMatch(complete_meta(), "fingerprint"))
 
         outcome = process(str(src), delete_source=False)
 
@@ -113,7 +114,7 @@ class TestProcess:
         monkeypatch.setattr(queue, "remux_extension", lambda _: ".opus")
         monkeypatch.setattr(queue, "transcode_destination", lambda _: str(dst))
         monkeypatch.setattr(queue, "transcode", fake_transcode)
-        monkeypatch.setattr(queue, "autotag", lambda p: complete_meta())
+        monkeypatch.setattr(queue, "autotag_match", lambda p: AutotagMatch(complete_meta(), "fingerprint"))
 
         outcome = process(str(src), delete_source=False)
 
@@ -131,7 +132,7 @@ class TestProcess:
         monkeypatch.setattr(queue, "remux_extension", lambda _: ".opus")
         monkeypatch.setattr(queue, "transcode_destination", lambda _: str(dst))
         monkeypatch.setattr(queue, "probe_audio", lambda _: {"codec_name": "opus", "channels": 2})
-        monkeypatch.setattr(queue, "autotag", lambda p: complete_meta())
+        monkeypatch.setattr(queue, "autotag_match", lambda p: AutotagMatch(complete_meta(), "fingerprint"))
 
         process(str(src), delete_source=True)
 
