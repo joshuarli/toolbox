@@ -173,6 +173,15 @@ def test_cli_missing_cover_is_nonfatal(flac_file):
     assert not has_embedded_art(flac_file)
 
 
+def test_cli_invalid_mbid_is_skipped(flac_file, capsys):
+    write_tags(flac_file, Metadata(title="Song", album="Album", musicbrainz_albumid="197524302"))
+    with patch("tool.music.api.coverart._get") as fetch:
+        art.run(_args(flac_file))
+    fetch.assert_not_called()
+    assert "invalid MusicBrainz ID: 197524302" in capsys.readouterr().out
+    assert not has_embedded_art(flac_file)
+
+
 def test_cli_network_errors_exit_nonzero(flac_file):
     _album(Path(flac_file))
     with patch("tool.music.art.fetch_cover", side_effect=CoverArtError("HTTP 503")):

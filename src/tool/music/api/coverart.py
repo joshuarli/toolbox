@@ -27,6 +27,10 @@ class CoverArtError(RuntimeError):
     """A cover art lookup failed for reasons other than missing artwork."""
 
 
+class InvalidMusicBrainzIdError(CoverArtError):
+    """A stored MusicBrainz ID is not a UUID, so no lookup can be made."""
+
+
 @dataclass(frozen=True)
 class Cover:
     data: bytes
@@ -41,7 +45,7 @@ def _uuid(value: str | None) -> str | None:
     try:
         return str(UUID(value))
     except (ValueError, AttributeError) as exc:
-        raise CoverArtError(f"invalid MusicBrainz ID: {value}") from exc
+        raise InvalidMusicBrainzIdError(f"invalid MusicBrainz ID: {value}") from exc
 
 
 def _get(url: str) -> bytes | None:

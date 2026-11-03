@@ -7,7 +7,12 @@ from pathlib import Path
 
 from mutagen import MutagenError
 
-from tool.music.api.coverart import Cover, CoverArtError, fetch_cover
+from tool.music.api.coverart import (
+    Cover,
+    CoverArtError,
+    InvalidMusicBrainzIdError,
+    fetch_cover,
+)
 from tool.music.artwork import embed_art, has_embedded_art
 from tool.music.scan import collect_files
 from tool.music.tags import is_writable, read_tags
@@ -94,6 +99,12 @@ def run(args: argparse.Namespace) -> None:
             except CoverArtError as exc:
                 cache[key] = exc
         cover = cache[key]
+        if isinstance(cover, InvalidMusicBrainzIdError):
+            print(f"skip  {display}: {cover} (fix tags or run music tag/resolve)")
+            if args.sidecar:
+                finished_dirs.add(path.parent)
+            skipped += 1
+            continue
         if isinstance(cover, CoverArtError):
             print(f"error {display}: {cover}", file=sys.stderr)
             if args.sidecar:

@@ -52,7 +52,7 @@ def test_group_without_release():
 
 def test_bad_id_does_not_make_request():
     with patch.object(coverart, "_get") as fetch:
-        with pytest.raises(coverart.CoverArtError, match="invalid MusicBrainz ID"):
+        with pytest.raises(coverart.InvalidMusicBrainzIdError, match="invalid MusicBrainz ID"):
             coverart.fetch_cover("../../etc/passwd", None)
     fetch.assert_not_called()
 
