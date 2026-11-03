@@ -1,25 +1,30 @@
 # Music tagging handoff
 
 State of the `~/Sync/M` tagging pass, what is left, and the techniques worth testing next.
-The working commands are `music audit`, `music autotag`, and `music resolve`; see
-[music.md](music.md) and [music-tagging.md](music-tagging.md) for their contracts.
+The working commands are `music audit`, `music autotag`, `music resolve`, and
+`music art`; see [music.md](music.md), [music-tagging.md](music-tagging.md), and
+[music-art.md](music-art.md) for their contracts.
 
 ## Where the library stands
 
 | State | Before | Now |
 |---|---:|---:|
-| complete | 272 | 789 (68.4%) |
-| missing identity | 806 | 295 |
-| missing album identity | 40 | 44 |
+| complete | 272 | 790 (68.5%) |
+| missing identity | 806 | 324 |
+| missing album identity | 40 | 14 |
 | untagged | 34 | 26 |
 | partial | 2 | 0 |
+| embedded front cover | 0 | 875 (75.8%) |
 
 The library has 1154 audio files. The 274 WebM sources were replaced by lossless Opus
 remuxes and then deleted after each output probed as valid. No source files remain
 untagged only because of their container.
 
-Every command below ran with zero failures. The final audit is
-`uv run tool music audit ~/Sync/M`; `--json` returns the per-file states.
+The final audit is `uv run tool music audit ~/Sync/M`; `--json` returns the per-file
+states. Artwork coverage comes from `tool music art --dry-run` plus the Cover Art
+Archive: 875 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
+the remaining 279 split into 248 files with no album MBID and 31 files in seven releases
+that have no front cover in the archive.
 
 ## What was run
 
@@ -32,23 +37,31 @@ Every command below ran with zero failures. The final audit is
 - A final `music autotag` pass with the guarded fallback: 51 tagged (21 by
   fingerprint + exact name, 10 by name + duration, 20 by fingerprint), 321 left.
 - Deleted 274 WebM sources, each after its `.opus` sibling probed with an audio stream.
+- `music art` over the library, twice: 311 covers embedded (48.9% → 75.8%). One archive
+  item (`Is It or Isn't It Happening？`) returned HTTP 500 on the first pass and worked on
+  a later one; the fault was the archive node, not the client.
+- Removed malformed numeric MusicBrainz IDs from 30 files (`Albums/Breathing` ×13,
+  `Albums/Breathing II` ×14, plus three playlist files). They came from another tagger and
+  are not UUIDs; `music art` now reports them as skips instead of aborting the run.
+- `music autotag` again: 15 tagged recording-only, 350 left for manual review.
+- `music resolve` again: 1 release (Dire Straits — Sultans of Swing), 14 ambiguous.
 
 ## What remains
 
-365 files: 295 missing identity, 44 missing album identity, 26 untagged.
+364 files: 324 missing identity, 14 missing album identity, 26 untagged.
 
-- 313 of the 365 still carry an album tag. The queue is concentrated in album folders:
+- 312 of the 364 still carry an album tag. The queue is concentrated in album folders:
   `WIP/evan call/Evan Call Orchestra Concert 2025` (28),
   `Music/Albums/Album - Sibelius, J.: Piano Music` (23),
-  `Albums/Breathing` + `Breathing II` (27),
-  `Staging/LUMINA` + `Light` (16),
-  `WIP/agobay` date folders (about 80 across 2023–2024),
-  `Albums/anan ryoko - usubenifuji` (9), `Albums/isos` (7),
-  `Music/bandcamp/Dreamage` (10), `Music/bandcamp/Arigto - Lungs` (7).
-- 40 of the 365 are redundant copies of another pending file: 36 Chromaprint-identical
-  groups covering 76 files. Tagging one copy would cover the rest.
-- 44 missing-album files split into 30 whose recording has no release linked in
-  MusicBrainz and 14 with several plausible release groups.
+  `WIP/agobay/keep/2024-may` (16), `Albums/Breathing` + `Breathing II` (27),
+  `Music/bandcamp/Dreamage` (10), `Staging` (10),
+  `WIP/agobay` date folders (about 50 across 2023–2024),
+  `Albums/anan ryoko - usubenifuji` (9), `Albums/isos` (7).
+- The duplicate measurement from the previous pass (40 redundant copies in 36
+  Chromaprint-identical groups) predates the latest autotag/resolve passes; re-measure
+  with `fpcalc` before acting on it.
+- 14 files have recording identity but no release: 13 with 2–4 plausible release groups
+  and one (Nina Simone — I Put a Spell On You) with 142.
 - 26 untagged files are mostly Bandcamp and playlist-folder rips with no descriptive tags.
 
 ## Techniques to investigate
@@ -80,13 +93,16 @@ complete tracklist match, and treat a partial match as no match.
 Expected: the dominant lever; roughly 100–150 files by folder size, but unmeasured.
 Suggested command shape: `music match-album DIR` with `--dry-run`, or a `--folder` mode on
 `resolve`. A review-first mode that prints the proposed tracklist and applies on
-confirmation would remove most of the false-positive risk for ~50 folders.
+confirmation would remove most of the false-positive risk for ~50 folders. The first
+candidate to test is `Playlists/Chinese Heart/Album - Totally Giving Up` (6 files, 2–3
+release groups each, all sharing one album folder).
 
 ### 2. Duplicate propagation (safe, small)
 
-36 fingerprint groups, 76 files, 40 redundant copies. `fpcalc` fingerprints are already
-available through `get_audio_fingerprint`. For each group, if one file is complete, copy
-its identity and descriptive tags to the rest with `read_tags` → `write_tags`.
+The previous queue measured 36 fingerprint groups, 76 files, 40 redundant copies.
+`fpcalc` fingerprints are already available through `get_audio_fingerprint`. For each
+group, if one file is complete, copy its identity and descriptive tags to the rest with
+`read_tags` → `write_tags`.
 
 Guard with duration equality and skip groups with no complete member. This carries no
 identification risk, only the normal risk of sharing a fingerprint between different
@@ -107,7 +123,7 @@ measurement suggests single-digit to low-double-digit yield.
 
 ### 4. Manual queue
 
-`music tag` still resolves one file interactively. For the 44 missing-album files and the
+`music tag` still resolves one file interactively. For the 14 missing-album files and the
 hard remainder, this is the fallback. A useful addition would be a command that prints a
 compact manual queue grouped by folder, excluding files already handled.
 
@@ -174,12 +190,15 @@ than one. The earlier pass found 36 groups over 365 files.
 | batch tagging and fallback reporting | `src/tool/music/autotag.py` |
 | fingerprint/name decision and write | `src/tool/music/tag.py` |
 | release resolution and album matching | `src/tool/music/resolve.py` |
+| cover fetch, batch command | `src/tool/music/art.py`, `src/tool/music/api/coverart.py` |
+| embedded/sidecar artwork I/O | `src/tool/music/artwork.py` |
 | MusicBrainz search, browse, enrich | `src/tool/music/api/musicbrainz.py` |
 | lossless remux and taggability | `src/tool/music/transcode.py` |
 
 Relevant commits: `08991b3` audit, `2e8c613` SSL context, `407f89e` autotag and remux,
 `ff02f09` key guidance, `394c24a` transcode default, `92ed3c9` release resolution,
-`4627191` sole release groups and edition titles, `7952dbb` guarded name fallback.
+`4627191` sole release groups and edition titles, `7952dbb` guarded name fallback,
+`24190ca` Cover Art Archive embedding, `ad3407e` malformed-ID skips.
 
 ## Open decisions
 
@@ -189,3 +208,6 @@ Relevant commits: `08991b3` audit, `2e8c613` SSL context, `407f89e` autotag and 
    album tags survive.
 3. Whether a sole release group may continue to replace a mismatched album tag. This was
    accepted for 83 files and is reported per file.
+4. Artwork in the 30 directories holding multiple releases: `--sidecar` skips them by
+   design, so they currently rely on per-file embedding. Splitting sidecars by release, or
+   keeping embedding as the only answer there, is unresolved.
