@@ -26,6 +26,8 @@ from tool.music.ui import bold, colored, dim, select_interactive
 
 _YT_ID_RE = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
 _TRACK_NUM_RE = re.compile(r"^\d{1,3}\s*[-–—]\s*")
+_ARTIST_TITLE_RE = re.compile(r"^(?P<artist>.+?)\s+[-–—]\s+(?P<title>.+)$")
+_DOWNLOAD_ID_RE = re.compile(r"\s*\[\d+\]$")
 
 
 def _normalize_filename(filepath: str) -> str:
@@ -49,6 +51,22 @@ def _normalize_filename(filepath: str) -> str:
     name = " ".join(name.split())
 
     return name.strip()
+
+
+def _filename_identity(filepath: str) -> tuple[str, str] | None:
+    """Title and artist parsed from an ``Artist - Title`` filename, or None.
+
+    A trailing numeric download ID (``[412580996]``) is dropped; the YouTube-ID and
+    track-number forms are already removed by `_normalize_filename`.
+    """
+    match = _ARTIST_TITLE_RE.match(_normalize_filename(filepath))
+    if match is None:
+        return None
+    title = _DOWNLOAD_ID_RE.sub("", match["title"]).strip()
+    artist = match["artist"].strip()
+    if not (title and artist):
+        return None
+    return title, artist
 
 
 def _fallback_search(filepath: str, current: Metadata) -> list[Candidate]:
@@ -310,7 +328,8 @@ def autotag_match(filepath: str) -> AutotagMatch | None:
     Fingerprint matches are trusted when unambiguous.  Conflicting fingerprint
     recordings may be separated by an exact title/artist match.  Without a usable
     fingerprint, MusicBrainz name search is accepted only for an exact title and
-    artist whose reported length agrees with the file.
+    artist whose reported length agrees with the file.  A file with no title or
+    artist tag uses an ``Artist - Title`` filename for that same guarded search.
     """
     if not is_writable(filepath):
         return None
@@ -325,11 +344,17 @@ def autotag_match(filepath: str) -> AutotagMatch | None:
     if selected is None:
         selected, duration_delta = _name_search(current, duration)
         method = "name"
+    if selected is None and not (current.title and current.artist):
+        parsed = _filename_identity(filepath)
+        if parsed is not None:
+            title, artist = parsed
+            selected, duration_delta = _name_search(Metadata(title=title, artist=artist), duration)
+            method = "filename"
     if selected is None:
         return None
     assert method is not None
 
-    if method == "name":
+    if method in {"name", "filename"}:
         metadata = enrich(Metadata(musicbrainz_recordingid=selected.musicbrainz_recordingid))
     else:
         same = [c for c in cands if c.meta.musicbrainz_recordingid == selected.musicbrainz_recordingid]

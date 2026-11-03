@@ -1,4 +1,5 @@
 import argparse
+import shutil
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +9,7 @@ from tool.music.metadata import Candidate, Metadata
 from tool.music.tag import (
     _fallback_search,
     _fallback_select,
+    _filename_identity,
     _match_lines,
     _name_search,
     _normalize_filename,
@@ -534,6 +536,18 @@ class TestAutotag:
         assert meta is not None
         assert read_tags(legacy_flac).musicbrainz_recordingid == KAL_REC
 
+    def test_untagged_file_uses_its_filename(self, legacy_flac, load_fixture, tmp_path):
+        path = tmp_path / "Kalandra - It Gets Easier.flac"
+        shutil.copyfile(legacy_flac, path)
+        audio = FLAC(path)
+        audio.delete()
+        audio.save()
+
+        meta, _calls = self.run_autotag(str(path), load_fixture, edit=lambda r: r["results"].clear())
+
+        assert meta is not None
+        assert read_tags(str(path)).musicbrainz_recordingid == KAL_REC
+
     def test_no_fingerprint_and_no_exact_name_is_left_alone(self, legacy_flac, load_fixture):
         with patch("tool.music.tag._name_search", return_value=(None, None)):
             meta, calls = self.run_autotag(legacy_flac, load_fixture, edit=lambda r: r["results"].clear())
@@ -628,6 +642,24 @@ class TestFingerprintAndName:
         assert selected is not None
         assert selected.musicbrainz_recordingid == "a"
         assert method == "fingerprint+name+album"
+
+
+class TestFilenameIdentity:
+    def test_parses_artist_and_title(self):
+        assert _filename_identity("dreamage - Castaic [412580996].opus") == ("Castaic", "dreamage")
+
+    def test_strips_track_number_and_youtube_id(self):
+        assert _filename_identity("09 - Artist - Song [abc123def45].mp3") == ("Song", "Artist")
+
+    def test_keeps_parentheticals_and_drops_the_download_id(self):
+        assert _filename_identity("Artist - Entry 1 (pine mountain dream journal) [675576454].opus") == (
+            "Entry 1 (pine mountain dream journal)",
+            "Artist",
+        )
+
+    def test_requires_both_sides(self):
+        assert _filename_identity("Bohemian Rhapsody.flac") is None
+        assert _filename_identity("- Title.flac") is None
 
 
 class TestNameSearch:
