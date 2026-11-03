@@ -1,5 +1,6 @@
 import argparse
 
+from tool.music import art as art_cmd
 from tool.music import audit, scan, suggest, tag, transcode
 from tool.music import autotag as autotag_cmd
 from tool.music import resolve as resolve_cmd
@@ -18,6 +19,10 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     p_audit = sub.add_parser("audit", help="report tag completeness across a music library")
     audit.configure_parser(p_audit)
     p_audit.set_defaults(handler=audit.run)
+
+    p_art = sub.add_parser("art", help="fetch album artwork and embed it or save a sidecar")
+    art_cmd.configure_parser(p_art)
+    p_art.set_defaults(handler=art_cmd.run)
 
     p_tag = sub.add_parser("tag", help="fingerprint a file and write MusicBrainz/AcoustID metadata")
     tag.configure_parser(p_tag)

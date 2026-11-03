@@ -1,9 +1,10 @@
 # `tool music`
 
-Music commands audit, autotag, resolve, scan, tag, transcode, and suggest artists for local audio files. Run `uv run tool music --help` or `uv run tool music <command> --help` for current flags.
+Music commands art, audit, autotag, resolve, scan, tag, transcode, and suggest artists for local audio files. Run `uv run tool music --help` or `uv run tool music <command> --help` for current flags.
 
 | Command | Behavior |
 |---|---|
+| `art` | Fetches album artwork from Cover Art Archive by MusicBrainz release ID; embeds it in audio or saves a sidecar. Supports `--dry-run`, `--sidecar`, and `--force`. See [music-art.md](music-art.md). |
 | `audit` | Reports tag completeness across a directory: complete, missing identity, missing album identity, untagged, and partial, with per-format and per-directory breakdowns and the files that need work. Read-only and offline; `--json` for scripting. |
 | `scan` | Reports codec, bitrate, artwork, missing tags, a lossy-transcode heuristic, and mastering flags; it does not write tags. See [music-scan.md](music-scan.md). |
 | `tag` | Looks up one audio file and writes the selected MusicBrainz/AcoustID metadata. Use `--read` to inspect tags, `--force` to refresh identity, and `-y` to skip the write confirmation. Details: [music-tagging.md](music-tagging.md). |
@@ -22,10 +23,10 @@ When strong fingerprint candidates disagree, `autotag` accepts one only if it ha
 
 Without `-o`, transcode writes a same-stem file beside each input: `.opus`, `.ogg`, `.flac`, or `.m4a` from the audio codec, falling back to `.m4a` for the encoder. A source already in a taggable container is left alone; `--encode` forces AAC. Existing outputs are refused unless `--overwrite` is set.
 
-`scan` and `transcode` need `ffprobe`/`ffmpeg`. `tag` and `autotag` need `fpcalc` and an `ACOUSTID_API_KEY`; when the environment lacks the key, the tool reads it with `vault get ACOUSTID_API_KEY`. MusicBrainz lookups need no key. `suggest` queries MusicBrainz and ListenBrainz, and auto-tagging needs the same AcoustID setup as `tag`.
+`art` needs no API key and uses existing release MBIDs; it downloads once per album and skips existing artwork by default. `scan` and `transcode` need `ffprobe`/`ffmpeg`. `tag` and `autotag` need `fpcalc` and an `ACOUSTID_API_KEY`; when the environment lacks the key, the tool reads it with `vault get ACOUSTID_API_KEY`. MusicBrainz lookups need no key. `suggest` queries MusicBrainz and ListenBrainz, and auto-tagging needs the same AcoustID setup as `tag`.
 
 Suggestions seed from playlist artist credits, resolve missing MBIDs by name, query ListenBrainz, and exclude artists already in the library. Auto-tagging is limited to unambiguous fingerprint matches.
 
-The tool writes only through commands that explicitly modify files: `tag` updates the supplied file, `autotag` tags a library and may remux (`--delete-source` also removes the original), `resolve` writes a chosen release identity, `transcode` writes a converted file, and `suggest` may tag playlist files unless `--no-tag` is set. The default library exclusion for `suggest` is `~/Sync/M`; pass `--library` to use another directory.
+The tool writes only through commands that explicitly modify files: `art` embeds covers or writes sidecars unless `--dry-run` is supplied, `tag` updates the supplied file, `autotag` tags a library and may remux (`--delete-source` also removes the original), `resolve` writes a chosen release identity, `transcode` writes a converted file, and `suggest` may tag playlist files unless `--no-tag` is set. The default library exclusion for `suggest` is `~/Sync/M`; pass `--library` to use another directory.
 
 The metadata model and its per-container mappings are documented in [music-tagging.md](music-tagging.md). Scan thresholds and the limits of its verdicts are in [music-scan.md](music-scan.md).

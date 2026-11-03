@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from tool.music.artwork import has_embedded_art
 from tool.music.constants import (
     AUDIO_EXTENSIONS,
     BLUE,
@@ -255,7 +256,7 @@ def _print_file_detail(
     codec = audio.get("codec_name", "?")
     bitrate_str = audio.get("bit_rate") or fmt.get("bit_rate")
     bitrate = int(bitrate_str) if bitrate_str else None
-    cover = has_cover_art(streams)
+    cover = has_cover_art(streams) or has_embedded_art(str(fp))
     sample_rate_str = audio.get("sample_rate")
     sample_rate = int(sample_rate_str) if sample_rate_str else None
     bit_depth = audio.get("bits_per_raw_sample") or audio.get("bits_per_sample")
@@ -477,7 +478,7 @@ def run(args: argparse.Namespace) -> None:
         codec = audio.get("codec_name", "?")
         bitrate_str = audio.get("bit_rate") or fmt.get("bit_rate")
         bitrate = int(bitrate_str) if bitrate_str else None
-        cover = has_cover_art(streams)
+        cover = has_cover_art(streams) or has_embedded_art(str(fp))
 
         sample_rate_str = audio.get("sample_rate")
         sample_rate = int(sample_rate_str) if sample_rate_str else None

@@ -23,3 +23,4 @@ Personal CLI tools, invoked as `uv run tool <name> ...`.
 - Music commands: [docs/music.md](docs/music.md)
 - MusicBrainz tags and identity: [docs/music-tagging.md](docs/music-tagging.md)
 - Audio scan verdicts: [docs/music-scan.md](docs/music-scan.md)
+- Cover artwork fetching: [docs/music-art.md](docs/music-art.md)

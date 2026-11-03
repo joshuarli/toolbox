@@ -1,6 +1,6 @@
 # Music scan verdicts
 
-`tool music scan` uses `ffprobe` to report audio streams and reads tags through the same tag adapter used by `music tag`. It does not modify the scanned files. A directory scan recurses over known audio extensions; a single file gets a detailed stream/tag breakdown.
+`tool music scan` uses `ffprobe` to report audio streams and reads tags through the same tag adapter used by `music tag`. Artwork detection combines ffprobe attached pictures with Mutagen's embedded-image tags (including Ogg/Opus picture blocks). It does not modify the scanned files. A directory scan recurses over known audio extensions; a single file gets a detailed stream/tag breakdown.
 
 For lossless files, a spectral heuristic looks for abrupt energy drops across five high-frequency bands. It scans a 60-second section around the middle of long files. Lossy codecs and DSD are reported separately; low overall energy or no high-frequency content makes the result inconclusive. A suspected brickwall is evidence of a lossy transcode, not proof of file provenance.
 
