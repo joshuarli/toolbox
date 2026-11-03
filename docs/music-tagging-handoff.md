@@ -9,21 +9,24 @@ The working commands are `music audit`, `music autotag`, `music resolve`, and
 
 | State | Before | Now |
 |---|---:|---:|
-| complete | 272 | 807 (69.9%) |
-| missing identity | 806 | 307 |
+| complete | 272 | 813 (71.1%) |
+| missing identity | 806 | 306 |
 | missing album identity | 40 | 14 |
-| untagged | 34 | 26 |
+| untagged | 34 | 11 |
 | partial | 2 | 0 |
-| embedded front cover | 0 | 891 (77.2%) |
+| embedded front cover | 0 | 882 (77.1%) |
 
-The library has 1154 audio files. The 274 WebM sources were replaced by lossless Opus
+The library has 1144 audio files. The 274 WebM sources were replaced by lossless Opus
 remuxes and then deleted after each output probed as valid. No source files remain
-untagged only because of their container.
+untagged only because of their container. Forty Syncthing conflict files were removed
+after hashing them against their same-stem sibling; 26 of them were the only copy of the
+Sibelius album folder, recovered from the `.webm` sources on `/Volumes/UNTITLED/moved`
+and remuxed back to Opus.
 
 The final audit is `uv run tool music audit ~/Sync/M`; `--json` returns the per-file
 states. Artwork coverage comes from `tool music art --dry-run` plus the Cover Art
-Archive: 891 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
-the remaining 263 split into 231 files with no album MBID and 32 files in eight releases
+Archive: 882 files embed a front cover, 11 album directories use `cover.jpg` sidecars, and
+the remaining 262 split into 230 files with no album MBID and 32 files in eight releases
 that have no front cover in the archive.
 
 ## What was run
@@ -51,12 +54,19 @@ that have no front cover in the archive.
   folder belong to unrelated albums and were inflating the expected track count.
 - `music art` over the matched folders: 16 covers embedded. The Civilization VII release
   has no front cover in the archive.
+- Removed 40 Syncthing conflict files that were byte-identical to a sibling; 26 were the
+  only copy of the Sibelius album and were restored from WebM sources before re-tagging.
+- Filename fallback in `autotag`: 15 untagged files tagged at recording level from
+  `Artist - Title` filenames, all matching the strict name + duration guard.
+- Fingerprinted the whole library to re-measure duplicates: 94 duplicate groups and 108
+  redundant copies, but **no group mixes a complete file with a pending one**, so
+  duplicate propagation would have identified nothing.
 
 ## What remains
 
-347 files: 307 missing identity, 14 missing album identity, 26 untagged.
+331 files: 306 missing identity, 14 missing album identity, 11 untagged.
 
-- 295 of the 347 still carry an album tag. The queue is concentrated in album folders:
+- 295 of the 331 still carry an album tag. The queue is concentrated in album folders:
   `WIP/evan call/Evan Call Orchestra Concert 2025` (28),
   `Music/Albums/Album - Sibelius, J.: Piano Music` (23),
   `WIP/agobay/keep/2024-may` (16), `Albums/Breathing` + `Breathing II` (27),
@@ -92,29 +102,25 @@ the album name, so folder identity is already mixed.
 The next gain here is not more matching code but cleaning those folder-level album tags,
 or relying on sole-release-group resolution, which `resolve` already does.
 
-### 2. Duplicate propagation (safe, small)
+### 2. Duplicate propagation (measured, not useful here)
 
-The previous queue measured 36 fingerprint groups, 76 files, 40 redundant copies.
-`fpcalc` fingerprints are already available through `get_audio_fingerprint`. For each
-group, if one file is complete, copy its identity and descriptive tags to the rest with
-`read_tags` → `write_tags`.
+The whole library was fingerprinted: 94 duplicate groups, 108 redundant copies. No group
+contains both a complete and a pending file, so there is nothing to propagate. The
+duplicates are copies of already-tagged files or copies of files that are all pending;
+deleting redundant copies is a storage decision, not a tagging one.
 
-Guard with duration equality and skip groups with no complete member. This carries no
-identification risk, only the normal risk of sharing a fingerprint between different
-masters.
+### 3. Filename fallback for untagged files (implemented)
 
-Expected: up to 40 files; fewer if no member of a group is complete.
+`autotag` now parses `Artist - Title` from the filename when a file has neither tag and
+runs the existing `_name_search` guard on it (exact title/artist, one recording, duration
+within `max(3 s, 2%)`). It tagged 15 files: `dreamage` ×10 and `Felicia Sjögren - HULDA`
+×5, all at recording level. The other 11 untagged files are date-named radio recordings
+and do not parse.
 
-### 3. Filename fallback (small, strict)
-
-26 files have no usable title/artist. Parse `Artist - Title` from the filename (strip
-track numbers and `[youtube-id]`), then reuse the existing name-search guard: exact
-title and artist, MusicBrainz score 100, and recording length within the larger of 3
-seconds or 2%. Files such as `2024-12.webm` and date-only radio recordings are not
-parseable and should stay out.
-
-Expected: some of the 10 Dreamage files and a few playlist rips. The strict name
-measurement suggests single-digit to low-double-digit yield.
+Those files then have no album tag, so nothing claims a release and they never get
+artwork. All 15 recordings have exactly one release group, so a sole-release-group rule
+for files with no album tag would give them an album and a cover; `resolve` currently
+refuses when the album tag is absent, by policy.
 
 ### 4. Manual queue
 
@@ -195,12 +201,14 @@ Relevant commits: `08991b3` audit, `2e8c613` SSL context, `407f89e` autotag and 
 `ff02f09` key guidance, `394c24a` transcode default, `92ed3c9` release resolution,
 `4627191` sole release groups and edition titles, `7952dbb` guarded name fallback,
 `24190ca` Cover Art Archive embedding, `ad3407e` malformed-ID skips, `34ecb0c`
-folder-level album matching.
+folder-level album matching, `f61a7fe` pending-file match sizing, `c93575e` filename
+fallback.
 
 ## Open decisions
 
-1. Duplicate propagation: copy full tags, or identity fields only so playlist-specific
-   album tags survive.
+1. Whether a sole release group may choose an album for a file that carries no album tag.
+   `resolve` refuses today; all 15 filename-tagged files have exactly one release group,
+   so allowing it would give them a release and a cover.
 2. Whether a sole release group may continue to replace a mismatched album tag. This was
    accepted for 83 files and is reported per file.
 3. Artwork in the 30 directories holding multiple releases: `--sidecar` skips them by
