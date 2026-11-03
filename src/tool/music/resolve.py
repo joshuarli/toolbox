@@ -100,13 +100,13 @@ def preference(meta: Metadata, candidate: Candidate) -> tuple[object, ...]:
 
 
 def choose_release(meta: Metadata, candidates: list[Candidate]) -> Candidate | None:
-    """The best release edition for *meta*, or None when the album is ambiguous or absent.
+    """The best release edition for *meta*, or None when the recording fits several groups.
 
-    When no release title matches the file's album, a single release group carrying the
-    recording is still unambiguous and is used; the caller reports that the album tag
-    was replaced.
+    A matching album title narrows competing editions.  Without an album tag, or without
+    any title match, a single release group carrying the recording is still unambiguous
+    and is used; the caller reports whether the album tag was added or replaced.
     """
-    if not bool(meta.album) or not bool(meta.musicbrainz_recordingid):
+    if not bool(meta.musicbrainz_recordingid):
         return None
     playable = [c for c in candidates if _track_matches(meta, c) and bool(c.meta.album)]
     if not playable:
@@ -149,6 +149,13 @@ def resolve_file(path: str) -> Metadata | None:
     return enriched
 
 
+def _needs_release(meta: Metadata) -> bool:
+    """Whether a release is still worth choosing: identity without a claimed album counts."""
+    if not bool(meta.musicbrainz_recordingid):
+        return False
+    return not meta.is_complete() or not bool(meta.album)
+
+
 def _print_result(status: str, color: int, path: str, detail: str = "") -> None:
     print(f"  {colored(f'{status:<14s}', color)} {path}{detail}", flush=True)
 
@@ -157,7 +164,8 @@ def configure_parser(p: argparse.ArgumentParser) -> None:
     p.description = (
         "Resolve release identity for files that already have a recording MBID. Chooses an "
         "edition when the recording appears in one release group and the track position matches; "
-        "a mismatched album tag is replaced and reported. Ambiguous files are left for `music tag`."
+        "a sole release group also supplies a missing or mismatched album tag, and the change is "
+        "reported. Ambiguous files are left for `music tag`."
     )
     p.add_argument("paths", nargs="+", help="directories or files to resolve")
     p.add_argument("--dry-run", action="store_true", help="list the queue without network access or writes")
@@ -173,11 +181,11 @@ def run(args: argparse.Namespace) -> None:
         queued = 0
         for fp, display in files:
             meta = read_tags(str(fp))
-            if meta.is_complete() or not bool(meta.musicbrainz_recordingid):
+            if not _needs_release(meta):
                 continue
             queued += 1
             track = f" track {meta.tracknumber}" if bool(meta.tracknumber) else ""
-            print(f"  {display}  [{meta.album}{track}]")
+            print(f"  {display}  [{meta.album or 'no album'}{track}]")
         print(f"\n  {queued} files would be resolved.")
         return
 
@@ -185,7 +193,7 @@ def run(args: argparse.Namespace) -> None:
     print(bold(f"  Resolving {len(files)} files"))
     for fp, display in files:
         meta = read_tags(str(fp))
-        if meta.is_complete():
+        if meta.is_complete() and bool(meta.album):
             counts["complete"] += 1
             continue
         if not bool(meta.musicbrainz_recordingid):
@@ -206,7 +214,9 @@ def run(args: argparse.Namespace) -> None:
         counts["resolved"] += 1
         edition = ", ".join(p for p in (resolved.media, resolved.releasecountry, resolved.date) if bool(p))
         detail = f"  [{resolved.album}" + (f" · {edition}" if edition else "") + "]"
-        if normalize(meta.album) != normalize(resolved.album):
+        if not bool(meta.album):
+            detail += "  (album tag added)"
+        elif normalize(meta.album) != normalize(resolved.album):
             detail += "  (album tag replaced)"
         _print_result("resolved", GREEN, display, detail)
 

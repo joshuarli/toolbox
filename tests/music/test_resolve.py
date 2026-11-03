@@ -123,8 +123,13 @@ class TestChooseRelease:
         assert chosen is not None
         assert chosen.meta.musicbrainz_albumid == "rel"
 
-    def test_without_album_is_not_guessed(self):
-        assert choose_release(meta(album=None), [candidate()]) is None
+    def test_without_album_a_sole_release_group_supplies_it(self):
+        chosen = choose_release(meta(album=None), [candidate()])
+        assert chosen is not None
+        assert chosen.meta.musicbrainz_albumid == "rel"
+
+    def test_without_album_several_release_groups_stay_ambiguous(self):
+        assert choose_release(meta(album=None), [candidate(group="a"), candidate(group="b")]) is None
 
     def test_official_release_wins(self):
         bootleg = candidate(release="bootleg", status="Bootleg")
@@ -200,9 +205,18 @@ class TestRun:
     def test_dry_run_lists_files_awaiting_a_release(self, tmp_path, monkeypatch, capsys):
         (tmp_path / "a.mp3").touch()
         (tmp_path / "b.mp3").touch()
+        (tmp_path / "c.mp3").touch()
         meta_by_path = {
             str(tmp_path / "a.mp3"): meta(),
-            str(tmp_path / "b.mp3"): Metadata(title="Complete", artist="A", musicbrainz_recordingid="r", album=None),
+            str(tmp_path / "b.mp3"): Metadata(
+                title="Complete",
+                artist="A",
+                album="Album",
+                musicbrainz_recordingid="r",
+                musicbrainz_albumid="rel",
+                musicbrainz_releasegroupid="rg",
+            ),
+            str(tmp_path / "c.mp3"): Metadata(title="Single", artist="A", musicbrainz_recordingid="r"),
         }
         monkeypatch.setattr(resolve, "read_tags", lambda p: meta_by_path[p])
 
@@ -211,7 +225,8 @@ class TestRun:
         out = capsys.readouterr().out
         assert "a.mp3" in out
         assert "b.mp3" not in out
-        assert "1 files would be resolved." in out
+        assert "c.mp3" in out
+        assert "2 files would be resolved." in out
 
     def test_summary_counts(self, tmp_path, monkeypatch, capsys):
         (tmp_path / "a.mp3").touch()
@@ -235,6 +250,24 @@ class TestRun:
         out = capsys.readouterr().out
         assert "1 resolved" in out
         assert "[Album · Digital Media, XW, 2020-01-01]" in out
+
+    def test_added_album_is_reported(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "a.mp3").touch()
+        monkeypatch.setattr(resolve, "read_tags", lambda p: Metadata(title="Song", artist="A", musicbrainz_recordingid="rec"))
+        resolved = Metadata(
+            title="Song",
+            artist="A",
+            album="Album",
+            musicbrainz_recordingid="rec",
+            musicbrainz_albumid="rel",
+            musicbrainz_releasegroupid="rg",
+            musicbrainz_trackid="t1",
+        )
+        monkeypatch.setattr(resolve, "resolve_file", lambda p: resolved)
+
+        run(self.args(tmp_path))
+
+        assert "(album tag added)" in capsys.readouterr().out
 
     def test_replaced_album_is_reported(self, tmp_path, monkeypatch, capsys):
         (tmp_path / "a.mp3").touch()
