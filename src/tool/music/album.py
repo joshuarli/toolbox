@@ -153,32 +153,34 @@ def _describe(summary: ReleaseSummary) -> str:
 
 
 def _plan(entries: list[tuple[Path, str]], *, dry_run: bool) -> tuple[str, int]:
-    """Match one folder; returns its status and the number of files written."""
-    metas = [read_tags(str(path)) for path, _ in entries]
-    pending = [meta for meta in metas if not meta.is_complete()]
+    """Match one folder; returns its status and the number of files written.
+
+    Only pending files are the matching unit.  Complete files in the same directory may
+    belong to other albums (playlist folders), so they neither size nor block the match.
+    """
+    pending = [(path, display, read_tags(str(path))) for path, display in entries]
+    pending = [(path, display, meta) for path, display, meta in pending if not meta.is_complete()]
     if not pending:
         return "complete", 0
-    identity = folder_album(pending)
+    identity = folder_album([meta for _, _, meta in pending])
     if identity is None:
         return "no-identity", 0
     album, artist = identity
-    chosen = choose_edition(album, len(metas), search_releases(album, artist), pending[0])
+    chosen = choose_edition(album, len(pending), search_releases(album, artist), pending[0][2])
     if chosen is None:
         return "ambiguous", 0
     summary, partial = chosen
-    mapped = map_tracks(metas, release_tracklist(summary).tracks, require_title=partial)
+    mapped = map_tracks([meta for _, _, meta in pending], release_tracklist(summary).tracks, require_title=partial)
     if mapped is None:
         return "unmapped", 0
     label = str(Path(entries[0][1]).parent)
     if dry_run:
-        print(f"  {colored('would match', GREEN)} {label}  {_describe(summary)}  {len(metas)} files")
-        for (_, display), track in zip(entries, mapped, strict=True):
+        print(f"  {colored('would match', GREEN)} {label}  {_describe(summary)}  {len(pending)} files")
+        for (_, display, _), track in zip(pending, mapped, strict=True):
             print(f"    {display} -> {track.disc_number}.{track.track_number} {track.title}")
         return "matched", 0
     written = 0
-    for (path, _), meta, track in zip(entries, metas, mapped, strict=True):
-        if meta.is_complete():
-            continue
+    for (path, _, meta), track in zip(pending, mapped, strict=True):
         enriched = enrich(_selection(meta, track, summary))
         if not (enriched.is_complete() and bool(enriched.musicbrainz_trackid)):
             return "enrichment-failed", written

@@ -226,6 +226,26 @@ class TestRun:
 
         assert [name for name, _ in written] == ["02.flac"]
 
+    def test_unrelated_complete_files_do_not_block_the_match(self, tmp_path, monkeypatch):
+        metas = {
+            "01.flac": Metadata(
+                title="Some Other Song",
+                artist="Other",
+                album="Another Album",
+                musicbrainz_recordingid="other-rec",
+                musicbrainz_albumid="other-rel",
+                musicbrainz_releasegroupid="other-rg",
+            ),
+            "02.flac": meta("Two", number="2"),
+        }
+        written = []
+        wire(monkeypatch, tmp_path, metas, [summary(count=10)], [track("1", "2", "Two")], written)
+        monkeypatch.setattr(album, "read_tags", lambda path: metas[Path(path).name])
+
+        album.run(args(tmp_path))
+
+        assert [name for name, _ in written] == ["02.flac"]
+
     def test_dry_run_prints_proposal_and_writes_nothing(self, tmp_path, monkeypatch, capsys):
         metas = {"01.flac": meta("One", number="1")}
         written = []
