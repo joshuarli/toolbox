@@ -1,7 +1,18 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tool.movies.crop import CropRect, detect_crop, parse_cropdetect, select_crop
+from .conftest import ffmpeg_names
+
+
+def _has_lavfi() -> bool:
+    try:
+        proc = subprocess.run(["ffmpeg", "-hide_banner", "-demuxers"], capture_output=True, text=True, timeout=30)
+    except Exception:
+        return False
+    return proc.returncode == 0 and " lavfi " in f" {proc.stdout} "
 
 
 def test_parse_cropdetect_extracts_all_rectangles() -> None:
@@ -42,6 +53,7 @@ def test_select_crop_rejects_out_of_bounds_geometry() -> None:
     assert select_crop([invalid] * 9, 720, 480) is None
 
 
+@pytest.mark.skipif(not _has_lavfi() or "libx264" not in ffmpeg_names("-encoders"), reason="lavfi demuxer and libx264 encoder required")
 def test_detect_crop_finds_fixed_black_borders(tmp_path: Path) -> None:
     path = tmp_path / "bordered.mp4"
     subprocess.run(

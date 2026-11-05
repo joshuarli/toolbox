@@ -814,6 +814,7 @@ class EncodingTests(unittest.TestCase):
 
         assert cmd[cmd.index("-b:a:0") + 1] == expected
 
+    @pytest.mark.skipif("lavfi" not in ffmpeg_names("-demuxers") or "libopus" not in ffmpeg_names("-encoders"), reason="lavfi demuxer and libopus encoder required")
     def test_audio_bitrate_estimate_uses_full_stream_when_head_is_silence(self) -> None:
         path = self.work / "leading-silence-opus.webm"
         run(

@@ -1,7 +1,10 @@
 import functools
 import json
+import math
 import re
+import struct
 import subprocess
+import wave
 from pathlib import Path
 
 import pytest
@@ -52,27 +55,49 @@ needs_libvorbis = pytest.mark.skipif(
 )
 
 
+def _need_encoder(name: str) -> None:
+    if name not in _ffmpeg_encoder_names():
+        pytest.skip(f"{name} encoder not available")
+
+
+def _write_sine_wav(path: Path, *, sample_rate: int = 44100, duration: float = 0.5, frequency: int = 440) -> None:
+    nframes = int(sample_rate * duration)
+    with wave.open(str(path), "w") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        for i in range(nframes):
+            sample = int(32767 * 0.5 * math.sin(2 * math.pi * frequency * i / sample_rate))
+            wav.writeframes(struct.pack("<h", sample))
+
+
 def _make_audio(path: str, codec: str, *, sample_rate: int = 44100) -> None:
     """Create a 0.5-second sine tone at *path* with the given ffmpeg codec."""
+    dest = Path(path)
+    src = dest.with_name(dest.stem + ".src.wav")
+    _write_sine_wav(src, sample_rate=sample_rate)
+    if codec == "pcm_s16le" and dest.suffix == ".wav":
+        src.replace(dest)
+        return
     encoder = {"flac": "flac", "mp3": "libmp3lame", "aac": "aac"}.get(codec, codec)
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=440:duration=0.5",
-            "-sample_rate",
-            str(sample_rate),
-            "-c:a",
-            encoder,
-            "-y",
-            path,
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                str(src),
+                "-c:a",
+                encoder,
+                "-y",
+                str(dest),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    finally:
+        if src.exists():
+            src.unlink()
 
 
 @pytest.fixture
@@ -84,6 +109,7 @@ def flac_file(tmp_path):
 
 @pytest.fixture
 def mp3_file(tmp_path):
+    _need_encoder("libmp3lame")
     p = tmp_path / "test.mp3"
     _make_audio(str(p), "mp3")
     return str(p)
@@ -105,6 +131,7 @@ def wav_file(tmp_path):
 
 @pytest.fixture
 def opus_file(tmp_path):
+    _need_encoder("libopus")
     p = tmp_path / "test.opus"
     _make_audio(str(p), "libopus", sample_rate=48000)
     return str(p)
@@ -112,6 +139,7 @@ def opus_file(tmp_path):
 
 @pytest.fixture
 def ogg_file(tmp_path):
+    _need_encoder("libvorbis")
     p = tmp_path / "test.ogg"
     _make_audio(str(p), "libvorbis")
     return str(p)
