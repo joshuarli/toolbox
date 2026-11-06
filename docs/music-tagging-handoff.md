@@ -192,8 +192,7 @@ than one. The earlier pass found 36 groups over 365 files.
 - `fpcalc` is required (`chromaprint`); `ffprobe`/`ffmpeg` are required for remuxing and
   scan.
 - This Python build uses a Rustls-backed `ssl` module. `tool.music.http.Session` must
-  keep passing an explicit `ssl_context`; without it urllib3 sets an unsupported option
-  and every HTTPS request fails.
+  keep building its opener from `ssl.create_default_context()`.
 - Transcode treats taggability as the goal: taggable sources are skipped, remuxable
   codecs are copied losslessly, and `--encode` forces AAC.
 

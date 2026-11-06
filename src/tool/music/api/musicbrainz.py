@@ -9,9 +9,8 @@ import json
 import sys
 from collections import Counter
 from dataclasses import dataclass, replace
+from http.client import HTTPException
 from typing import Any
-
-from urllib3.exceptions import HTTPError
 
 from tool.music.http import RateLimiter, Session
 from tool.music.metadata import Artist, Candidate, Metadata
@@ -55,7 +54,7 @@ def _request_json(url: str, *, params: dict[str, str | int], operation: str) -> 
     """Fetch a response, translating transport and response-decoding failures only."""
     try:
         return _session.get_json(url, params=params)
-    except (HTTPError, OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except (OSError, HTTPException, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise MusicBrainzRequestError(f"MusicBrainz {operation} failed") from exc
 
 

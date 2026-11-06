@@ -1,22 +1,15 @@
 """Cover Art Archive frontend: exact release first, release-group fallback."""
 
 from dataclasses import dataclass
+from http.client import HTTPException
 from uuid import UUID
-
-from urllib3.exceptions import HTTPError
-from urllib3.util.retry import Retry
 
 from tool.music.http import RateLimiter, Session
 
 _BASE = "https://coverartarchive.org"
 _MAX_BYTES = 10 * 1024 * 1024
 _SIZES = (1200, 500, 250)
-_RETRIES = Retry(
-    total=2,
-    status_forcelist=(429, 500, 502, 503, 504),
-    backoff_factor=0.5,
-    raise_on_status=False,
-)
+_RETRIES = 2
 _session = Session(
     user_agent="toolbox-music/0.1 (https://github.com/joshuarli/toolbox)",
     rate_limiter=RateLimiter(rate=2.0),
@@ -50,23 +43,16 @@ def _uuid(value: str | None) -> str | None:
 
 def _get(url: str) -> bytes | None:
     try:
-        _session._wait()
-        response = _session.pool.request(
-            "GET", url, headers=_session.headers, retries=_RETRIES, preload_content=False
-        )
-        try:
-            if response.status == 404:
-                return None
-            if response.status != 200:
-                raise CoverArtError(f"Cover Art Archive returned HTTP {response.status}: {url}")
-            data = response.read(_MAX_BYTES + 1)
-            if len(data) > _MAX_BYTES:
-                raise CoverArtError(f"image exceeds {_MAX_BYTES // (1024 * 1024)} MiB: {url}")
-            return data
-        finally:
-            response.close()
-    except (HTTPError, OSError) as exc:
+        status, data = _session.request("GET", url, retries=_RETRIES, max_bytes=_MAX_BYTES)
+    except (OSError, HTTPException) as exc:
         raise CoverArtError(f"Cover Art Archive request failed: {url}") from exc
+    if status == 404:
+        return None
+    if status != 200:
+        raise CoverArtError(f"Cover Art Archive returned HTTP {status}: {url}")
+    if len(data) > _MAX_BYTES:
+        raise CoverArtError(f"image exceeds {_MAX_BYTES // (1024 * 1024)} MiB: {url}")
+    return data
 
 
 def fetch_cover(

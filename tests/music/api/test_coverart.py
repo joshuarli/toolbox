@@ -1,6 +1,6 @@
 """Cover Art Archive fallback, validation and HTTP handling with mocked transport."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -64,22 +64,28 @@ def test_nonimage_is_error_not_missing():
 
 
 def test_get_handles_404_and_503_without_confusing_them():
-    response = MagicMock(status=404)
-    with patch.object(coverart._session.pool, "request", return_value=response):
+    with patch.object(coverart._session, "request", return_value=(404, b"")):
         assert coverart._get("https://coverartarchive.org/x") is None
-    response.close.assert_called_once()
 
-    response = MagicMock(status=503)
-    with patch.object(coverart._session.pool, "request", return_value=response):
-        with pytest.raises(coverart.CoverArtError, match="503"):
-            coverart._get("https://coverartarchive.org/x")
-    response.close.assert_called_once()
+    with (
+        patch.object(coverart._session, "request", return_value=(503, b"")),
+        pytest.raises(coverart.CoverArtError, match="503"),
+    ):
+        coverart._get("https://coverartarchive.org/x")
 
 
-def test_get_checks_size_and_closes_response():
-    response = MagicMock(status=200)
-    response.read.return_value = b"x" * (coverart._MAX_BYTES + 1)
-    with patch.object(coverart._session.pool, "request", return_value=response):
-        with pytest.raises(coverart.CoverArtError, match="exceeds"):
-            coverart._get("https://coverartarchive.org/x")
-    response.close.assert_called_once()
+def test_get_checks_size():
+    oversized = (200, b"x" * (coverart._MAX_BYTES + 1))
+    with (
+        patch.object(coverart._session, "request", return_value=oversized),
+        pytest.raises(coverart.CoverArtError, match="exceeds"),
+    ):
+        coverart._get("https://coverartarchive.org/x")
+
+
+def test_get_wraps_transport_failures():
+    with (
+        patch.object(coverart._session, "request", side_effect=TimeoutError("slow")),
+        pytest.raises(coverart.CoverArtError, match="request failed"),
+    ):
+        coverart._get("https://coverartarchive.org/x")

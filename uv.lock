@@ -191,9 +191,7 @@ dependencies = [
     { name = "blessed" },
     { name = "mutagen" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform != 'linux'" },
-    { name = "urllib3" },
     { name = "uvloop" },
-    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -219,9 +217,7 @@ requires-dist = [
     { name = "mutagen", specifier = ">=1.48.1" },
     { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=11" },
     { name = "shadowdriver", marker = "extra == 'browser'", directory = "../shadowdriver/py" },
-    { name = "urllib3", specifier = ">=2.7.0" },
     { name = "uvloop", specifier = ">=0.22.1" },
-    { name = "websockets", specifier = ">=16.0" },
 ]
 provides-extras = ["browser"]
 
@@ -245,14 +241,6 @@ wheels = [
     { url = "https://pypi.17166969.xyz/current/wheels/ty-0.0.91-py3-none-macosx_11_0_arm64.whl", hash = "sha256:78e3e66e88a9ae903afe0981ff9bd225d452ade2aeb070715842510dfcbf6de4" },
     { url = "https://pypi.17166969.xyz/current/wheels/ty-0.0.91-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:89ecaf87b3d7b508f9ea1ef8715d4cf47942719659028c92fad819d82a82ccfa" },
     { url = "https://pypi.17166969.xyz/current/wheels/ty-0.0.91-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f68bb6bfc8171910335a47c7e84070f28bbbc0326bcd6ef08fe3690d0509556b" },
-]
-
-[[package]]
-name = "urllib3"
-version = "2.8.0"
-source = { registry = "https://pypi.17166969.xyz/current/simple/" }
-wheels = [
-    { url = "https://pypi.17166969.xyz/current/wheels/urllib3-2.8.0-py3-none-any.whl", hash = "sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3" },
 ]
 
 [[package]]
@@ -281,14 +269,4 @@ version = "0.8.4"
 source = { registry = "https://pypi.17166969.xyz/current/simple/" }
 wheels = [
     { url = "https://pypi.17166969.xyz/current/wheels/wcwidth-0.8.4-py3-none-any.whl", hash = "sha256:2097bb1d28a0ba8fe177c2eb607317f9b1627b03f33ebebfd3da670b337a65ba" },
-]
-
-[[package]]
-name = "websockets"
-version = "17.3"
-source = { registry = "https://pypi.17166969.xyz/current/simple/" }
-wheels = [
-    { url = "https://pypi.17166969.xyz/current/wheels/websockets-17.3-cp315-cp315-macosx_11_0_arm64.whl", hash = "sha256:09f007b2150eff015b2109f006e2ac2012d376f41486defa88ae78a776b00cff" },
-    { url = "https://pypi.17166969.xyz/current/wheels/websockets-17.3-cp315-cp315-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:15decc0fe293d9e3f924bd483f3d76f3d0ff26845112a470e3f8842fec2c82a1" },
-    { url = "https://pypi.17166969.xyz/current/wheels/websockets-17.3-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:997617dd7856c5dad742bf6893b872319156dd43f47587541a59e4a852d52bbc" },
 ]

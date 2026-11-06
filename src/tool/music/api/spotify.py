@@ -1,7 +1,7 @@
 """Unauthenticated Spotify playlist fetching.
 
 Extracted from spotapi/SpotipyFree internals. No credentials, login, or TLS
-fingerprinting needed — uses Spotify's private web-player API via urllib3.
+fingerprinting needed — uses Spotify's private web-player API via urllib.request.
 
 API docs: https://developer.spotify.com/documentation/web-api
 """
